@@ -1,12 +1,17 @@
-import os
+from pathlib import Path
+import subprocess
+import sys
+
+
+API_DIR = Path(__file__).resolve().parent
 
 
 def main():
-    ''' wrapper to call run_azure.py using a dictionary
+    ''' wrapper to call the Gemini runner using a dictionary
         of dataset : case_id_list pairs '''
 
     # TODO: manually set these params for each set of expmts
-    task = 'run' # 'run' (query openai), 'calc' (metrics)
+    task = 'run' # 'run' (query Gemini), 'calc' (metrics)
     expmt_name_list = ['demo'] # per expmts defined in get_expmt_configs()
     is_demo = True # enable runs over 1 sample (else constants.N_MIN_SAMPLES)
 
@@ -15,30 +20,30 @@ def main():
         case_ids, model, n_samples = get_expmt_configs(expmt_name)
         dataset_list = ['opi', 'chq']
         assert task in ['run', 'calc']
-        script = 'run_expmt.py' 
+        script = 'run_expmt.py'
         
         if task == 'run':
-            cmd = f'python {script} --n_samples {n_samples} --model {model}'
+            cmd = [sys.executable, script, '--n_samples', str(n_samples),
+                   '--model', model]
             if is_demo:
-                cmd += ' --is_demo'
+                cmd.append('--is_demo')
         elif task == 'calc':
-            cmd = f'python ../src/calc_metrics.py --n_samples 9999 --model {model}'
+            cmd = [sys.executable, '../src/calc_metrics.py', '--n_samples',
+                   '9999', '--model', model]
 
         for dataset in dataset_list:
             
             case_id_list = case_ids[dataset]
-            cmd += f' --dataset {dataset}'
             
             for case_id in case_id_list:
-
-                cmd += f' --case_id {case_id}'
-                
-                os.system(cmd)
+                cmd_case = cmd + ['--dataset', dataset,
+                                  '--case_id', str(case_id)]
+                subprocess.run(cmd_case, cwd=API_DIR, check=True)
             
 
 def get_expmt_configs(expmt_name):
     ''' TODO: define experimental configurations, i.e.
-            model (gpt-35 or gpt-4)
+            model (for example, gemini-2.5-flash-lite)
             case_ids: corresponding to configs in constants.cases
             datasets, e.g. opi or chq '''
 
@@ -46,7 +51,7 @@ def get_expmt_configs(expmt_name):
     
     if expmt_name == 'demo':
         n_samples = 1 # number of samples to run
-        model = 'gpt-35' # choose gpt-3.5
+        model = 'gemini-2.5-flash-lite'
         case_ids = {'opi': [400], 'chq': []} # case_id=400 for opi dataset
 
     else:

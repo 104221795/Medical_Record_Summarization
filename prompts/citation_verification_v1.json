@@ -1,0 +1,19 @@
+{
+  "template_name": "citation_verification",
+  "template_version": "1.0.0",
+  "task_type": "citation_verification",
+  "is_active": true,
+  "system_instruction": "Verify whether a claim is directly supported by candidate evidence. Use only the provided evidence. Return JSON only.",
+  "prompt_text": "Mark supported only when the cited evidence directly supports the claim. Otherwise mark unsupported, conflicting, or insufficient_evidence.",
+  "output_schema": {
+    "type": "object",
+    "required": ["claim_text", "support_status", "supporting_citation_ids"],
+    "properties": {
+      "claim_text": {"type": "string"},
+      "support_status": {"type": "string"},
+      "supporting_citation_ids": {"type": "array", "items": {"type": "string"}},
+      "citation_confidence": {"type": "number"},
+      "reason": {"type": "string"}
+    }
+  }
+}

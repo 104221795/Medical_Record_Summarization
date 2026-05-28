@@ -3,14 +3,13 @@
 API REQUEST PARALLEL PROCESSOR
     previously preprocess_for_batch_api.py
 
-This script preprocesses input JSONL files and generates API request JSONL files.
-The resulting files can then be used with the API Request Parallel Processor:
-https://github.com/openai/openai-cookbook/blob/main/examples/api_request_parallel_processor.py
+This script preprocesses input JSONL files into Gemini generateContent
+request objects.
 
 Features:
 - Parses input files line by line to avoid running out of memory for large jobs
-- Creates API requests suitable for the OpenAI GPT-4 model
-- Preserves original data in the 'metadata' field of the request
+- Creates requests suitable for Gemini text generation
+- Preserves original data in the 'metadata' field of the local request file
 
 Example command to call script:
 ```
@@ -65,30 +64,25 @@ def generate_api_request(args, json_obj):
     user_prompt = json_obj["prompt"]
 
     return {
-        "messages": [
-            {"role": "system", "content": args.system_prompt},
-            {"role": "user", "content": user_prompt},
+        "system_instruction": {
+            "parts": [{"text": args.system_prompt}],
+        },
+        "contents": [
+            {"role": "user", "parts": [{"text": user_prompt}]},
         ],
-        "temperature": args.temperature,
+        "generationConfig": {
+            "temperature": args.temperature,
+        },
     }
 
 def preprocess_jsonl(args) -> None:
     """
     Preprocesses the input JSONL file and outputs to a new file.
 
-    The request object `request_obj` that is written to file should
-    conform to the format specified in the documentation for the
-    OpenAI API:
-    https://platform.openai.com/docs/api-reference/chat/create
-    Specifically, first-level keys should be "model", "messages",
-    and optionally "metadata". The "model" key should map to a string
-    specifying the model to be used for the API request (e.g., "gpt-4).
-    The "messages" key should map to a list of dictionaries, where each
-    dictionary has keys "role" and "content". The "role" key should map
-    to a string specifying the role of the message (e.g., "system" or
-    "user"). The "content" key should map to a string specifying the
-    content of the message. The "metadata" key should map to a dictionary
-    containing any additional metadata to be included in the request.
+    The request object written to file conforms to Gemini
+    ``generateContent`` with ``system_instruction``, ``contents``, and
+    ``generationConfig`` fields. The original sample is carried through
+    as local ``metadata`` and removed before sending the HTTP request.
 
     Parameters
     ----------
@@ -130,7 +124,7 @@ def main():
     SYS_PROMPT += " records to answer questions about patients"
     
     parser = argparse.ArgumentParser(
-        description="Preprocess JSONL files for use with the API Request Parallel Processor."
+        description="Preprocess JSONL files for Gemini generateContent requests."
     )
     parser.add_argument("fn_inp", type=str,
                         help="Path to the input JSONL file.")
@@ -138,7 +132,7 @@ def main():
                         help="Path to the output JSONL file.")
     parser.add_argument("--task", type=str, default="radadapt",
                         help="Name of the task.")
-    parser.add_argument("--model", type=str, default="gpt-35-turbo",
+    parser.add_argument("--model", type=str, default="gemini-2.5-flash-lite",
                         help="Name of the model to use.")
     parser.add_argument("--temperature", type=float, default=0.1, #default=0.7,
                         help="Temperature for sampling.")

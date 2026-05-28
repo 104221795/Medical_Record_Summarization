@@ -1,12 +1,19 @@
 import os
 
+from dotenv import load_dotenv
+
 
 ##############################################################
 ### project directory ########################################
 
-# TODO: set DIR_PROJECT as location for all data and models (outside git repo)
-DIR_PROJECT = "/your/project/directory/here/"
-assert os.path.exists(DIR_PROJECT), "please enter valid directory"
+# Store generated results beside the included sample data by default. Override
+# this when using a larger data/model workspace outside the repository.
+DIR_REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+load_dotenv(os.path.join(DIR_REPO, '.env'))
+DIR_PROJECT = os.environ.get('CLIN_SUMM_PROJECT_DIR', DIR_REPO)
+assert os.path.exists(os.path.join(DIR_PROJECT, 'data')), (
+    'CLIN_SUMM_PROJECT_DIR must contain a data directory'
+)
 
 
 ##############################################################
@@ -41,9 +48,10 @@ MODELS = {
         },
     },
 
-    # openai models: leave blank
+    # Legacy OpenAI experiment labels retained for existing saved results.
     'oai-35': {'gpt-35': '', 'gpt-35-16k': ''},
     'oai-4': {'gpt-4': '', 'gpt-4-32k': ''},
+    'gemini': {'gemini-2.5-flash-lite': ''},
 
 }
 
@@ -68,7 +76,7 @@ INSTRUCTION_D2N = (
     'summarize the patient/doctor dialogue into an assessment and plan'
 )
 INSTRUCTION_ICL = ', using the provided examples to guide word choice.'
-CHATGPT_EXPERTISE = 'you are a knowledgeable medical professional. '
+HOSTED_LLM_EXPERTISE = 'you are a knowledgeable medical professional. '
 
 # define task-dependent prompt components
 PROMPT_COMPONENT = {
@@ -119,7 +127,7 @@ DEFAULTS = {
     'lr_num_warmup_steps': 100, 
     'max_trn_epochs': 5,
     
-    # only relevant if querying openai model
+    # only relevant if querying a hosted model
     'gpt_temp': 0.1, 
 }
 
@@ -197,8 +205,9 @@ MAX_LEN_OAI = {'gpt-35': 4096, 'gpt-35-long': 16384,
                'gpt-4': 8192, 'gpt-4-long': 32768}
 MAX_LEN = {
     's2s-t5': 512, 's2s-ul2': 2048, 'gpt': 2048, 'gptq': 4096,
-    'oai-35': MAX_LEN_OAI['gpt-35'], # will be overwritten if openai
-    'oai-4': MAX_LEN_OAI['gpt-4'], # will be overwritten if openai
+    'oai-35': MAX_LEN_OAI['gpt-35'], # retained for legacy experiments
+    'oai-4': MAX_LEN_OAI['gpt-4'], # retained for legacy experiments
+    'gemini': 8192, # conservative cap for the bundled API demo
     }
 
 # maximum number of in-context examples by dataset
@@ -235,31 +244,14 @@ PATIENCE = 5
 ICL_SENTENCE_TRANSFORMER = 'pritamdeka/PubMedBERT-mnli-snli-scinli-scitail-mednli-stsb'
 
 ##############################################################
-### openai ###################################################
+### gemini ###################################################
 
-# set request url based on endpoint + names of deployed models
-def get_url(resource, deployment):
-    ''' get request url given azure endpoint, deployment '''
-    endpt = f'https://{resource}.openai.azure.com/'
-    URL_PREFIX = 'openai/deployments/' 
-    URL_SUFFIX = '/chat/completions?api-version=2023-03-15-preview'
-    return endpt + URL_PREFIX + deployment + URL_SUFFIX
-
-# TODO: (1) define your RESOURCE, API_KEY 
-#       (2) ensure your model deployments match those in URL_MODEL
-RESOURCE = None # name of your azure resource
-API_KEY = None # your azure api key
-URL_MODEL = { # your url for individual model deployments
-    'gpt-35': get_url(RESOURCE, 'gpt35-model'),
-    'gpt-35-long': get_url(RESOURCE, 'gpt35-16k-model'),
-    'gpt-4': get_url(RESOURCE, 'gpt4-model'),
-    'gpt-4-long': get_url(RESOURCE, 'gpt4-32k-model'),
-}
-
-# rate limits per model
-TOK_PER_MIN = { 
-    'gpt-35': 120000, 'gpt-35-long': 120000,
-    'gpt-4': 10000, 'gpt-4-long': 30000,
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+GEMINI_URL_MODEL = {
+    'gemini-2.5-flash-lite': (
+        'https://generativelanguage.googleapis.com/v1beta/models/'
+        'gemini-2.5-flash-lite:generateContent'
+    ),
 }
 
 ##############################################################

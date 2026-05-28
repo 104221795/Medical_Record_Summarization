@@ -1,0 +1,32 @@
+# Local configuration and generated experiment artifacts
+.env
+.venv/
+__pycache__/
+*.py[cod]
+output/
+results/
+models_tuned/
+backend/var/
+var/
+.pytest_cache/
+
+# Credentialed or raw clinical datasets must stay local.
+data/raw/
+data/raw_*/
+data/credentialed/
+data/mimic/
+data/mimic-iv-note/
+data/mimic_iv_note/
+data/mimic-iv-ext-bhc/
+data/mimic_iv_ext_bhc/
+data/evaluation/raw/
+data/evaluation/credentialed/
+
+# Large local dataset artifacts and caches.
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+*.parquet
+*.feather
+*.arrow

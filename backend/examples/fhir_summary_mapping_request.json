@@ -1,0 +1,72 @@
+{
+  "patient_id": "patient-demo",
+  "encounter_id": "enc-demo-002",
+  "author_reference": "Device/clinical-summarization-service",
+  "source_documents": [
+    {
+      "document_id": "report-2026-05-20",
+      "document_type": "diagnostic-report",
+      "title": "Chest X-ray report",
+      "encounter_id": "enc-demo-002",
+      "authored_at": "2026-05-20T14:10:00+07:00",
+      "text": "FINDINGS:\nHeart size is normal. No pulmonary edema.\n\nIMPRESSION:\nNo acute cardiopulmonary findings.",
+      "metadata": {
+        "source_system": "ris-demo"
+      }
+    }
+  ],
+  "retrieved_evidence": [
+    {
+      "chunk_id": "report-2026-05-20-findings-001",
+      "patient_id": "patient-demo",
+      "document_id": "report-2026-05-20",
+      "document_type": "diagnostic-report",
+      "title": "Chest X-ray report",
+      "encounter_id": "enc-demo-002",
+      "authored_at": "2026-05-20T14:10:00+07:00",
+      "section": "Findings",
+      "text": "Heart size is normal. No pulmonary edema.",
+      "char_start": 10,
+      "char_end": 51,
+      "score": 0.98
+    },
+    {
+      "chunk_id": "report-2026-05-20-impression-001",
+      "patient_id": "patient-demo",
+      "document_id": "report-2026-05-20",
+      "document_type": "diagnostic-report",
+      "title": "Chest X-ray report",
+      "encounter_id": "enc-demo-002",
+      "authored_at": "2026-05-20T14:10:00+07:00",
+      "section": "Impression",
+      "text": "No acute cardiopulmonary findings.",
+      "char_start": 65,
+      "char_end": 100,
+      "score": 0.99
+    }
+  ],
+  "summary_status": "accepted",
+  "summary": {
+    "claims": [
+      {
+        "text": "No pulmonary edema.",
+        "evidence_ids": ["report-2026-05-20-findings-001"]
+      },
+      {
+        "text": "No acute cardiopulmonary findings.",
+        "evidence_ids": ["report-2026-05-20-impression-001"]
+      }
+    ],
+    "missing_information": []
+  },
+  "conditions": [
+    {
+      "condition_id": "bph-suspected-001",
+      "display": "Suspected benign prostatic hyperplasia",
+      "clinical_status": "active",
+      "verification_status": "provisional",
+      "category": "encounter-diagnosis",
+      "evidence_document_ids": ["report-2026-05-20"]
+    }
+  ]
+}

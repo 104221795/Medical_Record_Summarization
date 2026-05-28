@@ -1,4 +1,3 @@
-from datasets import Dataset
 import itertools
 import numpy as np
 import os
@@ -13,7 +12,8 @@ import process
 class SummDataset():
     ''' dataset class for summarization tasks '''
 
-    def __init__(self, args, task='test', purpose='default'):
+    def __init__(self, args, task='test', purpose='default',
+                 create_dataset_obj=True):
         ''' instantiate SummDataset class for one of three purposes
             default:        load+process inputs for training/generating
             load_inputs:    load inputs only, no processing
@@ -27,7 +27,8 @@ class SummDataset():
             self.downsample_data(args)
             self.generate_prompt(args)
             self.remove_long_prompts(args)
-            self.create_dataset_obj()
+            if create_dataset_obj:
+                self.create_dataset_obj()
             self.set_max_new_toks(args)
             self.get_pregenerated_samples(args)
                 
@@ -188,6 +189,7 @@ class SummDataset():
 
     def create_dataset_obj(self):
         ''' create dataset dict object used for training/generating '''
+        from datasets import Dataset
             
         list_idx = get_vals_by_key(self.data, key='idx')
         list_prompt = get_vals_by_key(self.data, key='prompt')
@@ -298,7 +300,7 @@ class SummDataset():
             self.append_pregenerated_data()
             
         path = os.path.join(args.dir_out, fn_out)
-        process.write_list_to_jsonl(path, self.data, key=None)
+        process.write_list_to_jsonl(path, self.data)
 
         if 'result' in fn_out:
             print(f'results generated in {args.dir_out}')

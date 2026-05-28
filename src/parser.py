@@ -10,7 +10,7 @@ def get_parser(purpose=None):
 
     # alternative purpose(s) for calling this parser function
     if purpose:
-        assert purpose in ['openai']
+        assert purpose in ['api', 'openai']
     required = not purpose # if not alt purpose, some args required
 
     parser = argparse.ArgumentParser()
@@ -137,7 +137,7 @@ def transport_args(args):
         args.grad_accum_steps = case['grad_accum_steps']
         args.lr_num_warmup_steps = case['lr_num_warmup_steps']
     
-    # relevant for openai queries
+    # relevant for hosted API queries
     if args.case_id >= 400 and args.case_id <= 499:
         args.gpt_temp = case['gpt_temp']
 
@@ -158,11 +158,11 @@ def set_prompt_component(args):
     # get task-specific instructions
     args.instruction = task_dict['instruction']
     if args.case_id >= 400: # direct chatgpt re its expertise
-        args.instruction = constants.CHATGPT_EXPERTISE + args.instruction
+        args.instruction = constants.HOSTED_LLM_EXPERTISE + args.instruction
     if args.n_icl: 
        args.instruction += constants.INSTRUCTION_ICL
 
-    # set n_toks_buffer to account for system prompt (chatgpt) in filtering
+    # set n_toks_buffer to account for system prompt in filtering
     n_ = n_tokens(args.instruction)
     args.n_toks_buffer = n_ if args.case_id >= 400 else 0
 

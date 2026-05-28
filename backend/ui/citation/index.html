@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Citation Review | Medical Record Summarization</title>
+    <link rel="stylesheet" href="/citation-assets/styles.css">
+  </head>
+  <body>
+    <header class="header">
+      <div class="brand">
+        <span class="mark">V</span>
+        <div>
+          <strong>Clinical Citation Review</strong>
+          <small>Medical Record Summarization prototype</small>
+        </div>
+      </div>
+      <span class="safety">AI draft - clinician review required</span>
+    </header>
+
+    <main>
+      <section class="intro">
+        <div>
+          <p class="eyebrow">Citation-based summary</p>
+          <h1>Đối chiếu câu tóm tắt với bằng chứng gốc</h1>
+          <p>Di chuột hoặc bấm vào một câu bên phải để tô sáng đoạn nguồn ở hồ sơ bên trái.</p>
+        </div>
+        <div class="controls">
+          <label>Clinical question
+            <input id="question" value="Summarize active findings and plan.">
+          </label>
+          <label>Workflow
+            <select id="workflow">
+              <option value="active_record">Active record</option>
+              <option value="diagnostic_report">Diagnostic report</option>
+              <option value="handoff">Handoff</option>
+            </select>
+          </label>
+          <button id="run" type="button">Index and summarize</button>
+        </div>
+      </section>
+
+      <section class="review-grid">
+        <article class="card source-card">
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Nguồn EMR</p>
+              <h2>Bệnh án gốc</h2>
+            </div>
+            <button id="load-sample" class="ghost" type="button">Tải mẫu</button>
+          </div>
+          <textarea id="source-input" spellcheck="false" aria-label="Raw clinical record"></textarea>
+          <p class="hint">Preview có tô sáng:</p>
+          <div id="source-preview" class="source-preview" aria-live="polite"></div>
+        </article>
+
+        <article class="card summary-card">
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Bản tóm tắt</p>
+              <h2>Grounded sentences</h2>
+            </div>
+            <span id="coverage" class="coverage hidden"></span>
+          </div>
+          <div id="summary-empty" class="empty">
+            Nhập hồ sơ và sinh tóm tắt để xem các câu có citation.
+          </div>
+          <div id="summary-list" class="summary-list hidden"></div>
+          <div id="message" class="message hidden"></div>
+        </article>
+      </section>
+    </main>
+    <script src="/citation-assets/app.js"></script>
+  </body>
+</html>

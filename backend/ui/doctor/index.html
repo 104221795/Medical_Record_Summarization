@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Doctor Golden Path | Medical Record Summarization</title>
+    <link rel="stylesheet" href="/doctor-assets/styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">D</span>
+        <div>
+          <strong>Doctor Golden Path</strong>
+          <small>AI draft summary review, citations, and safety flags</small>
+        </div>
+      </div>
+      <div class="session-strip">
+        <span id="session-label" class="muted">Not signed in</span>
+        <button id="logout-button" class="ghost hidden" type="button">Reset mock session</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="login-view" class="screen login-screen">
+        <article class="login-card">
+          <p class="eyebrow">Mock development login</p>
+          <h1>Open the doctor workflow</h1>
+          <p class="copy">
+            Real auth/RBAC is not implemented yet. This screen stores a mock doctor session locally
+            and sends the required demo headers to the backend.
+          </p>
+          <label>
+            Role
+            <select id="role-select">
+              <option value="doctor">doctor</option>
+              <option value="nurse">nurse</option>
+              <option value="clinical_admin">clinical_admin</option>
+              <option value="auditor">auditor</option>
+            </select>
+          </label>
+          <label>
+            Mock user ID
+            <input id="user-id-input" value="doctor-demo">
+          </label>
+          <label>
+            Tenant
+            <input id="tenant-id-input" value="sandbox">
+          </label>
+          <button id="login-button" type="button">Continue</button>
+          <p class="safety-note">AI output remains Draft and requires clinician review before use.</p>
+        </article>
+      </section>
+
+      <section id="app-view" class="screen hidden">
+        <nav class="nav-tabs" aria-label="Workflow steps">
+          <button id="tab-patients" class="tab active" type="button">1. Patient List</button>
+          <button id="tab-detail" class="tab" type="button">2. Patient Detail</button>
+          <button id="tab-summary" class="tab" type="button">3. AI Summary Workspace</button>
+        </nav>
+
+        <section id="patient-list-view" class="workflow-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Patient list</p>
+              <h1>Find a patient</h1>
+            </div>
+            <div class="toolbar">
+              <input id="patient-search" placeholder="Search patient ID/hash">
+              <button id="refresh-patients" type="button">Refresh</button>
+              <button id="seed-demo-data" class="ghost" type="button">Create demo data</button>
+            </div>
+          </div>
+          <div id="patient-list-state" class="message hidden"></div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Patient</th>
+                  <th>DOB / Age</th>
+                  <th>Gender</th>
+                  <th>Current encounter</th>
+                  <th>Last summary status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="patient-table-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="patient-detail-view" class="workflow-panel hidden">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Patient detail</p>
+              <h1 id="patient-title">No patient selected</h1>
+            </div>
+            <button id="back-to-patients" class="ghost" type="button">Back to patient list</button>
+          </div>
+          <div id="patient-detail-state" class="message hidden"></div>
+          <div class="detail-grid">
+            <article class="card">
+              <h2>Patient Header</h2>
+              <dl id="patient-header"></dl>
+            </article>
+            <article class="card">
+              <h2>Encounters</h2>
+              <div id="encounter-list" class="stack-list"></div>
+            </article>
+            <article class="card wide">
+              <div class="card-row">
+                <h2>Clinical Documents</h2>
+                <button id="open-summary-workspace" type="button">Generate AI Summary</button>
+              </div>
+              <div id="document-list" class="stack-list"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="summary-view" class="workflow-panel hidden">
+          <div class="workspace-head">
+            <div>
+              <p class="eyebrow">AI summary workspace</p>
+              <h1>Draft summary with citations</h1>
+              <p id="workspace-patient-context" class="copy">Select a patient to begin.</p>
+            </div>
+            <div class="draft-banner">
+              <strong>Draft only</strong>
+              <span>AI-generated summary. Not an official clinical conclusion.</span>
+            </div>
+          </div>
+
+          <div class="summary-controls">
+            <label>
+              Summary type
+              <select id="summary-type">
+                <option value="patient_snapshot">patient_snapshot</option>
+              </select>
+            </label>
+            <label>
+              Encounter
+              <select id="summary-encounter"></select>
+            </label>
+            <button id="generate-summary" type="button">Generate</button>
+            <button id="regenerate-summary" class="ghost" type="button" disabled>Regenerate</button>
+            <button id="start-review" class="ghost" type="button" disabled>Start Review</button>
+            <button id="edit-summary" class="ghost" type="button" disabled>Edit</button>
+            <button id="approve-summary" type="button" disabled>Approve</button>
+            <button id="reject-summary" class="danger-action" type="button" disabled>Reject</button>
+            <button id="review-history" class="ghost" type="button" disabled>View Review History</button>
+          </div>
+
+          <div id="summary-state" class="message hidden"></div>
+
+          <div id="edit-panel" class="edit-panel card hidden">
+            <h2>Edit Summary</h2>
+            <p class="copy">
+              Save only clinician-reviewed wording. Claims and citations remain visible for verification,
+              and edited text is marked as needing citation revalidation.
+            </p>
+            <label>
+              Edited summary text
+              <textarea id="edit-summary-text" rows="10"></textarea>
+            </label>
+            <label>
+              Edit comment
+              <input id="edit-comment" placeholder="Corrected wording, removed unsupported claim, etc.">
+            </label>
+            <div class="modal-actions">
+              <button id="save-edit" type="button">Save Edit</button>
+              <button id="cancel-edit" class="ghost" type="button">Cancel</button>
+            </div>
+          </div>
+
+          <div class="workspace-grid">
+            <section class="summary-panel card">
+              <h2>Generated Sections</h2>
+              <div id="summary-empty" class="empty">
+                No summary generated yet. Choose an encounter and click Generate.
+              </div>
+              <div id="summary-sections" class="summary-sections hidden"></div>
+            </section>
+
+            <aside class="evidence-panel card">
+              <h2>Citation Evidence Panel</h2>
+              <div id="evidence-empty" class="empty">
+                Click a citation badge to view the source span.
+              </div>
+              <div id="evidence-content" class="hidden"></div>
+            </aside>
+
+            <aside class="safety-panel card">
+              <h2>Safety Panel</h2>
+              <div id="safety-content" class="empty">
+                Safety metrics will appear after generation.
+              </div>
+            </aside>
+
+            <aside class="review-history-panel card">
+              <h2>Review History</h2>
+              <div id="review-history-content" class="empty">
+                Review actions will appear here after Start Review, Edit, Approve, or Reject.
+              </div>
+            </aside>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <div id="approve-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="approve-modal-title">
+      <article class="modal-card">
+        <h2 id="approve-modal-title">Approve Summary</h2>
+        <p class="copy">Bạn xác nhận đã kiểm tra bản tóm tắt và các citation liên quan trước khi phê duyệt?</p>
+        <label>
+          Approval comment
+          <textarea id="approval-comment" rows="4">Reviewed and approved for clinician workflow use.</textarea>
+        </label>
+        <div class="modal-actions">
+          <button id="confirm-approve" type="button">Confirm Approve</button>
+          <button id="cancel-approve" class="ghost" type="button">Cancel</button>
+        </div>
+      </article>
+    </div>
+
+    <div id="reject-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="reject-modal-title">
+      <article class="modal-card">
+        <h2 id="reject-modal-title">Reject Summary</h2>
+        <label>
+          Rejection reason
+          <select id="rejection-reason">
+            <option value="">Select reason...</option>
+            <option value="unsupported_claim">unsupported_claim</option>
+            <option value="wrong_citation">wrong_citation</option>
+            <option value="missing_critical_info">missing_critical_info</option>
+            <option value="incorrect_clinical_fact">incorrect_clinical_fact</option>
+            <option value="conflicting_evidence">conflicting_evidence</option>
+            <option value="poor_readability">poor_readability</option>
+            <option value="too_generic">too_generic</option>
+            <option value="unsafe_output">unsafe_output</option>
+            <option value="other">other</option>
+          </select>
+        </label>
+        <label>
+          Rejection comment
+          <textarea id="rejection-comment" rows="5" placeholder="Explain what must be corrected before this summary can be used."></textarea>
+        </label>
+        <div id="reject-error" class="message error hidden"></div>
+        <div class="modal-actions">
+          <button id="confirm-reject" class="danger-action" type="button">Reject Summary</button>
+          <button id="cancel-reject" class="ghost" type="button">Cancel</button>
+        </div>
+      </article>
+    </div>
+
+    <script src="/doctor-assets/app.js"></script>
+  </body>
+</html>

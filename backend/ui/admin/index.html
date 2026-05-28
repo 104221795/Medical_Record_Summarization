@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Clinical Quality Dashboard</title>
+    <link rel="stylesheet" href="/admin-assets/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Medical Record Summarization MVP</p>
+        <h1>Audit, Metrics, and Evaluation Dashboard</h1>
+        <p class="subtitle">
+          Read-only clinical quality view. Metrics are computed from persisted summaries,
+          reviews, citations, model runs, and audit logs. No fake dashboard data is used.
+        </p>
+      </div>
+      <section class="session-card" aria-label="Mock admin session">
+        <label for="roleSelect">Mock role</label>
+        <select id="roleSelect">
+          <option value="clinical_admin">clinical_admin</option>
+          <option value="ai_safety_reviewer">ai_safety_reviewer</option>
+          <option value="auditor">auditor</option>
+          <option value="it_admin">it_admin</option>
+          <option value="nurse">nurse (should be denied)</option>
+        </select>
+        <label for="userInput">Mock user</label>
+        <input id="userInput" value="clinical-admin-demo" />
+        <button id="saveSessionBtn">Reload dashboard</button>
+        <p class="hint">This is dev header-based RBAC, not production auth.</p>
+      </section>
+    </header>
+
+    <main>
+      <div id="globalMessage" class="message hidden" role="status"></div>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>Overview</h2>
+          <span id="readinessBadge" class="badge neutral">Loading</span>
+        </div>
+        <div id="overviewCards" class="card-grid"></div>
+      </section>
+
+      <section class="grid-two">
+        <article class="panel">
+          <h2>Summary Status Breakdown</h2>
+          <div id="statusBreakdown" class="status-grid"></div>
+        </article>
+
+        <article class="panel">
+          <h2>Usage Metrics</h2>
+          <div id="usageMetrics" class="metric-list"></div>
+        </article>
+      </section>
+
+      <section class="grid-two">
+        <article class="panel">
+          <h2>Safety Metrics</h2>
+          <div id="safetyMetrics" class="metric-list"></div>
+          <h3>MVP Readiness Gates</h3>
+          <div id="safetyGates" class="gate-list"></div>
+        </article>
+
+        <article class="panel">
+          <h2>Review Metrics</h2>
+          <div id="reviewMetrics" class="metric-list"></div>
+          <h3>Top Rejection Reasons</h3>
+          <div id="rejectionReasons" class="chip-list"></div>
+        </article>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>Recent Audit Events</h2>
+          <button id="refreshAuditBtn" class="secondary">Refresh audit logs</button>
+        </div>
+        <form id="auditFilters" class="filters">
+          <label>
+            Action
+            <input name="action" placeholder="generate_summary" />
+          </label>
+          <label>
+            Patient ID
+            <input name="patient_id" placeholder="UUID" />
+          </label>
+          <label>
+            User ID
+            <input name="user_id" placeholder="UUID" />
+          </label>
+          <label>
+            From
+            <input name="from_date" placeholder="2026-05-01T00:00:00Z" />
+          </label>
+          <label>
+            To
+            <input name="to_date" placeholder="2026-05-28T23:59:59Z" />
+          </label>
+          <button type="submit">Apply filters</button>
+        </form>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Action</th>
+                <th>User</th>
+                <th>Patient ID</th>
+                <th>Resource</th>
+              </tr>
+            </thead>
+            <tbody id="auditTableBody"></tbody>
+          </table>
+        </div>
+        <aside id="auditDetail" class="detail-panel">
+          <h3>Audit detail</h3>
+          <p>Select an audit row to inspect safe metadata.</p>
+        </aside>
+      </section>
+    </main>
+
+    <script src="/admin-assets/app.js"></script>
+  </body>
+</html>

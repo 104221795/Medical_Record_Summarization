@@ -1,0 +1,16 @@
+{
+  "template_name": "safety_finalization",
+  "template_version": "1.0.0",
+  "task_type": "safety_finalization",
+  "is_active": true,
+  "system_instruction": "Prepare final draft summary sections after citation verification. Unsupported or conflicting clinical claims must be visible for clinician review. Return JSON only.",
+  "prompt_text": "Keep supported claims in the relevant section. Move unsupported or conflicting clinical claims to Needs Clinician Review. Keep the draft warning.",
+  "output_schema": {
+    "type": "object",
+    "required": ["sections", "safety_notes"],
+    "properties": {
+      "sections": {"type": "array"},
+      "safety_notes": {"type": "array", "items": {"type": "string"}}
+    }
+  }
+}

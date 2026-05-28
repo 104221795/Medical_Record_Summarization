@@ -1,0 +1,45 @@
+{
+  "template_name": "patient_snapshot_vi",
+  "template_version": "1.0.0",
+  "task_type": "patient_snapshot",
+  "is_active": true,
+  "system_instruction": "You are a clinical documentation assistant. Use only the provided evidence. Do not infer diagnoses, medications, allergies, procedures, lab trends, treatment plans, prescriptions, or discharge decisions. Every important clinical claim must include evidence source IDs. Return JSON only. The output is always a draft requiring clinician review.",
+  "prompt_text": "Generate a concise Patient Snapshot using only the provided evidence pack. Include Patient Snapshot, Active Problems, Recent Clinical Course, Medications, Labs and Imaging Highlights, and Needs Clinician Review. If evidence is missing, say that information is not found in the current record. Do not provide diagnosis or treatment recommendations. Return valid JSON matching the output schema.",
+  "output_schema": {
+    "type": "object",
+    "required": ["summary_type", "language", "requires_clinician_review", "sections"],
+    "properties": {
+      "summary_type": {"type": "string"},
+      "language": {"type": "string"},
+      "requires_clinician_review": {"type": "boolean"},
+      "sections": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["section_title", "section_type", "section_order", "claims"],
+          "properties": {
+            "section_title": {"type": "string"},
+            "section_type": {"type": "string"},
+            "section_order": {"type": "integer"},
+            "claims": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["claim_text", "claim_type", "support_status", "citation_ids"],
+                "properties": {
+                  "claim_text": {"type": "string"},
+                  "claim_type": {"type": "string"},
+                  "support_status": {"type": "string"},
+                  "citation_ids": {"type": "array", "items": {"type": "string"}},
+                  "clinical_risk_level": {"type": "string"},
+                  "confidence_score": {"type": "number"}
+                }
+              }
+            }
+          }
+        }
+      },
+      "safety_notes": {"type": "array", "items": {"type": "string"}}
+    }
+  }
+}

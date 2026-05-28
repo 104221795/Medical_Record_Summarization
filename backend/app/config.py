@@ -1,0 +1,116 @@
+from functools import lru_cache
+from pathlib import Path
+from typing import Literal
+
+from pydantic import SecretStr, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+
+
+class Settings(BaseSettings):
+    """Configuration loaded from environment or the repository .env file."""
+
+    model_config = SettingsConfigDict(
+        env_file=ROOT_DIR / ".env",
+        env_prefix="RAG_",
+        extra="ignore",
+    )
+
+    app_name: str = "Medical Record Summarization RAG API"
+    environment: Literal["development", "test", "production"] = "development"
+    api_prefix: str = "/api/v1"
+
+    database_url: str = "sqlite:///./var/clin_summ.db"
+    database_echo: bool = False
+
+    qdrant_url: str | None = None
+    qdrant_api_key: SecretStr | None = None
+    qdrant_path: Path | None = None
+    qdrant_collection: str = "clinical_record_chunks"
+
+    embedding_provider: Literal["hashing", "fastembed"] = "hashing"
+    embedding_dimension: int = 384
+    fastembed_model: str = "intfloat/multilingual-e5-large"
+    ort_execution_provider: Literal[
+        "CPUExecutionProvider",
+        "OpenVINOExecutionProvider",
+        "CUDAExecutionProvider",
+    ] = "CPUExecutionProvider"
+    ort_intra_op_threads: int | None = None
+
+    generator_provider: Literal["extractive", "gemini"] = "extractive"
+    gemini_api_key: SecretStr | None = None
+    gemini_model: str = "gemini-2.5-flash-lite"
+
+    llm_provider: Literal["mock", "deterministic", "local", "external", "gemini"] = "deterministic"
+    llm_mock_behavior: Literal["normal", "invalid_json", "unsupported_claim"] = "normal"
+    llm_external_enabled: bool = False
+    llm_allow_phi_external: bool = False
+    llm_model_name: str = "mock-clinical-json"
+    llm_model_version: str = "phase7-1.0.0"
+    llm_temperature: float = 0.0
+    prompt_templates_dir: Path = ROOT_DIR / "prompts"
+
+    chunk_max_chars: int = 1200
+    chunk_overlap_sentences: int = 1
+    retrieval_top_k: int = 6
+    minimum_retrieval_score: float = 0.0
+    minimum_token_overlap: float = 0.16
+    minimum_semantic_support: float = 0.42
+
+    whisper_model: str = "openai/whisper-small"
+    whisper_device: int = -1
+    vit_model: str = "google/vit-base-patch16-224-in21k"
+    vision_device: Literal["cpu", "cuda"] = "cpu"
+    maximum_audio_bytes: int = 50 * 1024 * 1024
+    maximum_image_bytes: int = 20 * 1024 * 1024
+
+    fhir_mock_base_url: str = "https://hapi.fhir.local/fhir/R4"
+    fhir_mapper_device_reference: str = "Device/clinical-summarization-service"
+    medical_nli_model_path: Path | None = None
+    medical_nli_contradiction_threshold: float = 0.80
+    medical_nli_required_for_writeback: bool = False
+
+    mlflow_enabled: bool = False
+    mlflow_tracking_uri: str = "sqlite:///./backend/var/mlflow.db"
+    mlflow_experiment_name: str = "medical-record-summarization"
+    mlflow_log_redacted_safety_artifacts: bool = True
+
+    @model_validator(mode="after")
+    def enforce_production_safety(self) -> "Settings":
+        if self.environment == "production" and self.embedding_provider == "hashing":
+            raise ValueError("Hashing embeddings are development-only; configure fastembed in production.")
+        if self.environment == "production" and not self.qdrant_url:
+            raise ValueError("Production requires RAG_QDRANT_URL for a shared Qdrant server.")
+        if self.ort_execution_provider != "CPUExecutionProvider" and self.embedding_provider != "fastembed":
+            raise ValueError("Accelerated ONNX execution providers require embedding_provider=fastembed.")
+        if self.generator_provider == "gemini" and not self.gemini_api_key:
+            raise ValueError("RAG_GEMINI_API_KEY is required when generator_provider=gemini.")
+        if self.llm_provider in {"external", "gemini"} and not self.llm_external_enabled:
+            raise ValueError(
+                "RAG_LLM_EXTERNAL_ENABLED=true is required when RAG_LLM_PROVIDER is external or gemini."
+            )
+        if self.llm_provider == "gemini" and not self.gemini_api_key:
+            raise ValueError("RAG_GEMINI_API_KEY is required when RAG_LLM_PROVIDER=gemini.")
+        if self.llm_external_enabled and not self.llm_allow_phi_external:
+            raise ValueError(
+                "External LLM access requires RAG_LLM_ALLOW_PHI_EXTERNAL=true after governance approval."
+            )
+        if not 0.0 <= self.llm_temperature <= 2.0:
+            raise ValueError("RAG_LLM_TEMPERATURE must be between 0 and 2.")
+        if self.medical_nli_required_for_writeback and not self.medical_nli_model_path:
+            raise ValueError(
+                "RAG_MEDICAL_NLI_MODEL_PATH is required when medical NLI is mandatory for writeback."
+            )
+        if self.environment == "production" and not self.medical_nli_required_for_writeback:
+            raise ValueError("Production FHIR writeback requires medical NLI validation.")
+        if not 0.0 <= self.medical_nli_contradiction_threshold <= 1.0:
+            raise ValueError("RAG_MEDICAL_NLI_CONTRADICTION_THRESHOLD must be between 0 and 1.")
+        return self
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()

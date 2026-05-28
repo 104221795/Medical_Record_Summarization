@@ -1,0 +1,55 @@
+{
+  "bundle": {
+    "resourceType": "Bundle",
+    "id": "vinmec-input-demo",
+    "type": "collection",
+    "entry": [
+      {
+        "resource": {
+          "resourceType": "Patient",
+          "id": "patient-demo",
+          "active": true
+        }
+      },
+      {
+        "resource": {
+          "resourceType": "Encounter",
+          "id": "encounter-demo",
+          "status": "in-progress",
+          "subject": {
+            "reference": "Patient/patient-demo"
+          }
+        }
+      },
+      {
+        "resource": {
+          "resourceType": "Observation",
+          "id": "blood-pressure-demo",
+          "status": "final",
+          "code": {
+            "coding": [
+              {
+                "system": "http://loinc.org",
+                "code": "85354-9",
+                "display": "Blood pressure panel"
+              }
+            ],
+            "text": "Blood pressure"
+          },
+          "subject": {
+            "reference": "Patient/patient-demo"
+          },
+          "encounter": {
+            "reference": "Encounter/encounter-demo"
+          },
+          "valueString": "145/92 mmHg"
+        }
+      }
+    ]
+  },
+  "clinical_notes": "TI\u1ec0N S\u1eec:\nT\u0103ng huy\u1ebft \u00e1p.\n\nCH\u1ea8N \u0110O\u00c1N:\nT\u0103ng huy\u1ebft \u00e1p ch\u01b0a ki\u1ec3m so\u00e1t.\n\nK\u1ebe HO\u1ea0CH:\nTheo d\u00f5i huy\u1ebft \u00e1p t\u1ea1i nh\u00e0.",
+  "clinical_question": "blood pressure hypertension treatment plan",
+  "workflow": "active_record",
+  "top_k": 5,
+  "replace_patient_index": true
+}

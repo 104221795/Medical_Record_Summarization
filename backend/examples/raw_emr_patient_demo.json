@@ -1,0 +1,29 @@
+{
+  "replace_patient_index": true,
+  "documents": [
+    {
+      "document_id": "visit-2026-05-18",
+      "document_type": "progress-note",
+      "title": "Urology outpatient note",
+      "encounter_id": "enc-demo-001",
+      "authored_at": "2026-05-18T09:30:00+07:00",
+      "text": "CHIEF COMPLAINT:\nWeak urinary stream and nocturia for three months.\n\nHISTORY OF PRESENT ILLNESS:\nPatient reports waking twice each night to void. Denies fever or hematuria.\n\nASSESSMENT:\nLower urinary tract symptoms, suspected benign prostatic hyperplasia.\n\nPLAN:\nStart tamsulosin 0.4 mg once nightly. Refer to urology follow-up in four weeks.",
+      "metadata": {
+        "source_system": "emr-demo",
+        "department": "urology"
+      }
+    },
+    {
+      "document_id": "report-2026-05-20",
+      "document_type": "diagnostic-report",
+      "title": "Chest X-ray report",
+      "encounter_id": "enc-demo-002",
+      "authored_at": "2026-05-20T14:10:00+07:00",
+      "text": "FINDINGS:\nHeart size is normal. No focal consolidation. No pleural effusion or pneumothorax. No pulmonary edema.\n\nIMPRESSION:\nNo acute cardiopulmonary findings.",
+      "metadata": {
+        "source_system": "ris-demo",
+        "modality": "XR"
+      }
+    }
+  ]
+}

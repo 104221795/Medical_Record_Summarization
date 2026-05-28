@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Clinical Intelligence | Medical Record Summarization</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-symbol">V</span>
+        <div>
+          <strong>Clinical Intelligence</strong>
+          <span>Vinmec-oriented concept prototype</span>
+        </div>
+      </div>
+      <div class="topbar-status">
+        <span class="badge neutral">FHIR R4 ready</span>
+        <span class="badge live"><i></i><span id="model-name">Model</span></span>
+      </div>
+    </header>
+
+    <main class="shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Medical Record Summarization</p>
+          <h1>Evidence-grounded summaries for safer chart review.</h1>
+          <p class="subtitle">
+            A HIS/EMR integration concept for active summarization, source-linked
+            evidence, safety gating, and FHIR-compatible draft export.
+          </p>
+        </div>
+        <aside class="disclaimer">
+          <strong>Clinician-in-the-loop</strong>
+          <p>AI output is a draft only. Review and attest before any EMR writeback.</p>
+        </aside>
+      </section>
+
+      <section id="capabilities" class="capabilities" aria-label="Platform capabilities"></section>
+
+      <section class="workbench">
+        <div class="panel input-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Active Summarizer</p>
+              <h2>Clinical context</h2>
+            </div>
+            <button id="load-example" class="secondary" type="button">Load sample</button>
+          </div>
+
+          <label class="small-label">Workflow</label>
+          <div id="workflow-picker" class="workflow-picker" role="radiogroup"></div>
+
+          <div class="source-row">
+            <label class="small-label">Source format</label>
+            <div class="toggle" role="radiogroup" aria-label="Input source format">
+              <button class="source-toggle active" type="button" data-input-type="text">Narrative record</button>
+              <button class="source-toggle" type="button" data-input-type="fhir">FHIR Bundle</button>
+            </div>
+          </div>
+
+          <label id="source-label" class="small-label" for="clinical-input">De-identified clinical text</label>
+          <textarea
+            id="clinical-input"
+            placeholder="Paste a de-identified clinical record or load a sample..."
+            spellcheck="false"
+          ></textarea>
+          <div class="input-notes">
+            <span>Do not enter identifiable patient data in this prototype.</span>
+            <span id="character-count">0 characters</span>
+          </div>
+
+          <button id="summarize" class="primary" type="button">
+            <span class="button-label">Generate grounded summary</span>
+            <span class="spinner" aria-hidden="true"></span>
+          </button>
+        </div>
+
+        <div class="panel output-panel">
+          <div class="panel-heading result-heading">
+            <div>
+              <p class="eyebrow">Citation-Based Summary</p>
+              <h2>Clinical review draft</h2>
+            </div>
+            <span id="review-status" class="status-pill draft hidden">Draft</span>
+          </div>
+
+          <nav class="tabs" aria-label="Results sections">
+            <button class="tab active" type="button" data-tab="summary">Summary</button>
+            <button class="tab" type="button" data-tab="safety">Evidence &amp; safety</button>
+            <button class="tab" type="button" data-tab="integration">EMR integration</button>
+          </nav>
+
+          <div id="empty-result" class="empty-result">
+            <span class="record-icon"></span>
+            <h3>Awaiting clinical context</h3>
+            <p>Generate a summary to see cited claims, safety checks, and FHIR export.</p>
+          </div>
+
+          <section id="summary-tab" class="tab-content hidden" aria-live="polite">
+            <div id="summary-sections"></div>
+            <div class="result-footer">
+              <span id="result-model"></span>
+              <button id="copy-summary" class="secondary" type="button">Copy draft</button>
+            </div>
+          </section>
+
+          <section id="safety-tab" class="tab-content hidden">
+            <div class="safety-score">
+              <div>
+                <p class="eyebrow">Hallucination Mitigation</p>
+                <strong id="coverage-score">--%</strong>
+                <span>citation coverage</span>
+              </div>
+              <div class="meter"><span id="coverage-meter"></span></div>
+            </div>
+            <div id="safety-alerts" class="alerts"></div>
+            <h3 class="section-title">Evidence ledger</h3>
+            <div id="evidence-list" class="evidence-list"></div>
+          </section>
+
+          <section id="integration-tab" class="tab-content hidden">
+            <div class="integration-banner">
+              <strong>FHIR writeback preview</strong>
+              <span>Draft only. Requires identity, authorization, attestation, and audit controls.</span>
+            </div>
+            <div class="integration-grid">
+              <div><span>Input</span><strong>FHIR R4 Bundle</strong></div>
+              <div><span>Output</span><strong>Composition</strong></div>
+              <div><span>Attachment</span><strong>DocumentReference</strong></div>
+              <div><span>Traceability</span><strong>Provenance</strong></div>
+            </div>
+            <button id="download-fhir" class="primary outline" type="button">Download draft FHIR export</button>
+            <p class="microcopy">
+              Intended integration point: HIS/EMR middleware using authenticated FHIR APIs,
+              terminology mapping, clinician signature, and immutable audit logging.
+            </p>
+          </section>
+        </div>
+      </section>
+
+      <section class="architecture">
+        <div>
+          <p class="eyebrow">Enterprise Blueprint</p>
+          <h2>From clinical source to reviewed EMR summary</h2>
+        </div>
+        <div class="pipeline">
+          <span>HIS / EMR</span><b></b>
+          <span>FHIR Gateway</span><b></b>
+          <span>RAG + Guardrails</span><b></b>
+          <span>Active Summarizer</span><b></b>
+          <span>Clinician Attestation</span>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      Concept prototype for product exploration, not an official Vinmec product or a
+      certified medical device. AI summaries require clinical review.
+    </footer>
+    <script src="/assets/app.js"></script>
+  </body>
+</html>

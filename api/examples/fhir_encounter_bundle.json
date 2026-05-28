@@ -1,0 +1,56 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "id": "vinmec-concept-demo",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "enc-1001",
+        "status": "finished",
+        "reasonCode": [{"text": "Weak urinary stream and nocturia"}]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "condition-bph",
+        "clinicalStatus": {"text": "active"},
+        "code": {"text": "Lower urinary tract symptoms, suspected benign prostatic hyperplasia"}
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "obs-nocturia",
+        "code": {"text": "Nocturia frequency"},
+        "valueQuantity": {"value": 3, "unit": "times per night"}
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "med-tamsulosin",
+        "status": "active",
+        "medicationCodeableConcept": {"text": "Tamsulosin 0.4 mg"},
+        "dosageInstruction": [{"text": "Take once nightly"}]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "ServiceRequest",
+        "id": "request-urology",
+        "status": "active",
+        "code": {"text": "Urology referral and PSA testing"}
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "id": "diagnostic-cxr",
+        "status": "final",
+        "conclusion": "No acute cardiopulmonary abnormality."
+      }
+    }
+  ]
+}

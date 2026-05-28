@@ -1,14 +1,19 @@
 import copy
 import datetime
+import json
 import os
+from pathlib import Path
+import subprocess
 import sys
 import time
-import timeout_decorator
-from timeout_decorator import timeout
+import urllib.error
+import urllib.request
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-sys.path.insert(0, '../src/')
+API_DIR = Path(__file__).resolve().parent
+SRC_DIR = API_DIR.parent / 'src'
+sys.path.insert(0, str(SRC_DIR))
 import constants
 import parser
 import process
@@ -23,15 +28,9 @@ LEN_TIMEOUT = 30 # seconds for api timeout
     
 
 def main():
-    ''' calls openai via microsoft azure '''
+    ''' calls the Gemini Developer API '''
 
     args, dataset = load_data_()
-
-    # set delay timer (in seconds) based on rate limit
-    tok_per_sec = constants.TOK_PER_MIN[args.oai_model] / 60
-    tok_per_sample = dataset.n_toks_longest
-    time_per_sample = round((tok_per_sample / tok_per_sec), 2)
-    print(f'set delay of {time_per_sample} seconds per sample')
 
     # files across all samples
     fn_log = os.path.join(args.dir_out, 'log.txt')
@@ -59,7 +58,7 @@ def main():
                              key='system_prompt', value=args.instruction)
     if len(idcs_pregen):
         msg = f'filtered out {len(idcs_pregen)} pre-generated samples. '
-        msg += f'querying openai model for {len(dataset.data)} remaining samples'
+        msg += f'querying Gemini for {len(dataset.data)} remaining samples'
         print(msg)
 
     for sample in dataset.data:
@@ -69,7 +68,7 @@ def main():
         tgt = sample['target']
         fn_ = f'{idx}.jsonl'
 
-        if idx in naughty_lst: # sample indices previously rejected by openai
+        if idx in naughty_lst: # sample indices previously rejected by API
             continue
 
         # get individual filenames
@@ -79,28 +78,30 @@ def main():
         fn_result_ = os.path.join(dir_result, fn_)
 
         sample = [sample] # convert to list so we can use built-ins
-        process.write_list_to_jsonl(fn_inp_, sample, key=None)
+        process.write_list_to_jsonl(fn_inp_, sample)
 
-        # pre-process inputs for azure
-        cmd = f'python preprocess.py {fn_inp_} {fn_inp_proc_}'
-        cmd += f' --system_prompt "{args.instruction}"'
-        cmd += f' --temperature {args.gpt_temp}'
-        os.system(cmd)
+        # Pre-process the prompt into a Gemini generateContent request.
+        cmd = [
+            sys.executable, 'preprocess.py', fn_inp_, fn_inp_proc_,
+            '--system_prompt', args.instruction,
+            '--temperature', str(args.gpt_temp),
+        ]
+        subprocess.run(cmd, cwd=API_DIR, check=True)
 
-        # query openai api
+        # Query Gemini.
         try:
             t0 = time.time()
             out = call_api_wrapper(args, fn_inp_proc_, fn_out)
             t1 = round(time.time() - t0, 1)
             now = str(datetime.datetime.now()).split('.')[0]
-            if not out: # if openai gave error
+            if not out: # if Gemini gave an error
                 msg = f'sample {idx} exited w error in {t1} seconds, {now}'
                 log_progress(fn_log, msg)
                 continue
             msg = f'sample {idx} processed in {t1} seconds, {now}'
             log_progress(fn_log, msg)
 
-        except timeout_decorator.timeout_decorator.TimeoutError:
+        except TimeoutError:
             now = str(datetime.datetime.now()).split('.')[0]
             msg = f'sample {idx} timed out given {LEN_TIMEOUT} seconds, {now}'
             log_progress(fn_log, msg)
@@ -115,19 +116,14 @@ def main():
         add_key_val_pair(sample, idx=idx, key='ratio_tok', value=r_tok)
 
         # save indiv file
-        process.write_list_to_jsonl(fn_result_, sample, key=None)
-
-        # delay to avoid overloading api
-        time_elapsed = time.time() - t0
-        if time_elapsed < time_per_sample:
-            time.sleep(time_per_sample - time_elapsed)
+        process.write_list_to_jsonl(fn_result_, sample)
 
     # load all indiv files, save to one for expmt
     fn_out_lst = get_files(dir_result)
     results_all = []
     for fn_out in fn_out_lst:
         results_all.append(process.read_jsonl_to_list(fn_out)[0])
-    process.write_list_to_jsonl(fn_result, results_all, key=None)
+    process.write_list_to_jsonl(fn_result, results_all)
     print(f'results generated in {args.dir_out}\n\n\n\n\n')
 
 
@@ -135,113 +131,74 @@ def load_data_():
     ''' load data for api call
         determine which samples, add system prompt '''
 
-    args = parser.get_parser(purpose='openai')
+    args = parser.get_parser(purpose='api')
 
-    # get oai configs (gpt-x v. gpt-x-long, openai api key, max_len_abs)
-    args = get_oai_configs(args)
+    args = get_gemini_configs(args)
   
     # load inputs
-    dataset = SummDataset(args, task='test')
+    dataset = SummDataset(args, task='test', create_dataset_obj=False)
     dataset.save_data(args, fn_out='inputs.jsonl')
 
     return args, dataset
 
 
-@timeout(LEN_TIMEOUT, use_signals=False)
 def call_api_wrapper(args, fn_inp_proc_, fn_out):
-    ''' wrapper to call openai api, save intermediate jsonl output
-        log exit reasons for failed requests
-        return valid requests as list of tuples i.e. (inp, out) '''
-    
-    if not constants.RESOURCE:
-        raise NotImplementedError('define azure RESOURCE in constants.py')
+    ''' Call Gemini for one prepared request and return generated text. '''
 
-    cmd = f'python call_api.py {fn_inp_proc_} {fn_out}'
-    cmd += f' --request_url {constants.URL_MODEL[args.oai_model]}'
-    cmd += f' --api_key {args.oai_key}'
-    cmd += f' --max_tok_per_min {constants.TOK_PER_MIN[args.oai_model]}'
-    os.system(cmd)
-    out_gpt = process.read_jsonl_to_list(fn_out)
-    
-    # track exit indices
-    exits = {'content_filter': [], 'error': [], 'unknown': []}
+    request_body = process.read_jsonl_to_list(fn_inp_proc_)[0]
+    metadata = request_body.pop('metadata')
+    request = urllib.request.Request(
+        constants.GEMINI_URL_MODEL[args.model],
+        data=json.dumps(request_body).encode('utf-8'),
+        headers={
+            'Content-Type': 'application/json',
+            'x-goog-api-key': args.gemini_api_key,
+        },
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=LEN_TIMEOUT) as response:
+            api_response = json.loads(response.read().decode('utf-8'))
+    except urllib.error.HTTPError as exc:
+        raw_response = exc.read().decode('utf-8')
+        try:
+            api_response = json.loads(raw_response)
+        except json.JSONDecodeError:
+            api_response = {'error': {'code': exc.code, 'message': raw_response}}
 
-    list_idx, list_out = [], []
-    for ii, out in enumerate(out_gpt):
-       
-        idx_sample = out[2]['idx']
+    process.write_list_to_jsonl(
+        fn_out, [[request_body, api_response, metadata]]
+    )
+    if 'error' in api_response:
+        log_api_exit(args, metadata, api_response)
+        return None
 
-        try: # try extracting output
-
-            # running list of successful outputs, indices
-            out_ = out[1]['choices'][0]['message']['content']
-            list_out.append(out_)
-            list_idx.append(idx_sample)
-
-        except: # track errors
-            try: # check if request exited due to content filter
-                code = oo[1]['choices'][0]['finish_reason']
-                if code == 'content_filter':
-                    exits[code].append(idx_sample)
-            except:
-                try: # check if request exited due to content error
-                    code = oo[1][0][2:7]
-                    if code == 'error':
-                        exits[code].append(idx_sample)
-                except: # unknown reason for exit request
-                    exits['unknown'].append(idx_sample)
-   
-    log_exits(args, exits, out_gpt)
-    
-    if list_out:
-        return list_out[0] # only processing one sample
-    else:
-        return None # i.e. got error
+    try:
+        parts = api_response['candidates'][0]['content']['parts']
+    except (KeyError, IndexError):
+        log_api_exit(args, metadata, api_response)
+        return None
+    return ''.join(part.get('text', '') for part in parts).strip()
 
 
-def get_oai_configs(args):
-    ''' based on manually determined limints for n_icl
-        decide whether to use longer context model '''
-   
-    if not constants.API_KEY:
-        raise NotImplementedError('define azure API_KEY in constants.py')
-    args.oai_key = constants.API_KEY
+def get_gemini_configs(args):
+    ''' Load the Gemini API key from the environment or repository .env. '''
 
-    # get model-, dataset-specific n_icl limit
-    # for both gpt-x, gpt-x-long
-    n_icl_limits = constants.N_ICL_LIMITS[args.model][args.dataset]
-    if args.n_icl <= n_icl_limits[0]:
-        args.oai_model = args.model
-    elif args.n_icl <= n_icl_limits[1]:
-        args.oai_model = f'{args.model}-long'
-    else:
-        raise NotImplementedError('n_icl above manually chosen limit')
-
-    # overwrite args.max_len_abs based on oai_model
-    args.max_len_abs = constants.MAX_LEN_OAI[args.oai_model]
-
+    if not constants.GEMINI_API_KEY:
+        raise NotImplementedError('set GEMINI_API_KEY in .env or your environment')
+    args.gemini_api_key = constants.GEMINI_API_KEY
     return args
 
 
-def log_exits(args, exits, out_gpt):
-    ''' given dict w reasons and indices for exits, save to csv '''
-
-    exits_lst = []
-    for key, idcs in exits.items():
-        exits_lst.append(f'exit code: {key}')
-        for ii, idx in enumerate(idcs):
-            exits_lst.append(idx)
-            exits_lst.append(out_gpt[ii])
-        exits_lst.append('\n')
-
+def log_api_exit(args, metadata, api_response):
     fn_exit = get_path(args.dir_out, 'exit_log.csv', rm=False)
-    process.write_list_to_csv(fn_exit, exits_lst)
-
-    return
+    process.write_list_to_csv(
+        fn_exit, [metadata['idx'], json.dumps(api_response)]
+    )
 
 
 def get_naughty_list(fn_naughty):
-    ''' list of samples idcs which openai previously rejected
+    ''' list of sample indices previously rejected by the API
         track s.t. we avoid them in future runs '''
     
     if not os.path.exists(fn_naughty):

@@ -1,0 +1,27 @@
+{
+  "template_name": "claim_extraction",
+  "template_version": "1.0.0",
+  "task_type": "claim_extraction",
+  "is_active": true,
+  "system_instruction": "Extract atomic clinical claims from a draft summary. Do not add new facts. Return JSON only.",
+  "prompt_text": "Extract one factual claim per item. Preserve citation IDs and classify claim type and clinical risk.",
+  "output_schema": {
+    "type": "object",
+    "required": ["claims"],
+    "properties": {
+      "claims": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["claim_text", "claim_type", "citation_ids"],
+          "properties": {
+            "claim_text": {"type": "string"},
+            "claim_type": {"type": "string"},
+            "citation_ids": {"type": "array", "items": {"type": "string"}},
+            "clinical_risk_level": {"type": "string"}
+          }
+        }
+      }
+    }
+  }
+}

@@ -12,10 +12,7 @@ import itertools
 import json
 import os
 import re
-import torch
 from tqdm import tqdm
-from torch.utils.data import DataLoader
-from transformers import default_data_collator
 
 import constants
 import summ_dataset
@@ -121,6 +118,7 @@ def preprocess_function_gpt(examples, tokenizer, len_pad=None):
             i.e. tokenizer(inputs, padding='max_length',
                            truncation=True, max_length=args.max_len_abs)
             gave nan loss while training '''
+    import torch
     
     # tokenize inputs, targets
     inputs = examples['sentence']
@@ -158,6 +156,8 @@ def preprocess_function_gpt(examples, tokenizer, len_pad=None):
 
 def get_loader(args, dataset, tokenizer):
     ''' given list of input and target texts, return dataloader '''
+    from torch.utils.data import DataLoader
+    from transformers import default_data_collator
         
     if args.model in constants.MODELS_W_CUSTOM_TOKENIZER:
         preprocess_function = preprocess_function_gpt
@@ -200,7 +200,7 @@ def get_loader(args, dataset, tokenizer):
 def postprocess(args, str_):
     ''' postprocess generated output '''
 
-    if args.arch in ['oai-35', 'oai-4']:
+    if args.arch in ['oai-35', 'oai-4', 'gemini']:
         # post-process these tasks only
         tasks_to_postprocess = ['rrs', 'pls']
         if args.summ_task not in tasks_to_postprocess:
@@ -217,7 +217,7 @@ def postprocess(args, str_):
     # old post-processing used for gpt-neo models
     else:
         # remove everything in brackets and underscores
-        str_ = re.sub("[\(\[].*?[\)\]]", "", str_)
+        str_ = re.sub(r"[\(\[].*?[\)\]]", "", str_)
         str_ = str_.replace('_', '')
 
         # remove all duplicate adjacent words
@@ -227,7 +227,7 @@ def postprocess(args, str_):
 
 
 def postprocess_pls(string):
-    ''' postprocess openai output of pls task 
+    ''' postprocess hosted model output of pls task
         remove all "n. " b/c gpt outputs things in numbered lists
         replace w semi-colons to separate problems '''
 
@@ -242,7 +242,7 @@ def postprocess_pls(string):
 
 
 def postprocess_rrs(string):
-    ''' postprocess openai output of rrs task 
+    ''' postprocess hosted model output of rrs task
         remove sub-strings "Impression: " '''
 
     sub_str_list = ['Impression: ', 'impression: ']
