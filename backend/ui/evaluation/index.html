@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MVP Evaluation & Demo Control Center</title>
+    <link rel="stylesheet" href="/evaluation-assets/styles.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Medical Record Summarization MVP</p>
+        <h1>MVP Evaluation & Demo Control Center</h1>
+        <p class="subtitle">
+          One read-only control page for demo readiness, provider status, citation and safety checks,
+          HITL workflow visibility, monitoring, and the three-layer evaluation plan.
+        </p>
+        <p class="warning">
+          Mock data validates system function only. Pending credentialed EHR dataset:
+          real EHR benchmark performance remains pending until credentialed
+          de-identified MIMIC-style data is provided.
+        </p>
+      </div>
+      <section class="session-card">
+        <label>
+          Mock role
+          <select id="roleSelect">
+            <option value="clinical_admin">clinical_admin</option>
+            <option value="ai_safety_reviewer">ai_safety_reviewer</option>
+            <option value="auditor">auditor</option>
+            <option value="doctor">doctor</option>
+          </select>
+        </label>
+        <label>
+          Mock user
+          <input id="userInput" value="clinical-admin-demo" />
+        </label>
+        <button id="reloadBtn" type="button">Reload Control Center</button>
+        <p class="hint">Header-based mock RBAC for local demo only.</p>
+      </section>
+    </header>
+
+    <main>
+      <div id="globalMessage" class="message hidden"></div>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>Golden Path Status</h2>
+          <a href="/doctor-demo">Open Doctor UI</a>
+        </div>
+        <div id="goldenPathStatus" class="status-grid"></div>
+      </section>
+
+      <section class="grid-two">
+        <article class="panel">
+          <h2>Model Provider Status</h2>
+          <div id="providerStatus" class="stack"></div>
+        </article>
+
+        <article class="panel">
+          <h2>Citation & Safety</h2>
+          <div id="safetyStatus" class="stack"></div>
+        </article>
+      </section>
+
+      <section class="grid-two">
+        <article class="panel">
+          <h2>HITL Review</h2>
+          <div id="reviewStatus" class="stack"></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-heading">
+            <h2>Monitoring Summary</h2>
+            <a href="/admin/dashboard">Open Admin Dashboard</a>
+          </div>
+          <div id="monitoringStatus" class="stack"></div>
+        </article>
+      </section>
+
+      <section class="panel">
+        <h2>Three-layer Evaluation</h2>
+        <div id="evaluationLayers" class="layer-grid"></div>
+      </section>
+
+      <section class="grid-two">
+        <article class="panel">
+          <h2>Layer A — Functional Validation</h2>
+          <p class="hint">Runs now using mock/de-identified demo data.</p>
+          <button id="runFunctionalBtn" type="button">Run Functional Validation</button>
+          <div id="functionalResult" class="stack result-box"></div>
+        </article>
+
+        <article class="panel">
+          <h2>Layer C — Human Evaluation</h2>
+          <p class="hint">
+            Demo/human usability evaluation on generated summaries. This is not real clinical validation.
+          </p>
+          <form id="humanEvaluationForm" class="human-form">
+            <label>
+              Summary ID
+              <input name="summary_id" required placeholder="UUID of generated summary" />
+            </label>
+            <label>
+              Evaluator name
+              <input name="evaluator_name" placeholder="Reviewer name or ID" />
+            </label>
+            <label>
+              Model provider
+              <select name="model_provider">
+                <option value="">Use summary model run</option>
+                <option value="deterministic">deterministic</option>
+                <option value="bart">bart</option>
+                <option value="pegasus">pegasus</option>
+                <option value="gemini">gemini</option>
+              </select>
+            </label>
+            <label>Factual correctness <input name="factual_correctness_score" type="number" min="1" max="5" value="4" /></label>
+            <label>Completeness <input name="completeness_score" type="number" min="1" max="5" value="4" /></label>
+            <label>Conciseness <input name="conciseness_score" type="number" min="1" max="5" value="4" /></label>
+            <label>Readability <input name="readability_score" type="number" min="1" max="5" value="4" /></label>
+            <label>Citation usefulness <input name="citation_usefulness_score" type="number" min="1" max="5" value="4" /></label>
+            <label>
+              Hallucination risk
+              <select name="hallucination_risk">
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+              </select>
+            </label>
+            <label class="wide">
+              Comments
+              <textarea name="comments" rows="4" placeholder="What was correct, missing, unclear, or unsafe?"></textarea>
+            </label>
+            <button type="submit">Submit Human Evaluation</button>
+          </form>
+          <div id="humanSummary" class="stack"></div>
+        </article>
+      </section>
+
+      <section class="panel">
+        <h2>Final Demo Checklist</h2>
+        <div id="demoChecklist" class="checklist"></div>
+      </section>
+    </main>
+
+    <script src="/evaluation-assets/app.js"></script>
+  </body>
+</html>

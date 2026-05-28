@@ -21,6 +21,9 @@ data/mimic-iv-ext-bhc/
 data/mimic_iv_ext_bhc/
 data/evaluation/raw/
 data/evaluation/credentialed/
+data/processed/ehr_benchmark/*.jsonl
+data/processed/ehr_benchmark/*.json
+data/processed/ehr_benchmark/*.csv
 
 # Large local dataset artifacts and caches.
 *.sqlite

@@ -21,10 +21,12 @@ def test_doctor_golden_path_ui_is_served(tmp_path: Path) -> None:
     assert "Doctor Golden Path" in page.text
     assert "Draft only" in page.text
     assert "Create demo data" in page.text
+    assert "Model provider" in page.text
     assert "Start Review" in page.text
     assert "Approve Summary" in page.text
     assert "Reject Summary" in page.text
     assert script.status_code == 200
+    assert "model_provider" in script.text
     assert "GET /api/v1/patients" not in script.text
     assert styles.status_code == 200
 

@@ -434,17 +434,142 @@ class ReviewMetricsResponse(PersistenceModel):
     reviewer_activity: list[MetricCountItem]
 
 
+class EvaluationProviderStatus(PersistenceModel):
+    provider: str
+    configured: bool
+    enabled: bool
+    status: str
+    model_name: str | None = None
+    last_run_status: str | None = None
+    latency_ms: int | None = None
+    message: str | None = None
+
+
+class EvaluationReadinessItem(PersistenceModel):
+    name: str
+    status: str
+    message: str | None = None
+
+
+class EvaluationLayerStatus(PersistenceModel):
+    layer: str
+    status: str
+    message: str
+    expected_path: str | None = None
+
+
+class EvaluationStatusResponse(PersistenceModel):
+    provider_readiness: list[EvaluationProviderStatus]
+    golden_path_readiness: str
+    citation_readiness: str
+    safety_readiness: str
+    hitl_readiness: str
+    audit_readiness: str
+    metrics_readiness: str
+    evaluation_layers: list[EvaluationLayerStatus]
+
+
+class DemoReadinessResponse(PersistenceModel):
+    golden_path: list[EvaluationReadinessItem]
+    provider_readiness: list[EvaluationProviderStatus]
+    evaluation_layers: list[EvaluationLayerStatus]
+    message: str
+
+
+class FunctionalValidationCheck(PersistenceModel):
+    name: str
+    status: Literal["passed", "failed", "not_tested"]
+    message: str
+
+
+class FunctionalValidationResponse(PersistenceModel):
+    status: Literal["passed", "failed", "partial", "runnable"]
+    checks: list[FunctionalValidationCheck]
+    message: str
+
+
+class BenchmarkStatusResponse(PersistenceModel):
+    status: str
+    message: str
+    dataset_path: str
+    dataset_exists: bool
+    schema_valid: bool | None = None
+    benchmark_runner_exists: bool
+    model_comparison_output_path: str
+    model_comparison_output_exists: bool
+
+
+class HumanEvaluationCreateRequest(PersistenceModel):
+    summary_id: uuid.UUID
+    evaluator_name: str | None = Field(default=None, max_length=255)
+    evaluator_id: str | None = Field(default=None, max_length=100)
+    model_provider: str | None = Field(default=None, max_length=100)
+    factual_correctness_score: int = Field(ge=1, le=5)
+    completeness_score: int = Field(ge=1, le=5)
+    conciseness_score: int = Field(ge=1, le=5)
+    readability_score: int = Field(ge=1, le=5)
+    citation_usefulness_score: int = Field(ge=1, le=5)
+    hallucination_risk: Literal["low", "medium", "high"]
+    comments: str | None = Field(default=None, max_length=5000)
+
+
+class HumanEvaluationResponse(PersistenceModel):
+    evaluation_id: uuid.UUID
+    summary_id: uuid.UUID
+    evaluator_name: str | None
+    evaluator_id: str | None
+    model_provider: str | None
+    factual_correctness_score: int
+    completeness_score: int
+    conciseness_score: int
+    readability_score: int
+    citation_usefulness_score: int
+    hallucination_risk: str
+    comments: str | None
+    created_at: datetime
+
+
+class HumanEvaluationSummaryResponse(PersistenceModel):
+    total_evaluations: int
+    average_factual_correctness_score: float | None
+    average_completeness_score: float | None
+    average_conciseness_score: float | None
+    average_readability_score: float | None
+    average_citation_usefulness_score: float | None
+    hallucination_risk_distribution: list[MetricCountItem]
+    evaluations_by_provider: list[MetricCountItem]
+    recent_evaluations: list[HumanEvaluationResponse]
+
+
+class HumanEvaluationListResponse(PersistenceModel):
+    summary_id: uuid.UUID
+    evaluations: list[HumanEvaluationResponse]
+
+
 class SummaryGenerateOptions(PersistenceModel):
     require_citations: bool = True
     include_safety_check: bool = True
+
+
+SummaryProviderName = Literal["deterministic", "gemini", "bart", "pegasus"]
 
 
 class SummaryGenerateRequest(PersistenceModel):
     encounter_id: uuid.UUID | None = None
     summary_type: Literal["patient_snapshot"] = "patient_snapshot"
     language: str = Field(default="vi", min_length=2, max_length=20)
-    provider: Literal["deterministic", "gemini"] | None = None
+    provider: SummaryProviderName | None = None
+    model_provider: SummaryProviderName | None = None
     options: SummaryGenerateOptions = Field(default_factory=SummaryGenerateOptions)
+
+    @model_validator(mode="after")
+    def normalize_provider_aliases(self) -> "SummaryGenerateRequest":
+        if self.provider and self.model_provider and self.provider != self.model_provider:
+            raise ValueError("provider and model_provider must match when both are supplied.")
+        selected = self.model_provider or self.provider
+        self.model_provider = selected
+        self.provider = selected
+        return self
 
 
 class SummaryGenerateResponse(PersistenceModel):
@@ -453,6 +578,9 @@ class SummaryGenerateResponse(PersistenceModel):
     encounter_id: uuid.UUID | None
     summary_type: str
     status: str
+    model_provider: str | None = None
+    model_name: str | None = None
+    latency_ms: int | None = None
     citation_coverage: Decimal | None
     unsupported_claim_count: int
     conflict_count: int
@@ -517,6 +645,9 @@ class SummaryDetailResponse(PersistenceModel):
     summary_text: str
     summary_language: str
     status: str
+    model_provider: str | None = None
+    model_name: str | None = None
+    latency_ms: int | None = None
     version_number: int
     parent_summary_id: uuid.UUID | None
     citation_coverage: Decimal | None

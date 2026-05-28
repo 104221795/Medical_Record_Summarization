@@ -6,11 +6,25 @@ from sqlalchemy.orm import Session
 from ..config import Settings
 from ..db.base import Base
 from ..db.seed import seed_mock_data
-from ..dependencies import RequestContext, get_db_session, get_request_context
-from ..persistence_schemas import DemoSeedResponse
+from ..dependencies import (
+    RequestContext,
+    get_db_session,
+    get_evaluation_service,
+    get_request_context,
+)
+from ..persistence_schemas import DemoReadinessResponse, DemoSeedResponse
+from ..services.evaluation_service import EvaluationService
 
 
 router = APIRouter(prefix="/demo", tags=["Demo"])
+
+
+@router.get("/readiness", response_model=DemoReadinessResponse)
+def demo_readiness(
+    _context: Annotated[RequestContext, Depends(get_request_context)],
+    service: Annotated[EvaluationService, Depends(get_evaluation_service)],
+) -> DemoReadinessResponse:
+    return service.demo_readiness()
 
 
 @router.post("/seed", response_model=DemoSeedResponse, status_code=status.HTTP_201_CREATED)

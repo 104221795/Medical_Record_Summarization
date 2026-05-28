@@ -43,6 +43,7 @@ class SummaryRepository:
                 ),
                 selectinload(Summary.claims).selectinload(SummaryClaim.citations),
                 selectinload(Summary.reviews).selectinload(SummaryReview.reviewer),
+                selectinload(Summary.model_run),
             )
         )
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
@@ -45,6 +46,13 @@ from .audit_service import AuditService
 from .generators import GeminiJsonClient, GenerationError
 from .persistence_common import PersistedResourceNotFoundError
 from .safety_service import SafetyResult, SafetyService
+from .summary_providers import (
+    BartProvider,
+    PegasusProvider,
+    ProviderExecutionError,
+    ProviderOutput,
+    SummaryProvider,
+)
 
 
 MISSING_INFORMATION = "Không tìm thấy thông tin trong dữ liệu hiện có."
@@ -166,12 +174,14 @@ class DeterministicSummaryService:
         audit_service: AuditService,
         settings: Settings | None = None,
         gemini_client: GeminiJsonClient | None = None,
+        model_providers: dict[str, SummaryProvider] | None = None,
     ):
         self.repository = repository
         self.safety_service = safety_service
         self.audit_service = audit_service
         self.settings = settings
         self.gemini_client = gemini_client
+        self.model_providers = model_providers or {}
 
     def generate(
         self,
@@ -206,10 +216,14 @@ class DeterministicSummaryService:
             existing.encounter_id,
             existing.summary_type,
         )
+        model_provider = _model_provider_label(existing.model_run)
+        if model_provider not in {"deterministic", "gemini", "bart", "pegasus"}:
+            model_provider = "deterministic"
         generate_request = SummaryGenerateRequest(
             encounter_id=existing.encounter_id,
             summary_type="patient_snapshot",
             language=existing.summary_language,
+            model_provider=model_provider,
             options=request.options,
         )
         generated = self._generate(
@@ -300,6 +314,21 @@ class DeterministicSummaryService:
                 regeneration_reason=regeneration_reason,
                 started=started,
             )
+        if generation_provider in {"bart", "pegasus"}:
+            return self._generate_with_text_provider(
+                generation_provider,
+                patient,
+                encounter,
+                context,
+                request,
+                tenant_id=tenant_id,
+                actor_external_id=actor_external_id,
+                audit_action=audit_action,
+                parent_summary_id=parent_summary_id,
+                version_number=version_number,
+                regeneration_reason=regeneration_reason,
+                started=started,
+            )
 
         sections = self._build_sections(patient, encounter, context)
         claims = [claim for section in sections for claim in section.claims]
@@ -374,9 +403,11 @@ class DeterministicSummaryService:
 
     def _generation_provider(self, request: SummaryGenerateRequest) -> str:
         configured = self.settings.llm_provider if self.settings else "deterministic"
-        provider = request.provider or configured
+        provider = request.model_provider or request.provider or configured
         if provider in {"mock", "local", "deterministic"}:
             return "deterministic"
+        if provider in {"bart", "pegasus"}:
+            return provider
         if provider == "external":
             raise SummaryGenerationError(
                 "Use provider='gemini' with RAG_LLM_PROVIDER=gemini for the governed external LLM path."
@@ -543,6 +574,149 @@ class DeterministicSummaryService:
             },
         )
         return self._summary_generate_response(summary)
+
+    def _generate_with_text_provider(
+        self,
+        provider_name: str,
+        patient: Patient,
+        encounter: Encounter | None,
+        context: dict[str, list],
+        request: SummaryGenerateRequest,
+        *,
+        tenant_id: str,
+        actor_external_id: str,
+        audit_action: str,
+        parent_summary_id: uuid.UUID | None,
+        version_number: int,
+        regeneration_reason: str | None,
+        started: float,
+    ) -> SummaryGenerateResponse:
+        evidence_pack, citation_lookup = self._build_evidence_pack(
+            patient,
+            encounter,
+            context,
+            request,
+        )
+        context_hash = hashlib.sha256(
+            json.dumps(evidence_pack, sort_keys=True, default=_json_default).encode("utf-8")
+        ).hexdigest()
+        provider = self._summary_provider(provider_name)
+        try:
+            provider_output = provider.generate_summary(
+                patient=patient,
+                encounter=encounter,
+                context=context,
+                evidence_pack=evidence_pack,
+                summary_type=request.summary_type,
+                language=request.language,
+                options=request.options.model_dump(),
+            )
+        except ProviderExecutionError as exc:
+            raise SummaryGenerationError(str(exc)) from exc
+        except Exception as exc:
+            raise SummaryGenerationError(
+                f"{provider_name.upper()} generation failed safely: {exc}"
+            ) from exc
+
+        if provider_output.provider != provider_name:
+            raise SummaryGenerationError(
+                f"Provider output mismatch: expected {provider_name}, got {provider_output.provider}."
+            )
+        if not provider_output.summary_text.strip():
+            raise SummaryGenerationError(f"{provider_name.upper()} returned an empty summary.")
+
+        sections = self._text_provider_sections_to_drafts(
+            provider_output,
+            evidence_pack,
+            citation_lookup,
+        )
+        claims = [claim for section in sections for claim in section.claims]
+        safety = self.safety_service.calculate(claims)
+        summary_text = "\n\n".join(f"{section.title}\n{section.text}" for section in sections)
+        output_hash = hashlib.sha256(provider_output.summary_text.encode("utf-8")).hexdigest()
+        latency_ms = provider_output.latency_ms or int((perf_counter() - started) * 1000)
+
+        model_run = ModelRun(
+            model_name=provider_output.model_name,
+            model_version=provider_output.model_version or provider_output.model_name,
+            provider=provider_name,
+            prompt_template_id=provider_output.prompt_template_name
+            or f"{provider_name}_text_normalizer",
+            prompt_version=provider_output.prompt_template_version or "1.0.0",
+            summary_type=request.summary_type,
+            context_hash=context_hash,
+            output_hash=output_hash,
+            input_token_count=_rough_token_count(context),
+            output_token_count=len(provider_output.summary_text.split()),
+            latency_ms=latency_ms,
+            status="completed",
+            run_metadata={
+                "llm_used": True,
+                "provider_path": f"baseline/{provider_name}",
+                "normalization": "sentence_overlap_citation",
+                "require_citations": request.options.require_citations,
+                "include_safety_check": request.options.include_safety_check,
+                "raw_output": provider_output.raw_output,
+            },
+        )
+        self.repository.add_model_run(model_run)
+        self.repository.session.flush()
+
+        summary = Summary(
+            patient_id=patient.patient_id,
+            encounter_id=encounter.encounter_id if encounter else None,
+            model_run_id=model_run.model_run_id,
+            summary_type=request.summary_type,
+            summary_text=summary_text,
+            summary_language=request.language,
+            status=SummaryStatus.DRAFT,
+            citation_coverage=safety.citation_coverage,
+            unsupported_claim_count=safety.unsupported_claim_count,
+            conflict_count=safety.conflict_count,
+            generated_at=datetime.now(UTC),
+            version_number=version_number,
+            parent_summary_id=parent_summary_id,
+            context_hash=context_hash,
+        )
+        self.repository.session.add(summary)
+        self.repository.session.flush()
+
+        persisted_sections = self._persist_sections(summary, sections)
+        self._persist_claims(summary, sections, persisted_sections)
+        self.repository.session.flush()
+
+        self.audit_service.record(
+            action=audit_action,
+            patient_id=summary.patient_id,
+            resource_type="summary",
+            resource_id=summary.summary_id,
+            metadata={
+                "tenant_id": tenant_id,
+                "actor_external_id": actor_external_id,
+                "summary_type": request.summary_type,
+                "status": SummaryStatus.DRAFT.value,
+                "llm_used": True,
+                "provider": provider_name,
+                "model_name": provider_output.model_name,
+                "citation_coverage": str(safety.citation_coverage),
+                "unsupported_claim_count": safety.unsupported_claim_count,
+                "conflict_count": safety.conflict_count,
+                "regeneration_reason": regeneration_reason,
+            },
+        )
+        return self._summary_generate_response(summary)
+
+    def _summary_provider(self, provider_name: str) -> SummaryProvider:
+        if provider_name in self.model_providers:
+            return self.model_providers[provider_name]
+        if provider_name == "bart":
+            provider = BartProvider()
+        elif provider_name == "pegasus":
+            provider = PegasusProvider()
+        else:
+            raise SummaryGenerationError(f"Unsupported summary provider: {provider_name}.")
+        self.model_providers[provider_name] = provider
+        return provider
 
     def _load_prompt_template(self, summary_type: str) -> dict[str, Any]:
         if self.settings is None:
@@ -905,6 +1079,99 @@ class DeterministicSummaryService:
 
         return [sections[section_type] for _, section_type in self.REQUIRED_SECTIONS]
 
+    def _text_provider_sections_to_drafts(
+        self,
+        provider_output: ProviderOutput,
+        evidence_pack: dict[str, Any],
+        citation_lookup: dict[str, CitationDraft],
+    ) -> list[SectionDraft]:
+        generated = SectionDraft("Generated Summary", "generated_summary")
+        needs_review = SectionDraft("Needs Clinician Review", "needs_clinician_review")
+        claim_texts: list[str] = []
+        for section in provider_output.sections:
+            claim_texts.extend(section.claims)
+        if not claim_texts:
+            claim_texts = _split_claim_text(provider_output.summary_text)
+
+        for text in claim_texts:
+            claim_text = text.strip()
+            if not claim_text:
+                continue
+            claim_type = _infer_claim_type(claim_text)
+            citations = self._match_claim_citations(claim_text, evidence_pack, citation_lookup)
+            clinical_risk_level = _risk_level(claim_type, None)
+            confidence_score = Decimal("0.72") if citations else Decimal("0")
+            support_status = (
+                ClaimSupportStatus.SUPPORTED
+                if citations
+                else ClaimSupportStatus.INSUFFICIENT_EVIDENCE
+            )
+            if _contains_forbidden_clinical_advice(claim_text):
+                support_status = ClaimSupportStatus.UNSUPPORTED
+                clinical_risk_level = "critical"
+                citations = []
+                confidence_score = Decimal("0")
+            draft = ClaimDraft(
+                text=claim_text,
+                claim_type=claim_type,
+                support_status=support_status,
+                clinical_risk_level=clinical_risk_level,
+                citations=citations,
+                confidence_score=confidence_score,
+            )
+            if support_status == ClaimSupportStatus.SUPPORTED:
+                generated.claims.append(draft)
+            else:
+                needs_review.claims.append(draft)
+
+        if not generated.claims and not needs_review.claims:
+            needs_review.claims.append(
+                ClaimDraft(
+                    text=MISSING_INFORMATION,
+                    claim_type="missing_information",
+                    support_status=ClaimSupportStatus.INSUFFICIENT_EVIDENCE,
+                    clinical_risk_level="low",
+                    confidence_score=Decimal("0"),
+                )
+            )
+        needs_review.claims.append(
+            ClaimDraft(
+                text="Provider output requires clinician review before clinical use.",
+                claim_type="general",
+                support_status=ClaimSupportStatus.UNCHECKED,
+                clinical_risk_level="low",
+                confidence_score=Decimal("0"),
+            )
+        )
+        return [generated, needs_review]
+
+    def _match_claim_citations(
+        self,
+        claim_text: str,
+        evidence_pack: dict[str, Any],
+        citation_lookup: dict[str, CitationDraft],
+    ) -> list[CitationDraft]:
+        claim_tokens = _token_set(claim_text)
+        if len(claim_tokens) < 3:
+            return []
+        scored: list[tuple[float, str]] = []
+        lowered_claim = claim_text.casefold()
+        for item in evidence_pack.get("evidence", []):
+            source_id = str(item.get("source_id") or "")
+            source_text = str(item.get("text") or "")
+            if source_id not in citation_lookup or not source_text.strip():
+                continue
+            source_tokens = _token_set(source_text)
+            if not source_tokens:
+                continue
+            direct_match = lowered_claim in source_text.casefold()
+            overlap = len(claim_tokens.intersection(source_tokens))
+            score = 1.0 if direct_match else overlap / max(1, min(len(claim_tokens), len(source_tokens)))
+            if score >= 0.55:
+                scored.append((score, source_id))
+        scored.sort(reverse=True)
+        return [citation_lookup[source_id] for _score, source_id in scored[:2]]
+
     def _build_sections(
         self,
         patient: Patient,
@@ -1226,6 +1493,9 @@ class DeterministicSummaryService:
             encounter_id=summary.encounter_id,
             summary_type=summary.summary_type,
             status=summary.status.value,
+            model_provider=_model_provider_label(summary.model_run),
+            model_name=summary.model_run.model_name if summary.model_run else None,
+            latency_ms=summary.model_run.latency_ms if summary.model_run else None,
             citation_coverage=summary.citation_coverage,
             unsupported_claim_count=summary.unsupported_claim_count,
             conflict_count=summary.conflict_count,
@@ -1254,6 +1524,9 @@ class DeterministicSummaryService:
             summary_text=summary.summary_text,
             summary_language=summary.summary_language,
             status=summary.status.value,
+            model_provider=_model_provider_label(summary.model_run),
+            model_name=summary.model_run.model_name if summary.model_run else None,
+            latency_ms=summary.model_run.latency_ms if summary.model_run else None,
             version_number=summary.version_number,
             parent_summary_id=summary.parent_summary_id,
             citation_coverage=summary.citation_coverage,
@@ -1316,6 +1589,14 @@ def _claim_response(claim: SummaryClaim) -> SummaryClaimResponse:
 
 def _citation_response(citation: ClaimCitation) -> ClaimCitationResponse:
     return ClaimCitationResponse.model_validate(citation)
+
+
+def _model_provider_label(model_run: ModelRun | None) -> str | None:
+    if model_run is None:
+        return None
+    if model_run.provider == "local":
+        return "deterministic"
+    return model_run.provider
 
 
 def _chunk_citation(chunk: DocumentChunk, confidence: Decimal) -> CitationDraft:
@@ -1420,6 +1701,44 @@ def _section_type_from_title(title: str) -> str | None:
     if "review" in normalized or "missing" in normalized or "safety" in normalized:
         return "needs_clinician_review"
     return None
+
+
+def _split_claim_text(text: str) -> list[str]:
+    claims: list[str] = []
+    for raw_line in text.replace("\r", "\n").splitlines():
+        line = raw_line.strip().strip("-*•0123456789. ")
+        if not line:
+            continue
+        parts = re.split(r"(?<=[.!?])\s+", line)
+        claims.extend(part.strip() for part in parts if part.strip())
+    if not claims:
+        claims = [part.strip() for part in re.split(r"(?<=[.!?])\s+", text) if part.strip()]
+    return claims[:20]
+
+
+def _token_set(text: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[\wÀ-ỹ]+", text.casefold(), flags=re.UNICODE)
+        if len(token) > 2 and token not in {"the", "and", "for", "with", "patient"}
+    }
+
+
+def _infer_claim_type(text: str) -> str:
+    lowered = text.casefold()
+    if any(marker in lowered for marker in ("medication", "medicine", "drug", "dose", "dosage", "thuá»‘c")):
+        return "medication"
+    if any(marker in lowered for marker in ("creatinine", "lab", "laboratory", "hemoglobin", "glucose", "result", "observation")):
+        return "lab_result"
+    if any(marker in lowered for marker in ("x-ray", "ct ", "mri", "imaging", "diagnostic report", "ultrasound")):
+        return "imaging_finding"
+    if any(marker in lowered for marker in ("condition", "problem", "diagnosis", "diagnosed", "active problem")):
+        return "diagnosis"
+    if any(marker in lowered for marker in ("follow-up", "follow up", "pending")):
+        return "follow_up"
+    if any(marker in lowered for marker in ("visit", "course", "reported", "noted", "recorded")):
+        return "timeline_event"
+    return "general"
 
 
 def _risk_level(claim_type: str, supplied: str | None) -> str:

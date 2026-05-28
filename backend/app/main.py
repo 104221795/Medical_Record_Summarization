@@ -15,6 +15,7 @@ from .routers.claims import router as claim_router
 from .routers.demo import router as demo_router
 from .routers.documents import router as document_router
 from .routers.encounters import router as encounter_router
+from .routers.evaluation import router as evaluation_router
 from .routers.fhir import router as fhir_router
 from .routers.ingestion import router as ingestion_router
 from .routers.metrics import router as metrics_router
@@ -32,6 +33,7 @@ from .services.rag import RagService, build_rag_service
 CITATION_UI_DIR = Path(__file__).resolve().parents[1] / "ui" / "citation"
 DOCTOR_UI_DIR = Path(__file__).resolve().parents[1] / "ui" / "doctor"
 ADMIN_UI_DIR = Path(__file__).resolve().parents[1] / "ui" / "admin"
+EVALUATION_UI_DIR = Path(__file__).resolve().parents[1] / "ui" / "evaluation"
 
 
 def create_app(
@@ -84,12 +86,18 @@ def create_app(
     app.include_router(claim_router, prefix=configured_settings.api_prefix)
     app.include_router(citation_router, prefix=configured_settings.api_prefix)
     app.include_router(demo_router, prefix=configured_settings.api_prefix)
+    app.include_router(evaluation_router, prefix=configured_settings.api_prefix)
     app.include_router(clinical_router, prefix=configured_settings.api_prefix)
     app.include_router(multimodal_router, prefix=configured_settings.api_prefix)
     app.include_router(fhir_router, prefix=configured_settings.api_prefix)
     app.mount("/citation-assets", StaticFiles(directory=CITATION_UI_DIR), name="citation-assets")
     app.mount("/doctor-assets", StaticFiles(directory=DOCTOR_UI_DIR), name="doctor-assets")
     app.mount("/admin-assets", StaticFiles(directory=ADMIN_UI_DIR), name="admin-assets")
+    app.mount(
+        "/evaluation-assets",
+        StaticFiles(directory=EVALUATION_UI_DIR),
+        name="evaluation-assets",
+    )
 
     @app.get("/citation-demo", include_in_schema=False)
     def citation_demo() -> FileResponse:
@@ -102,6 +110,10 @@ def create_app(
     @app.get("/admin/dashboard", include_in_schema=False)
     def admin_dashboard() -> FileResponse:
         return FileResponse(ADMIN_UI_DIR / "index.html")
+
+    @app.get("/evaluation-demo", include_in_schema=False)
+    def evaluation_demo() -> FileResponse:
+        return FileResponse(EVALUATION_UI_DIR / "index.html")
 
     @app.get("/healthz", response_model=HealthResponse, tags=["Operations"])
     def health() -> HealthResponse:

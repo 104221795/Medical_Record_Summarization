@@ -5,6 +5,7 @@ from .citation import CitationRepository
 from .clinical import ClinicalRepository
 from .document import DocumentRepository
 from .encounter import EncounterRepository
+from .evaluation import EvaluationRepository
 from .ingestion import IngestionRepository
 from .metrics import MetricsRepository
 from .patient import PatientRepository
@@ -16,6 +17,7 @@ __all__ = [
     "ClinicalRepository",
     "DocumentRepository",
     "EncounterRepository",
+    "EvaluationRepository",
     "IngestionRepository",
     "MetricsRepository",
     "PatientRepository",

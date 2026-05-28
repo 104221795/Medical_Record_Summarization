@@ -11,6 +11,7 @@ from .repositories import (
     CitationRepository,
     DocumentRepository,
     EncounterRepository,
+    EvaluationRepository,
     IngestionRepository,
     MetricsRepository,
     PatientRepository,
@@ -22,6 +23,7 @@ from .services.clinical_pipeline import ClinicalSummaryPipelineService
 from .services.deterministic_summary_service import DeterministicSummaryService
 from .services.document_service import DocumentService
 from .services.encounter_service import EncounterService
+from .services.evaluation_service import EvaluationService
 from .services.fhir_mapper import FhirMapperService
 from .services.ingestion_service import IngestionService
 from .services.metrics_service import MetricsService
@@ -137,6 +139,7 @@ def get_summary_service(
         AuditService(AuditRepository(session)),
         request.app.state.settings,
         getattr(request.app.state, "gemini_json_client", None),
+        getattr(request.app.state, "summary_model_providers", None),
     )
 
 
@@ -149,6 +152,18 @@ def get_review_service(session: Annotated[Session, Depends(get_db_session)]) -> 
 
 def get_metrics_service(session: Annotated[Session, Depends(get_db_session)]) -> MetricsService:
     return MetricsService(MetricsRepository(session))
+
+
+def get_evaluation_service(
+    request: Request,
+    session: Annotated[Session, Depends(get_db_session)],
+) -> EvaluationService:
+    return EvaluationService(
+        EvaluationRepository(session),
+        session,
+        request.app.state.settings,
+        AuditService(AuditRepository(session)),
+    )
 
 
 def get_citation_service(session: Annotated[Session, Depends(get_db_session)]) -> CitationService:

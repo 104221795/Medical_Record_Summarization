@@ -51,6 +51,7 @@ const nodes = {
   workspacePatientContext: document.querySelector("#workspace-patient-context"),
   summaryEncounter: document.querySelector("#summary-encounter"),
   summaryType: document.querySelector("#summary-type"),
+  summaryProvider: document.querySelector("#summary-provider"),
   generateSummary: document.querySelector("#generate-summary"),
   regenerateSummary: document.querySelector("#regenerate-summary"),
   startReview: document.querySelector("#start-review"),
@@ -416,7 +417,8 @@ function renderWorkspaceContext() {
 async function generateSummary() {
   if (!state.selectedPatient) return;
   setActiveTab("summary");
-  setMessage(nodes.summaryState, "Generating deterministic draft summary from persisted evidence...");
+  const provider = nodes.summaryProvider.value;
+  setMessage(nodes.summaryState, `Generating ${provider} draft summary from persisted evidence...`);
   nodes.generateSummary.disabled = true;
   try {
     const generated = await api(`/patients/${state.selectedPatient.patient_id}/summaries/generate`, {
@@ -425,6 +427,7 @@ async function generateSummary() {
         encounter_id: nodes.summaryEncounter.value || null,
         summary_type: nodes.summaryType.value,
         language: "vi",
+        model_provider: provider,
         options: { require_citations: true, include_safety_check: true },
       }),
     });
@@ -472,15 +475,23 @@ function renderSummary() {
   nodes.summarySections.replaceChildren();
   hide(nodes.summaryEmpty);
   show(nodes.summarySections);
-  REQUIRED_SECTIONS.forEach((title) => {
-    const section = summary.sections.find((item) => item.section_title === title);
-    if (!section) return;
+  const rendered = new Set();
+  const renderSection = (section) => {
+    rendered.add(section.section_id);
     const sectionNode = document.createElement("article");
     sectionNode.className = "summary-section";
     const claims = section.claims.map(renderClaim).join("");
     sectionNode.innerHTML = `<h3>${escapeHtml(section.section_title)}</h3>${claims || `<div class="empty">No claims in this section.</div>`}`;
     nodes.summarySections.append(sectionNode);
+  };
+  REQUIRED_SECTIONS.forEach((title) => {
+    const section = summary.sections.find((item) => item.section_title === title);
+    if (!section) return;
+    renderSection(section);
   });
+  summary.sections
+    .filter((section) => !rendered.has(section.section_id))
+    .forEach(renderSection);
   renderSafetyPanel();
   renderReviewHistory();
   updateReviewActions();
@@ -564,6 +575,9 @@ function renderSafetyPanel() {
     </div>
     <div class="safety-grid">
       <div class="metric"><span>Status</span><strong>${escapeHtml(summary.status)}</strong></div>
+      <div class="metric"><span>Provider</span><strong>${escapeHtml(summary.model_provider || "unknown")}</strong></div>
+      <div class="metric"><span>Model</span><strong>${escapeHtml(summary.model_name || "not available")}</strong></div>
+      <div class="metric"><span>Latency</span><strong>${summary.latency_ms === null || summary.latency_ms === undefined ? "not available" : `${summary.latency_ms} ms`}</strong></div>
       <div class="metric"><span>Citation coverage</span><strong>${normalizeCoverage(summary.citation_coverage)}</strong></div>
       <div class="metric"><span>Unsupported claims</span><strong>${summary.unsupported_claim_count}</strong></div>
       <div class="metric"><span>Conflicts</span><strong>${summary.conflict_count}</strong></div>

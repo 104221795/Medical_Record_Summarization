@@ -369,6 +369,9 @@ class Summary(Base, TimestampMixin):
     reviews: Mapped[list[SummaryReview]] = relationship(
         back_populates="summary", cascade="all, delete-orphan"
     )
+    human_evaluations: Mapped[list[HumanEvaluation]] = relationship(
+        back_populates="summary", cascade="all, delete-orphan"
+    )
 
 
 class SummarySection(Base, CreatedAtMixin):
@@ -490,6 +493,53 @@ class SummaryReview(Base, CreatedAtMixin):
 
     summary: Mapped[Summary] = relationship(back_populates="reviews")
     reviewer: Mapped[User] = relationship()
+
+
+class HumanEvaluation(Base, CreatedAtMixin):
+    __tablename__ = "human_evaluations"
+    __table_args__ = (
+        CheckConstraint(
+            "factual_correctness_score BETWEEN 1 AND 5",
+            name="ck_human_eval_factual_score_range",
+        ),
+        CheckConstraint(
+            "completeness_score BETWEEN 1 AND 5",
+            name="ck_human_eval_completeness_score_range",
+        ),
+        CheckConstraint(
+            "conciseness_score BETWEEN 1 AND 5",
+            name="ck_human_eval_conciseness_score_range",
+        ),
+        CheckConstraint(
+            "readability_score BETWEEN 1 AND 5",
+            name="ck_human_eval_readability_score_range",
+        ),
+        CheckConstraint(
+            "citation_usefulness_score BETWEEN 1 AND 5",
+            name="ck_human_eval_citation_score_range",
+        ),
+        CheckConstraint(
+            "hallucination_risk IN ('low', 'medium', 'high')",
+            name="ck_human_eval_hallucination_risk",
+        ),
+    )
+
+    evaluation_id: Mapped[uuid.UUID] = _uuid_pk()
+    summary_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("summaries.summary_id"), nullable=False, index=True
+    )
+    evaluator_id: Mapped[str | None] = mapped_column(String(100))
+    evaluator_name: Mapped[str | None] = mapped_column(String(255))
+    model_provider: Mapped[str | None] = mapped_column(String(100))
+    factual_correctness_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    completeness_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    conciseness_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    readability_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    citation_usefulness_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    hallucination_risk: Mapped[str] = mapped_column(String(20), nullable=False)
+    comments: Mapped[str | None] = mapped_column(Text)
+
+    summary: Mapped[Summary] = relationship(back_populates="human_evaluations")
 
 
 class AuditLog(Base):

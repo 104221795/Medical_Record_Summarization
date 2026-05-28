@@ -10,7 +10,7 @@ HIS/EMR integration and must use de-identified or mock data by default.
 
 ## Current Implementation Status
 
-Implemented through Phase 7C:
+Implemented through provider unification after Phase 7C:
 
 | Phase | Status | Scope |
 | --- | --- | --- |
@@ -24,10 +24,11 @@ Implemented through Phase 7C:
 | Phase 7A | Done | Real/de-identified EHR dataset loader, normalization, and mock evaluation fixture |
 | Phase 7B | Done | BART/Pegasus baseline provider adapters and baseline evaluation runner |
 | Phase 7C | Done | Gemini provider integration into the persisted draft summary workflow |
+| Provider unification | Done | Deterministic, Gemini, BART, and Pegasus selectable from the persisted summary endpoint |
+| Phase 8 | Done | Evaluation & Demo Control Center, functional validation, pending benchmark status, human evaluation |
 
 Not implemented yet:
 
-- BART/Pegasus output integration into claims/citations/persisted summary workflow
 - Production SSO/OAuth
 - Production HIS/EMR writeback
 - Advanced retrieval evaluation and wrong-patient retrieval tracking
@@ -176,6 +177,7 @@ Backend URLs:
 - Health check: `http://127.0.0.1:8080/healthz`
 - Doctor UI: `http://127.0.0.1:8080/doctor-demo`
 - Admin dashboard: `http://127.0.0.1:8080/admin/dashboard`
+- Evaluation & Demo Control Center: `http://127.0.0.1:8080/evaluation-demo`
 - Citation demo: `http://127.0.0.1:8080/citation-demo`
 
 If the app reports that the schema is not initialized, run:
@@ -222,6 +224,22 @@ before approval.
 
 The dashboard is read-only and does not intentionally expose raw clinical text
 or patient names.
+
+## Run The Phase 8 Evaluation Demo
+
+1. Start the backend.
+2. Open `http://127.0.0.1:8080/evaluation-demo`.
+3. Review golden path, provider, citation/safety, HITL, and monitoring status.
+4. Click `Run Functional Validation` to execute the mock/de-identified workflow check.
+5. Confirm Layer B says `pending_dataset` until
+   `data/processed/ehr_benchmark/test.jsonl` exists.
+6. Submit human evaluation scores for a generated summary ID if you want demo
+   usability feedback.
+
+Layer A functional validation uses mock/de-identified data only. Layer B real
+EHR benchmark status remains pending until credentialed MIMIC-IV-Note or
+MIMIC-IV-Ext-BHC data is processed locally. Mock data is never used to claim
+real benchmark performance.
 
 ## Phase 7A Dataset Pipeline
 
@@ -347,20 +365,50 @@ installed.
 
 Generated baseline files under `results/` are ignored by git.
 
-## Phase 7C Gemini Persisted Summary Provider
+## Persisted Summary Provider Selection
 
-Gemini is now available behind the same persisted summary endpoint used by the
-Doctor UI:
+The main persisted workflow now supports provider selection behind the same
+summary endpoint used by the Doctor UI:
 
 ```http
 POST /api/v1/patients/{patient_id}/summaries/generate
 ```
 
-The provider is disabled by default. Deterministic generation remains the safe
-default for local development, CI, and demos.
+Supported `model_provider` values:
 
-To enable Gemini for the main persisted workflow, all of these environment
-variables must be set explicitly:
+- `deterministic`: default safe local workflow for development, tests, and demos
+- `gemini`: governed external Gemini JSON provider
+- `bart`: Hugging Face BART baseline provider
+- `pegasus`: Hugging Face Pegasus baseline provider
+
+All providers persist through the same internal path: draft summary, sections,
+claims, citations, safety calculation, `model_runs`, audit logs, and the doctor
+review workflow. Deterministic generation remains the safe default when no
+provider is requested.
+
+Example deterministic request:
+
+```json
+{
+  "encounter_id": "00000000-0000-0000-0000-000000000000",
+  "summary_type": "patient_snapshot",
+  "language": "vi",
+  "model_provider": "deterministic",
+  "options": {
+    "require_citations": true,
+    "include_safety_check": true
+  }
+}
+```
+
+`provider` is still accepted as a backward-compatible alias for
+`model_provider`.
+
+### Gemini
+
+Gemini is disabled by default. To enable Gemini for the main persisted workflow,
+all of these environment variables must be set explicitly:
+
 
 ```powershell
 $env:RAG_LLM_PROVIDER = "gemini"
@@ -383,7 +431,7 @@ Example request:
   "encounter_id": "00000000-0000-0000-0000-000000000000",
   "summary_type": "patient_snapshot",
   "language": "vi",
-  "provider": "gemini",
+  "model_provider": "gemini",
   "options": {
     "require_citations": true,
     "include_safety_check": true
@@ -396,6 +444,52 @@ Every supported claim must map back to a source ID from the current patient's
 evidence pack. Claims without valid evidence are downgraded and shown for
 clinician review. Generated summaries remain `draft`; the HITL review workflow
 is still required for approval.
+
+### BART and Pegasus in the persisted workflow
+
+BART and Pegasus are available as persisted baseline providers, but real model
+execution is disabled by default to avoid surprise Hugging Face downloads during
+tests and local demos.
+
+Enable real BART/Pegasus execution only when you intentionally want local model
+loading:
+
+```powershell
+$env:RUN_REAL_BASELINES = "1"
+$env:BART_MODEL_NAME = "facebook/bart-large-cnn"
+$env:PEGASUS_MODEL_NAME = "google/pegasus-xsum"
+```
+
+Then request the provider:
+
+```json
+{
+  "summary_type": "patient_snapshot",
+  "language": "vi",
+  "model_provider": "bart",
+  "options": {
+    "require_citations": true,
+    "include_safety_check": true
+  }
+}
+```
+
+```json
+{
+  "summary_type": "patient_snapshot",
+  "language": "vi",
+  "model_provider": "pegasus",
+  "options": {
+    "require_citations": true,
+    "include_safety_check": true
+  }
+}
+```
+
+BART/Pegasus plain-text outputs are normalized into a `Generated Summary`
+section, split into atomic claims, citation-matched against the current
+patient's evidence pack, and flagged for clinician review when evidence is weak
+or missing.
 
 ## Main API Groups
 
@@ -442,6 +536,17 @@ Audit and metrics:
 - `GET /metrics/usage`
 - `GET /metrics/safety`
 - `GET /metrics/review`
+
+Evaluation and demo readiness:
+
+- `GET /demo/readiness`
+- `GET /evaluation/status`
+- `GET /evaluation/functional/status`
+- `POST /evaluation/functional/run`
+- `GET /evaluation/benchmark/status`
+- `POST /evaluation/human`
+- `GET /evaluation/human/summary`
+- `GET /evaluation/human/by-summary/{summary_id}`
 
 Mock RBAC headers:
 
