@@ -1,16 +1,16 @@
 # Medical Record Summarization MVP
 
-This repository contains a FastAPI-based Medical Record Summarization MVP with
-database persistence, FHIR-like ingestion, deterministic draft summary
-generation, citation evidence, clinician review workflow, and an admin quality
-dashboard.
+This repository contains a final internship-demo Medical Record Summarization
+MVP with database persistence, FHIR-like ingestion, provider-selectable draft
+summary generation, citation evidence, clinician review workflow, auditability,
+monitoring, and a three-layer evaluation readiness center.
 
 The implementation is a local/development prototype. It is not a production
 HIS/EMR integration and must use de-identified or mock data by default.
 
 ## Current Implementation Status
 
-Implemented through provider unification after Phase 7C:
+Implemented through the final demo/submission package:
 
 | Phase | Status | Scope |
 | --- | --- | --- |
@@ -63,13 +63,22 @@ backend/tests/             Backend regression and workflow tests
 backend/ui/citation/       Citation evidence demo UI
 backend/ui/doctor/         Doctor Golden Path UI
 backend/ui/admin/          Phase 6 audit and quality dashboard
+backend/ui/unified/        Unified role-based demo console served by FastAPI
 src/data/                  Phase 7A dataset loading and normalization utilities
 src/models/                Phase 7B deterministic, BART, and Pegasus baseline providers
 scripts/                   Baseline/evaluation command-line utilities
 data/evaluation/           Committed mock/de-identified evaluation fixture and docs
+data/demo/                 Curated final demo cases, all mock/de-identified
 docs/                      MVP source-of-truth docs and QA templates
 deploy/k8s/                Kubernetes deployment manifests
 ```
+
+Final submission documents:
+
+- `docs/FINAL_DEMO_SCRIPT.md`
+- `docs/FINAL_REPORT.md`
+- `docs/SUBMISSION_CHECKLIST.md`
+- `docs/Buildingphases/PHASE8_EVALUATION_DESIGN.md`
 
 ## Requirements
 
@@ -141,11 +150,13 @@ python -m backend.app.db.seed
 
 The seed command is idempotent and creates de-identified sandbox data:
 
-- One doctor user
-- One patient
-- One encounter
-- Clinical documents and chunks
-- One draft summary with claims and citations
+- Demo doctor/admin/auditor users
+- Ten de-identified MIMIC-III-demo-inspired patients
+- Ten encounters across medicine, ICU, neurology, nephrology, cardiac surgery,
+  orthopedics, vascular surgery, and telemetry
+- Clinical documents and chunks with source spans
+- Structured conditions, medications, observations, and diagnostic reports
+- Seeded draft summaries for navigation plus source evidence for fresh summary generation
 - Audit events
 
 ### PostgreSQL
@@ -175,6 +186,7 @@ Backend URLs:
 
 - OpenAPI: `http://127.0.0.1:8080/docs`
 - Health check: `http://127.0.0.1:8080/healthz`
+- Unified Demo Console: `http://127.0.0.1:8080/demo-console`
 - Doctor UI: `http://127.0.0.1:8080/doctor-demo`
 - Admin dashboard: `http://127.0.0.1:8080/admin/dashboard`
 - Evaluation & Demo Control Center: `http://127.0.0.1:8080/evaluation-demo`
@@ -186,6 +198,48 @@ If the app reports that the schema is not initialized, run:
 python -m alembic -c alembic.ini upgrade head
 python -m backend.app.db.seed
 ```
+
+## Run The Unified Demo Console
+
+The main mentor-demo UI is:
+
+```text
+http://127.0.0.1:8080/demo-console
+```
+
+It provides a role-based mock login/logout screen and a medical-themed unified
+workspace for:
+
+- Demo setup and seeding
+- Patient registry
+- Encounters and clinical documents
+- Doctor summary workspace
+- HITL review actions
+- Citation explorer with highlighted evidence
+- Admin metrics
+- Audit logs
+- Evaluation status
+- FHIR-like ingestion
+
+Default demo roles:
+
+- `doctor`: patient workflow, summary generation, citations, and HITL review
+- `clinical_admin`: metrics, audit, evaluation, and integration overview
+- `auditor`: read-only audit/evaluation flow
+- `ai_safety_reviewer`: safety, citation, metrics, and evaluation review
+- `it_admin`: monitoring/integration-focused view
+- `nurse`: limited patient context view, no approval actions
+
+The console sends these headers with API calls:
+
+```text
+X-Tenant-ID
+X-User-ID
+X-Role-Code
+```
+
+This is a mock local login only. Production would require SSO/OAuth, hardened
+RBAC, session management, and audit review.
 
 ## Run The Doctor Flow Through Phase 5
 
@@ -240,6 +294,23 @@ Layer A functional validation uses mock/de-identified data only. Layer B real
 EHR benchmark status remains pending until credentialed MIMIC-IV-Note or
 MIMIC-IV-Ext-BHC data is processed locally. Mock data is never used to claim
 real benchmark performance.
+
+## Final Demo Cases
+
+Three curated mock/de-identified cases are available at:
+
+```text
+data/demo/final_demo_cases.json
+```
+
+They cover:
+
+- Normal supported-citation flow.
+- Missing-information flow.
+- Unsupported or weak/conflicting evidence flow.
+
+Copy a case's `fhir_like_import` object into `POST /api/v1/ingestion/import`,
+then run the Doctor UI golden path.
 
 ## Phase 7A Dataset Pipeline
 
@@ -336,6 +407,7 @@ BART/Pegasus execution uses Hugging Face Transformers and is disabled by
 default so CI/tests do not download models. To run real local baselines:
 
 ```powershell
+python -m pip install -r requirements-baselines.txt
 $env:RUN_REAL_BASELINES = "1"
 
 .\.venv\Scripts\python.exe -m scripts.run_baseline_summarization `
@@ -364,6 +436,93 @@ optional via `--include-bertscore` and is skipped if the optional package is not
 installed.
 
 Generated baseline files under `results/` are ignored by git.
+
+## Unified Provider Proxy Evaluation
+
+Use the unified provider evaluation runner when you want one comparison pass
+across:
+
+- `deterministic`
+- `bart`
+- `pegasus`
+- `gemini`
+
+This runner is for proxy evaluation only. It uses mock/de-identified demo rows
+and writes explicit warnings into every output file. Do not report these
+numbers as real EHR benchmark performance.
+
+Safe default run:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.run_provider_evaluation `
+  --providers all `
+  --dataset-path data/evaluation/sample_ehr_notes.jsonl `
+  --output-dir results/provider_evaluation
+```
+
+Expected behavior in the safe default:
+
+- `deterministic` runs locally.
+- `bart` is skipped unless real Hugging Face baselines are explicitly enabled.
+- `pegasus` is skipped unless real Hugging Face baselines are explicitly enabled.
+- `gemini` is skipped unless external Gemini evaluation is explicitly enabled.
+
+Generated files:
+
+```text
+results/provider_evaluation/provider_outputs.jsonl
+results/provider_evaluation/deterministic_outputs.jsonl
+results/provider_evaluation/bart_outputs.jsonl
+results/provider_evaluation/pegasus_outputs.jsonl
+results/provider_evaluation/gemini_outputs.jsonl
+results/provider_evaluation/provider_model_comparison.csv
+results/provider_evaluation/EVALUATION_SUMMARY.md
+```
+
+Each JSONL row includes:
+
+- `evaluation_type = proxy_deidentified_demo_evaluation`
+- `proxy_evaluation = true`
+- provider/model metadata
+- source and reference text from the demo/de-identified dataset
+- generated summary when a provider runs
+- ROUGE-1, ROUGE-2, ROUGE-L for completed rows
+- skipped/failed status and error details when a provider is unavailable
+
+Enable real BART/Pegasus model loading only when you intentionally want local
+Hugging Face execution:
+
+```powershell
+python -m pip install -r requirements-baselines.txt
+$env:RUN_REAL_BASELINES = "1"
+
+.\.venv\Scripts\python.exe -m scripts.run_provider_evaluation `
+  --providers deterministic,bart,pegasus `
+  --dataset-path data/evaluation/sample_ehr_notes.jsonl `
+  --output-dir results/provider_evaluation `
+  --allow-model-downloads
+```
+
+Enable Gemini proxy evaluation only for de-identified/governed data:
+
+```powershell
+$env:RUN_GEMINI_EVALUATION = "1"
+$env:RAG_LLM_PROVIDER = "gemini"
+$env:RAG_LLM_EXTERNAL_ENABLED = "true"
+$env:RAG_LLM_ALLOW_PHI_EXTERNAL = "true"
+$env:RAG_GEMINI_API_KEY = "<google-ai-studio-api-key>"
+
+.\.venv\Scripts\python.exe -m scripts.run_provider_evaluation `
+  --providers deterministic,gemini `
+  --dataset-path data/evaluation/sample_ehr_notes.jsonl `
+  --output-dir results/provider_evaluation `
+  --allow-gemini
+```
+
+Strong safety warning: the unified runner is not a clinical validation study.
+It is a final-demo comparison harness for de-identified/demo data. Real
+MIMIC-IV-Note or MIMIC-IV-Ext-BHC evaluation remains pending until credentialed
+data is processed locally and reviewed under the evaluation protocol.
 
 ## Persisted Summary Provider Selection
 
@@ -445,6 +604,24 @@ evidence pack. Claims without valid evidence are downgraded and shown for
 clinician review. Generated summaries remain `draft`; the HITL review workflow
 is still required for approval.
 
+Provider troubleshooting:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.check_provider_setup
+```
+
+If Gemini does not run, check that the backend process sees
+`RAG_LLM_PROVIDER=gemini`, `RAG_LLM_EXTERNAL_ENABLED=true`,
+`RAG_LLM_ALLOW_PHI_EXTERNAL=true`, and a Gemini key. The backend accepts
+`RAG_GEMINI_API_KEY`; it also accepts the legacy local variable
+`GEMINI_API_KEY` as a fallback. Installing `google-generativeai` is not required
+for this backend path because the app uses a small HTTPS JSON client.
+
+If Gemini returns `invalid structured JSON`, the backend rejects the output
+safely and creates no summary. The prompt schema restricts allowed section,
+claim, support-status, and risk-level values; minor structural variants are
+normalized into the internal schema, but non-JSON or unsafe outputs still fail.
+
 ### BART and Pegasus in the persisted workflow
 
 BART and Pegasus are available as persisted baseline providers, but real model
@@ -455,6 +632,7 @@ Enable real BART/Pegasus execution only when you intentionally want local model
 loading:
 
 ```powershell
+python -m pip install -r requirements-baselines.txt
 $env:RUN_REAL_BASELINES = "1"
 $env:BART_MODEL_NAME = "facebook/bart-large-cnn"
 $env:PEGASUS_MODEL_NAME = "google/pegasus-xsum"
@@ -568,7 +746,13 @@ Admin dashboard roles:
 Run the full backend regression suite:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest backend/tests -q
+.\.venv\Scripts\python.exe -m pytest backend\tests -p no:cacheprovider -q
+```
+
+Final local validation result on May 29, 2026:
+
+```text
+105 passed
 ```
 
 Run DB and workflow-focused tests:
@@ -595,6 +779,12 @@ Run Phase 7B baseline provider tests:
 .\.venv\Scripts\python.exe -m pytest backend/tests/test_baseline_providers.py -q
 ```
 
+Run the unified provider proxy evaluation tests:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_provider_evaluation_runner.py -q
+```
+
 Run Phase 7C Gemini persisted workflow tests without any external API call:
 
 ```powershell
@@ -606,6 +796,25 @@ Optional static UI JavaScript syntax checks:
 ```powershell
 node --check backend/ui/doctor/app.js
 node --check backend/ui/admin/app.js
+node --check backend/ui/evaluation/app.js
+```
+
+Run Phase 8 evaluation readiness tests:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend\tests\test_phase8_evaluation.py -q
+```
+
+Run functional validation through the UI:
+
+```text
+http://127.0.0.1:8080/evaluation-demo
+```
+
+or through the API:
+
+```http
+POST /api/v1/evaluation/functional/run
 ```
 
 ## Troubleshooting

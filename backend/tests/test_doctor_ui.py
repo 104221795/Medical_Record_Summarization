@@ -51,7 +51,11 @@ def test_demo_seed_initializes_schema_and_patient_records(tmp_path: Path) -> Non
 
     patients = client.get("/api/v1/patients", headers=headers)
     assert patients.status_code == 200
-    assert patients.json()["pagination"]["total_items"] == 1
+    assert patients.json()["pagination"]["total_items"] == 10
+    assert any(
+        item["external_patient_id"] == "MIMIC-DEMO-10006"
+        for item in patients.json()["items"]
+    )
 
 
 def test_demo_seed_disabled_in_production(tmp_path: Path) -> None:

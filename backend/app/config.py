@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr, model_validator
+from pydantic import AliasChoices, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -41,7 +41,10 @@ class Settings(BaseSettings):
     ort_intra_op_threads: int | None = None
 
     generator_provider: Literal["extractive", "gemini"] = "extractive"
-    gemini_api_key: SecretStr | None = None
+    gemini_api_key: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices("RAG_GEMINI_API_KEY", "GEMINI_API_KEY"),
+    )
     gemini_model: str = "gemini-2.5-flash-lite"
 
     llm_provider: Literal["mock", "deterministic", "local", "external", "gemini"] = "deterministic"

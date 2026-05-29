@@ -48,7 +48,7 @@ def seed_demo_data(
         summary_id=result.summary_id,
         created=result.created,
         message=(
-            "De-identified demo data created."
+            "Ten de-identified demo patients and clinical evidence records are ready."
             if result.created
             else "De-identified demo data already exists."
         ),

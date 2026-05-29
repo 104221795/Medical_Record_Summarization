@@ -58,6 +58,51 @@ class FakeGeminiJsonClient:
         medication_id = first("medication:")
         observation_id = first("observation:")
         report_id = first("diagnostic_report:")
+        if self.mode == "loose_realistic":
+            return json.dumps(
+                {
+                    "summary_type": "Patient Snapshot",
+                    "language": "Vietnamese",
+                    "requires_clinician_review": "yes",
+                    "summary_text": "Extra text should not break parsing.",
+                    "sections": [
+                        {
+                            "title": "Patient Snapshot",
+                            "type": "snapshot",
+                            "section_order": "1",
+                            "section_text": "Extra section text should be ignored.",
+                            "claims": [
+                                {
+                                    "text": "Gemini used the provided patient record for context.",
+                                    "type": "context",
+                                    "status": "cited",
+                                    "citation_ids": patient_id,
+                                    "risk_level": "low",
+                                    "extra_field": "ignored",
+                                }
+                            ],
+                        },
+                        {
+                            "section_title": "Active Problems",
+                            "section_type": "problem",
+                            "section_order": 2,
+                            "claims": [
+                                {
+                                    "statement": "Medication information needs clinician verification.",
+                                    "claim_type": "missing",
+                                    "support_status": "not_found",
+                                    "citation_ids": [],
+                                    "clinical_risk_level": "medium",
+                                }
+                            ],
+                        },
+                    ],
+                    "safety_notes": [
+                        "AI-generated draft requires doctor review before clinical use.",
+                        "Trợ lý phải tóm tắt các phát hiện mạch máu được ghi nhận, không đề xuất can thiệp.",
+                    ],
+                }
+            )
         active_problem_citations = (
             ["condition:does-not-exist"] if self.mode == "bad_citation" else [condition_id]
         )
@@ -310,6 +355,46 @@ def test_invalid_gemini_json_fails_safely_without_summary(tmp_path: Path) -> Non
 
         with session_factory() as session:
             assert session.scalar(select(func.count()).select_from(Summary)) == 0
+    finally:
+        engine.dispose()
+
+
+def test_loose_realistic_gemini_json_is_normalized_and_still_safe(
+    tmp_path: Path,
+) -> None:
+    fake_client = FakeGeminiJsonClient(mode="loose_realistic")
+    app, session_factory, engine = _build_gemini_app(tmp_path, fake_client)
+    try:
+        with TestClient(app) as client:
+            patient_id, encounter_id = import_patient(client)
+            generated = _generate_with_gemini(client, patient_id, encounter_id)
+
+            assert generated["status_code"] == 201, generated["body"]
+            assert generated["body"]["status"] == "draft"
+            assert generated["body"]["unsupported_claim_count"] >= 1
+
+            detail = client.get(
+                f"/api/v1/summaries/{generated['body']['summary_id']}",
+                headers=HEADERS,
+            ).json()
+            claims = [
+                claim
+                for section in detail["sections"]
+                for claim in section["claims"]
+            ]
+            assert any(claim["support_status"] == "supported" for claim in claims)
+            assert any(
+                claim["support_status"] == "insufficient_evidence"
+                and claim["claim_type"] == "missing_information"
+                for claim in claims
+            )
+            claim_texts = [claim["claim_text"] for claim in claims]
+            assert not any("Trợ lý phải" in text for text in claim_texts)
+            assert not any("AI-generated draft" in text for text in claim_texts)
+
+        with session_factory() as session:
+            summary_count = session.scalar(select(func.count()).select_from(Summary))
+            assert summary_count == 1
     finally:
         engine.dispose()
 

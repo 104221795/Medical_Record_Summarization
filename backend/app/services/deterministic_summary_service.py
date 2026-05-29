@@ -483,10 +483,12 @@ class DeterministicSummaryService:
             raise SummaryGenerationError(f"Gemini generation failed safely: {exc}") from exc
 
         try:
-            generated = GeminiPersistedSummary.model_validate_json(raw_output)
-        except ValidationError as exc:
+            generated_payload = _load_and_normalize_gemini_payload(raw_output, request)
+            generated = GeminiPersistedSummary.model_validate(generated_payload)
+        except (json.JSONDecodeError, ValidationError) as exc:
             raise SummaryGenerationError(
-                "Gemini returned invalid structured JSON; no summary was created."
+                "Gemini returned invalid structured JSON; no summary was created. "
+                f"{_validation_hint(exc)}"
             ) from exc
         if generated.summary_type != request.summary_type:
             raise SummaryGenerationError("Gemini output summary_type does not match the request.")
@@ -1066,7 +1068,7 @@ class DeterministicSummaryService:
                     target_section.claims.append(draft)
 
         for note in generated.safety_notes:
-            if note.strip():
+            if _should_persist_safety_note(note):
                 needs_review.claims.append(
                     ClaimDraft(
                         text=note.strip(),
@@ -1680,6 +1682,326 @@ def _json_default(value: Any) -> str | int | float:
 
 def _string_or_none(value: Any) -> str | None:
     return str(value) if value is not None else None
+
+
+ALLOWED_CLAIM_TYPES = {
+    "encounter_context",
+    "diagnosis",
+    "medication",
+    "lab_result",
+    "vital_sign",
+    "timeline_event",
+    "imaging_finding",
+    "follow_up",
+    "missing_information",
+    "allergy",
+    "procedure",
+    "general",
+}
+
+CLAIM_TYPE_ALIASES = {
+    "active_problem": "diagnosis",
+    "active_problems": "diagnosis",
+    "condition": "diagnosis",
+    "diagnoses": "diagnosis",
+    "diagnostic": "diagnosis",
+    "problem": "diagnosis",
+    "problems": "diagnosis",
+    "med": "medication",
+    "meds": "medication",
+    "drug": "medication",
+    "drugs": "medication",
+    "lab": "lab_result",
+    "labs": "lab_result",
+    "laboratory": "lab_result",
+    "observation": "lab_result",
+    "vital": "vital_sign",
+    "vitals": "vital_sign",
+    "image": "imaging_finding",
+    "imaging": "imaging_finding",
+    "radiology": "imaging_finding",
+    "course": "timeline_event",
+    "timeline": "timeline_event",
+    "clinical_course": "timeline_event",
+    "missing": "missing_information",
+    "missing_info": "missing_information",
+    "review": "missing_information",
+    "recommendation": "follow_up",
+}
+
+SUPPORT_STATUS_ALIASES = {
+    "supported": "supported",
+    "support": "supported",
+    "cited": "supported",
+    "evidenced": "supported",
+    "unsupported": "unsupported",
+    "not_supported": "unsupported",
+    "no_support": "unsupported",
+    "conflict": "conflicting",
+    "conflicting": "conflicting",
+    "contradictory": "conflicting",
+    "contradiction": "conflicting",
+    "insufficient": "insufficient_evidence",
+    "insufficient_evidence": "insufficient_evidence",
+    "missing": "insufficient_evidence",
+    "not_found": "insufficient_evidence",
+    "not found": "insufficient_evidence",
+    "no_evidence": "insufficient_evidence",
+    "unchecked": "unchecked",
+    "unverified": "unchecked",
+    "unknown": "unchecked",
+}
+
+ALLOWED_RISK_LEVELS = {"low", "medium", "high", "critical"}
+
+
+def _load_and_normalize_gemini_payload(
+    raw_output: str,
+    request: SummaryGenerateRequest,
+) -> dict[str, Any]:
+    payload = json.loads(raw_output)
+    if not isinstance(payload, dict):
+        return {}
+
+    summary_type = _normalize_token(payload.get("summary_type"))
+    if summary_type in {"patient_snapshot", "patient", "snapshot"}:
+        summary_type = request.summary_type
+
+    language = _normalize_language(payload.get("language"), request.language)
+    sections = payload.get("sections") if isinstance(payload.get("sections"), list) else []
+    normalized_sections = [
+        _normalize_gemini_section(section, index)
+        for index, section in enumerate(sections, start=1)
+        if isinstance(section, (dict, str))
+    ]
+
+    return {
+        "summary_type": summary_type,
+        "language": language,
+        "requires_clinician_review": _normalize_boolean(payload.get("requires_clinician_review")),
+        "sections": normalized_sections,
+        "safety_notes": _normalize_string_list(payload.get("safety_notes")),
+    }
+
+
+def _normalize_gemini_section(section: dict[str, Any] | str, index: int) -> dict[str, Any]:
+    if isinstance(section, str):
+        return {
+            "section_title": "Needs Clinician Review",
+            "section_type": "needs_clinician_review",
+            "section_order": index,
+            "claims": [
+                {
+                    "claim_text": section,
+                    "claim_type": "general",
+                    "support_status": "unchecked",
+                    "citation_ids": [],
+                    "clinical_risk_level": "low",
+                }
+            ],
+        }
+
+    section_title = str(section.get("section_title") or section.get("title") or "").strip()
+    section_type = _normalize_token(section.get("section_type") or section.get("type"))
+    inferred_type = _section_type_from_title(section_title) if section_title else None
+    if section_type not in {section_type for _, section_type in DeterministicSummaryService.REQUIRED_SECTIONS}:
+        section_type = inferred_type or "needs_clinician_review"
+    if not section_title:
+        section_title = _section_title_from_type(section_type)
+
+    raw_order = section.get("section_order") or section.get("order") or index
+    try:
+        section_order = max(1, int(raw_order))
+    except (TypeError, ValueError):
+        section_order = index
+
+    claims = section.get("claims") if isinstance(section.get("claims"), list) else []
+    normalized_claims = [
+        _normalize_gemini_claim(claim)
+        for claim in claims
+        if isinstance(claim, (dict, str))
+    ]
+
+    return {
+        "section_title": section_title,
+        "section_type": section_type,
+        "section_order": section_order,
+        "claims": normalized_claims,
+    }
+
+
+def _normalize_gemini_claim(claim: dict[str, Any] | str) -> dict[str, Any]:
+    if isinstance(claim, str):
+        return {
+            "claim_text": claim,
+            "claim_type": "general",
+            "support_status": "unchecked",
+            "citation_ids": [],
+            "clinical_risk_level": "low",
+        }
+
+    claim_text = str(
+        claim.get("claim_text")
+        or claim.get("text")
+        or claim.get("statement")
+        or claim.get("summary")
+        or ""
+    ).strip()
+    claim_type = _normalize_claim_type(claim.get("claim_type") or claim.get("type"))
+    support_status = _normalize_support_status(
+        claim.get("support_status") or claim.get("evidence_status") or claim.get("status")
+    )
+    risk_level = _normalize_risk_level(
+        claim.get("clinical_risk_level") or claim.get("risk_level"),
+        claim_type,
+    )
+    return {
+        "claim_text": claim_text,
+        "claim_type": claim_type,
+        "support_status": support_status,
+        "citation_ids": _normalize_citation_ids(claim.get("citation_ids") or claim.get("evidence_ids")),
+        "clinical_risk_level": risk_level,
+        "confidence_score": _normalize_confidence_score(claim.get("confidence_score") or claim.get("confidence")),
+    }
+
+
+def _normalize_token(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", str(value or "").strip().casefold()).strip("_")
+
+
+def _normalize_language(value: Any, requested_language: str) -> str:
+    normalized = str(value or "").strip().casefold()
+    if not normalized:
+        return ""
+    if normalized in {requested_language.casefold(), requested_language.replace("-", "_").casefold()}:
+        return requested_language
+    if requested_language == "vi" and ("vietnamese" in normalized or normalized.startswith("vi")):
+        return "vi"
+    return str(value).strip()
+
+
+def _normalize_boolean(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().casefold() in {"true", "yes", "1", "required"}
+    return False
+
+
+def _normalize_string_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    return []
+
+
+def _normalize_claim_type(value: Any) -> str:
+    normalized = _normalize_token(value)
+    normalized = CLAIM_TYPE_ALIASES.get(normalized, normalized)
+    return normalized if normalized in ALLOWED_CLAIM_TYPES else "general"
+
+
+def _normalize_support_status(value: Any) -> str:
+    normalized = _normalize_token(value)
+    return SUPPORT_STATUS_ALIASES.get(normalized, "unchecked")
+
+
+def _normalize_risk_level(value: Any, claim_type: str) -> str:
+    normalized = _normalize_token(value)
+    supplied = normalized if normalized in ALLOWED_RISK_LEVELS else None
+    return _risk_level(claim_type, supplied)
+
+
+def _normalize_citation_ids(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value.strip()] if value.strip() else []
+    if not isinstance(value, list):
+        return []
+    citation_ids: list[str] = []
+    for item in value:
+        if isinstance(item, str) and item.strip():
+            citation_ids.append(item.strip())
+        elif isinstance(item, dict):
+            source_id = item.get("source_id") or item.get("citation_id") or item.get("id")
+            if source_id and str(source_id).strip():
+                citation_ids.append(str(source_id).strip())
+    return citation_ids
+
+
+def _normalize_confidence_score(value: Any) -> Decimal | None:
+    if value is None or value == "":
+        return None
+    try:
+        score = Decimal(str(value))
+    except Exception:
+        return None
+    if Decimal("0") <= score <= Decimal("1"):
+        return score
+    return None
+
+
+def _section_title_from_type(section_type: str) -> str:
+    return {
+        section_key: section_title
+        for section_title, section_key in DeterministicSummaryService.REQUIRED_SECTIONS
+    }.get(section_type, "Needs Clinician Review")
+
+
+def _should_persist_safety_note(note: str) -> bool:
+    text = note.strip()
+    if not text:
+        return False
+    lowered = text.casefold()
+    meta_markers = (
+        "ai-generated",
+        "assistant",
+        "clinician review before",
+        "do not ",
+        "draft requires",
+        "instruction",
+        "json",
+        "must summarize",
+        "output schema",
+        "prompt",
+        "requires doctor review",
+        "return valid",
+        "schema",
+        "trợ lý",
+        "không đề xuất",
+        "phải tóm tắt",
+    )
+    if any(marker in lowered for marker in meta_markers):
+        return False
+    clinical_safety_markers = (
+        "citation",
+        "conflict",
+        "conflicting",
+        "evidence",
+        "insufficient",
+        "missing",
+        "unsupported",
+        "dị ứng",
+        "không tìm thấy",
+        "mâu thuẫn",
+        "thiếu",
+    )
+    return any(marker in lowered for marker in clinical_safety_markers)
+
+
+def _validation_hint(exc: Exception) -> str:
+    if isinstance(exc, json.JSONDecodeError):
+        return "The response was not valid JSON."
+    if isinstance(exc, ValidationError):
+        errors = exc.errors(include_input=False)[:3]
+        if not errors:
+            return "The response did not match the required schema."
+        details = []
+        for error in errors:
+            location = ".".join(str(part) for part in error.get("loc", ())) or "root"
+            details.append(f"{location}: {error.get('type', 'validation_error')}")
+        return "Validation hints: " + "; ".join(details)
+    return "The response did not match the required schema."
 
 
 def _clean_join(parts: list[str | None]) -> str:

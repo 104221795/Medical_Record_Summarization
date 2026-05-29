@@ -1,0 +1,6 @@
+-r requirements-rag.txt
+torch>=2.4,<3
+transformers>=4.48,<6
+sentencepiece>=0.2,<1
+accelerate>=1.0,<2
+rouge-score>=0.1.2,<1

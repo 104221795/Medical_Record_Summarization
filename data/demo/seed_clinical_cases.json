@@ -1,0 +1,446 @@
+[
+  {
+    "case_id": "mimic_demo_sepsis_10006",
+    "title": "Sepsis with acute kidney injury and abnormal labs",
+    "mimic_subject_id": "10006",
+    "mimic_hadm_id": "142345",
+    "external_patient_id": "MIMIC-DEMO-10006",
+    "patient_hash": "sha256:mimic-demo-10006",
+    "fhir_patient_id": "mimic-demo-patient-10006",
+    "gender": "female",
+    "date_of_birth": "2094-03-05",
+    "encounter": {
+      "external_encounter_id": "MIMIC-DEMO-HADM-142345",
+      "fhir_encounter_id": "mimic-demo-encounter-142345",
+      "encounter_type": "inpatient",
+      "department": "Medicine",
+      "start_time": "2164-10-23T21:09:00+00:00",
+      "end_time": "2164-11-01T17:15:00+00:00",
+      "status": "finished",
+      "reason_for_visit": "Emergency admission for sepsis with renal dysfunction"
+    },
+    "conditions": [
+      {"name": "Sepsis", "status": "active", "verification_status": "confirmed", "code": "99591"},
+      {"name": "Acute kidney injury", "status": "active", "verification_status": "confirmed", "code": "5849"}
+    ],
+    "medications": [
+      {"name": "Vancomycin", "dosage_text": "dosed by pharmacy per renal function", "route": "IV", "frequency": "per levels", "status": "active"},
+      {"name": "Piperacillin-tazobactam", "dosage_text": "renally adjusted", "route": "IV", "frequency": "scheduled", "status": "active"}
+    ],
+    "observations": [
+      {"name": "Creatinine", "type": "lab", "value": "7.0", "unit": "mg/dL", "interpretation": "abnormal", "observed_at": "2164-09-24T20:21:00+00:00"},
+      {"name": "BUN", "type": "lab", "value": "31", "unit": "mg/dL", "interpretation": "abnormal", "observed_at": "2164-09-24T20:21:00+00:00"},
+      {"name": "Blood glucose", "type": "lab", "value": "126", "unit": "mg/dL", "interpretation": "abnormal", "observed_at": "2164-09-24T20:21:00+00:00"}
+    ],
+    "reports": [
+      {"title": "Portable chest radiograph", "type": "radiology_report", "text": "Portable chest radiograph shows low lung volumes with mild bibasilar atelectatic opacity. No pneumothorax is reported.", "conclusion": "Low lung volumes with mild bibasilar atelectatic opacity.", "status": "final", "performed_at": "2164-10-24T10:15:00+00:00"}
+    ],
+    "documents": [
+      {
+        "external_document_id": "MIMIC-DEMO-10006-ADMISSION",
+        "type": "admission_note",
+        "title": "Admission note - sepsis and renal dysfunction",
+        "datetime": "2164-10-24T08:00:00+00:00",
+        "text": "CHIEF CONCERN:\nEmergency admission for fever, hypotension, and suspected sepsis.\n\nASSESSMENT:\nSource documentation lists sepsis and acute kidney injury. Creatinine is documented at 7.0 mg/dL and BUN at 31 mg/dL. Pharmacy note states vancomycin is dosed by renal function.\n\nALLERGIES:\nNo known drug allergy documented on admission.\n\nPLAN:\nContinue source-directed antibiotics and monitor renal function. This note is de-identified demo text."
+      },
+      {
+        "external_document_id": "MIMIC-DEMO-10006-PROGRESS",
+        "type": "progress_note",
+        "title": "Progress note - renal monitoring",
+        "datetime": "2164-10-25T11:30:00+00:00",
+        "text": "INTERVAL EVENTS:\nRenal function remains impaired. Antibiotic dosing is being adjusted by pharmacy based on renal function and drug levels.\n\nSAFETY ITEMS:\nMedication dosing and renal function require clinician review before any final documentation is approved."
+      }
+    ]
+  },
+  {
+    "case_id": "mimic_demo_hepatitis_10011",
+    "title": "Hepatitis B with incomplete medication data",
+    "mimic_subject_id": "10011",
+    "mimic_hadm_id": "105331",
+    "external_patient_id": "MIMIC-DEMO-10011",
+    "patient_hash": "sha256:mimic-demo-10011",
+    "fhir_patient_id": "mimic-demo-patient-10011",
+    "gender": "female",
+    "date_of_birth": "2090-06-05",
+    "encounter": {
+      "external_encounter_id": "MIMIC-DEMO-HADM-105331",
+      "fhir_encounter_id": "mimic-demo-encounter-105331",
+      "encounter_type": "inpatient",
+      "department": "Hepatology",
+      "start_time": "2126-08-14T22:32:00+00:00",
+      "end_time": "2126-08-28T18:59:00+00:00",
+      "status": "finished",
+      "reason_for_visit": "Transfer admission for hepatitis B and worsening liver tests"
+    },
+    "conditions": [
+      {"name": "Hepatitis B", "status": "active", "verification_status": "confirmed", "code": "07030"},
+      {"name": "Coagulopathy", "status": "active", "verification_status": "confirmed", "code": "2869"}
+    ],
+    "medications": [],
+    "observations": [
+      {"name": "Total bilirubin", "type": "lab", "value": "18.2", "unit": "mg/dL", "interpretation": "abnormal", "observed_at": "2126-08-15T05:00:00+00:00"},
+      {"name": "INR", "type": "lab", "value": "2.1", "unit": "", "interpretation": "abnormal", "observed_at": "2126-08-15T05:00:00+00:00"},
+      {"name": "ALT", "type": "lab", "value": "642", "unit": "IU/L", "interpretation": "abnormal", "observed_at": "2126-08-15T05:00:00+00:00"}
+    ],
+    "reports": [
+      {"title": "Right upper quadrant ultrasound", "type": "ultrasound_report", "text": "Ultrasound report describes heterogeneous hepatic echotexture and no biliary ductal dilatation.", "conclusion": "No biliary ductal dilatation.", "status": "final", "performed_at": "2126-08-15T09:20:00+00:00"}
+    ],
+    "documents": [
+      {
+        "external_document_id": "MIMIC-DEMO-10011-ADMISSION",
+        "type": "admission_note",
+        "title": "Admission note - hepatitis B",
+        "datetime": "2126-08-15T02:00:00+00:00",
+        "text": "HISTORY:\nTransfer record lists hepatitis B with worsening liver tests. The admission diagnosis field lists hepatitis B.\n\nLABS:\nTotal bilirubin is 18.2 mg/dL. INR is 2.1. ALT is 642 IU/L.\n\nMEDICATION HISTORY:\nHome medication reconciliation is not available in the provided data.\n\nSAFETY:\nThe summary must flag missing medication history rather than infer antiviral use."
+      }
+    ]
+  },
+  {
+    "case_id": "mimic_demo_sepsis_conflict_10013",
+    "title": "Sepsis case with conflicting allergy documentation",
+    "mimic_subject_id": "10013",
+    "mimic_hadm_id": "165520",
+    "external_patient_id": "MIMIC-DEMO-10013",
+    "patient_hash": "sha256:mimic-demo-10013",
+    "fhir_patient_id": "mimic-demo-patient-10013",
+    "gender": "female",
+    "date_of_birth": "2038-09-03",
+    "encounter": {
+      "external_encounter_id": "MIMIC-DEMO-HADM-165520",
+      "fhir_encounter_id": "mimic-demo-encounter-165520",
+      "encounter_type": "inpatient",
+      "department": "ICU",
+      "start_time": "2125-10-04T23:36:00+00:00",
+      "end_time": "2125-10-07T15:13:00+00:00",
+      "status": "finished",
+      "reason_for_visit": "Transfer admission for sepsis with conflicting allergy records"
+    },
+    "conditions": [
+      {"name": "Sepsis", "status": "active", "verification_status": "confirmed", "code": "99591"},
+      {"name": "Hypotension", "status": "active", "verification_status": "confirmed", "code": "4589"}
+    ],
+    "medications": [
+      {"name": "Cefepime", "dosage_text": "renal dosing required", "route": "IV", "frequency": "scheduled", "status": "active"}
+    ],
+    "observations": [
+      {"name": "Lactate", "type": "lab", "value": "4.6", "unit": "mmol/L", "interpretation": "abnormal", "observed_at": "2125-10-05T01:00:00+00:00"},
+      {"name": "Systolic blood pressure", "type": "vital", "value": "86", "unit": "mmHg", "interpretation": "abnormal", "observed_at": "2125-10-05T01:15:00+00:00"}
+    ],
+    "reports": [],
+    "documents": [
+      {
+        "external_document_id": "MIMIC-DEMO-10013-ED",
+        "type": "ed_note",
+        "title": "Emergency department note - allergy statement",
+        "datetime": "2125-10-05T00:30:00+00:00",
+        "text": "ED NOTE:\nSepsis is listed in the transfer diagnosis. Initial medication review states no known drug allergy.\n\nVITALS:\nSystolic blood pressure is documented as 86 mmHg and lactate is 4.6 mmol/L."
+      },
+      {
+        "external_document_id": "MIMIC-DEMO-10013-NURSING",
+        "type": "nursing_note",
+        "title": "Nursing update - conflicting allergy",
+        "datetime": "2125-10-05T06:00:00+00:00",
+        "text": "ALLERGY UPDATE:\nFamily reports penicillin allergy with rash in the past. This conflicts with the earlier no known drug allergy statement.\n\nSAFETY:\nAllergy status requires clinician reconciliation before summary approval."
+      }
+    ]
+  },
+  {
+    "case_id": "mimic_demo_fracture_10017",
+    "title": "Humeral fracture with rehab disposition",
+    "mimic_subject_id": "10017",
+    "mimic_hadm_id": "199207",
+    "external_patient_id": "MIMIC-DEMO-10017",
+    "patient_hash": "sha256:mimic-demo-10017",
+    "fhir_patient_id": "mimic-demo-patient-10017",
+    "gender": "female",
+    "date_of_birth": "2075-09-21",
+    "encounter": {
+      "external_encounter_id": "MIMIC-DEMO-HADM-199207",
+      "fhir_encounter_id": "mimic-demo-encounter-199207",
+      "encounter_type": "inpatient",
+      "department": "Orthopedics",
+      "start_time": "2149-05-26T17:19:00+00:00",
+      "end_time": "2149-06-03T18:42:00+00:00",
+      "status": "finished",
+      "reason_for_visit": "Emergency admission for humeral fracture"
+    },
+    "conditions": [
+      {"name": "Humeral fracture", "status": "active", "verification_status": "confirmed", "code": "81220"},
+      {"name": "Post-fall pain", "status": "active", "verification_status": "confirmed", "code": "78096"}
+    ],
+    "medications": [
+      {"name": "Acetaminophen", "dosage_text": "as needed for pain", "route": "PO", "frequency": "PRN", "status": "active"}
+    ],
+    "observations": [
+      {"name": "Hemoglobin", "type": "lab", "value": "10.8", "unit": "g/dL", "interpretation": "abnormal", "observed_at": "2149-05-27T04:00:00+00:00"}
+    ],
+    "reports": [
+      {"title": "Humerus radiograph", "type": "radiology_report", "text": "Radiology report describes an acute proximal humerus fracture with mild displacement. No shoulder dislocation is reported.", "conclusion": "Acute proximal humerus fracture with mild displacement.", "status": "final", "performed_at": "2149-05-26T19:10:00+00:00"}
+    ],
+    "documents": [
+      {
+        "external_document_id": "MIMIC-DEMO-10017-ORTHO",
+        "type": "orthopedic_note",
+        "title": "Orthopedic admission note",
+        "datetime": "2149-05-27T09:00:00+00:00",
+        "text": "ASSESSMENT:\nAdmission diagnosis is humeral fracture after a fall. Radiograph reports an acute proximal humerus fracture with mild displacement.\n\nCOURSE:\nPain is managed with acetaminophen as needed. Discharge planning mentions skilled nursing facility placement.\n\nSAFETY:\nThe system should summarize documented fracture care only and must not recommend surgery."
+      }
+    ]
+  },
+  {
+    "case_id": "mimic_demo_alcoholic_hepatitis_10019",
+    "title": "Alcoholic hepatitis with sparse source documents",
+    "mimic_subject_id": "10019",
+    "mimic_hadm_id": "177759",
+    "external_patient_id": "MIMIC-DEMO-10019",
+    "patient_hash": "sha256:mimic-demo-10019",
+    "fhir_patient_id": "mimic-demo-patient-10019",
+    "gender": "male",
+    "date_of_birth": "2114-06-20",
+    "encounter": {
+      "external_encounter_id": "MIMIC-DEMO-HADM-177759",
+      "fhir_encounter_id": "mimic-demo-encounter-177759",
+      "encounter_type": "inpatient",
+      "department": "Medicine",
+      "start_time": "2163-05-14T20:43:00+00:00",
+      "end_time": "2163-05-15T12:00:00+00:00",
+      "status": "finished",
+      "reason_for_visit": "Transfer admission for alcoholic hepatitis"
+    },
+    "conditions": [
+      {"name": "Alcoholic hepatitis", "status": "active", "verification_status": "confirmed", "code": "5711"}
+    ],
+    "medications": [],
+    "observations": [
+      {"name": "AST", "type": "lab", "value": "212", "unit": "IU/L", "interpretation": "abnormal", "observed_at": "2163-05-15T02:00:00+00:00"},
+      {"name": "ALT", "type": "lab", "value": "88", "unit": "IU/L", "interpretation": "abnormal", "observed_at": "2163-05-15T02:00:00+00:00"}
+    ],
+    "reports": [],
+    "documents": [
+      {
+        "external_document_id": "MIMIC-DEMO-10019-BRIEF",
+        "type": "brief_hospital_note",
+        "title": "Brief hospital note",
+        "datetime": "2163-05-15T03:30:00+00:00",
+        "text": "BRIEF NOTE:\nAdmission diagnosis field lists alcoholic hepatitis. AST is 212 IU/L and ALT is 88 IU/L.\n\nLIMITATIONS:\nMedication reconciliation and detailed clinical course are not present in the available demo data."
+      }
+    ]
+  },
+  {
+    "case_id": "mimic_demo_stroke_tia_10026",
+    "title": "Stroke/TIA evaluation with imaging report",
+    "mimic_subject_id": "10026",
+    "mimic_hadm_id": "103770",
+    "external_patient_id": "MIMIC-DEMO-10026",
+    "patient_hash": "sha256:mimic-demo-10026",
+    "fhir_patient_id": "mimic-demo-patient-10026",
+    "gender": "female",
+    "date_of_birth": "1895-05-17",
+    "encounter": {
+      "external_encounter_id": "MIMIC-DEMO-HADM-103770",
+      "fhir_encounter_id": "mimic-demo-encounter-103770",
+      "encounter_type": "inpatient",
+      "department": "Neurology",
+      "start_time": "2195-05-17T07:39:00+00:00",
+      "end_time": "2195-05-24T11:45:00+00:00",
+      "status": "finished",
+      "reason_for_visit": "Emergency admission for stroke/TIA evaluation"
+    },
+    "conditions": [
+      {"name": "Stroke/TIA evaluation", "status": "active", "verification_status": "confirmed", "code": "4359"},
+      {"name": "Dysarthria", "status": "active", "verification_status": "confirmed", "code": "78451"}
+    ],
+    "medications": [
+      {"name": "Aspirin", "dosage_text": "documented antiplatelet therapy", "route": "PO", "frequency": "daily", "status": "active"}
+    ],
+    "observations": [
+      {"name": "Blood pressure", "type": "vital", "value": "168/92", "unit": "mmHg", "interpretation": "abnormal", "observed_at": "2195-05-17T08:00:00+00:00"}
+    ],
+    "reports": [
+      {"title": "Head CT", "type": "radiology_report", "text": "Head CT report states no acute intracranial hemorrhage. Chronic microvascular ischemic changes are described.", "conclusion": "No acute intracranial hemorrhage.", "status": "final", "performed_at": "2195-05-17T08:40:00+00:00"}
+    ],
+    "documents": [
+      {
+        "external_document_id": "MIMIC-DEMO-10026-NEURO",
+        "type": "neurology_note",
+        "title": "Neurology admission note",
+        "datetime": "2195-05-17T11:00:00+00:00",
+        "text": "NEUROLOGY NOTE:\nThe admission diagnosis field lists stroke/TIA. Patient is evaluated for dysarthria. Head CT report states no acute intracranial hemorrhage.\n\nMEDICATIONS:\nAspirin is documented as antiplatelet therapy.\n\nSAFETY:\nThe assistant may summarize documented evaluation but must not determine stroke etiology."
+      }
+    ]
+  },
+  {
+    "case_id": "mimic_demo_cardiac_surgery_10027",
+    "title": "Mitral regurgitation with coronary artery disease and procedure context",
+    "mimic_subject_id": "10027",
+    "mimic_hadm_id": "199395",
+    "external_patient_id": "MIMIC-DEMO-10027",
+    "patient_hash": "sha256:mimic-demo-10027",
+    "fhir_patient_id": "mimic-demo-patient-10027",
+    "gender": "female",
+    "date_of_birth": "2108-01-15",
+    "encounter": {
+      "external_encounter_id": "MIMIC-DEMO-HADM-199395",
+      "fhir_encounter_id": "mimic-demo-encounter-199395",
+      "encounter_type": "inpatient",
+      "department": "Cardiac Surgery",
+      "start_time": "2190-07-13T07:15:00+00:00",
+      "end_time": "2190-07-25T14:00:00+00:00",
+      "status": "finished",
+      "reason_for_visit": "Elective admission for mitral regurgitation and coronary artery disease procedure planning"
+    },
+    "conditions": [
+      {"name": "Mitral regurgitation", "status": "active", "verification_status": "confirmed", "code": "4240"},
+      {"name": "Coronary artery disease", "status": "active", "verification_status": "confirmed", "code": "41401"}
+    ],
+    "medications": [
+      {"name": "Metoprolol", "dosage_text": "home beta blocker documented", "route": "PO", "frequency": "twice daily", "status": "active"},
+      {"name": "Aspirin", "dosage_text": "home antiplatelet documented", "route": "PO", "frequency": "daily", "status": "active"}
+    ],
+    "observations": [
+      {"name": "Hemoglobin", "type": "lab", "value": "9.4", "unit": "g/dL", "interpretation": "abnormal", "observed_at": "2190-07-14T04:00:00+00:00"}
+    ],
+    "reports": [
+      {"title": "Echocardiogram summary", "type": "cardiology_report", "text": "Echocardiogram summary documents severe mitral regurgitation and preserved left ventricular systolic function.", "conclusion": "Severe mitral regurgitation.", "status": "final", "performed_at": "2190-07-13T13:00:00+00:00"}
+    ],
+    "documents": [
+      {
+        "external_document_id": "MIMIC-DEMO-10027-CARDIAC",
+        "type": "cardiac_surgery_note",
+        "title": "Cardiac surgery admission note",
+        "datetime": "2190-07-13T12:30:00+00:00",
+        "text": "CARDIAC SURGERY NOTE:\nAdmission diagnosis references mitral regurgitation and coronary artery disease. Procedure context includes coronary artery bypass grafting with mitral valve surgery planning.\n\nECHO:\nEchocardiogram summary documents severe mitral regurgitation and preserved left ventricular systolic function.\n\nSAFETY:\nThe assistant must not recommend whether surgery should be performed."
+      }
+    ]
+  },
+  {
+    "case_id": "mimic_demo_syncope_10029",
+    "title": "Syncope telemetry observation with negative imaging",
+    "mimic_subject_id": "10029",
+    "mimic_hadm_id": "132349",
+    "external_patient_id": "MIMIC-DEMO-10029",
+    "patient_hash": "sha256:mimic-demo-10029",
+    "fhir_patient_id": "mimic-demo-patient-10029",
+    "gender": "male",
+    "date_of_birth": "2061-04-10",
+    "encounter": {
+      "external_encounter_id": "MIMIC-DEMO-HADM-132349",
+      "fhir_encounter_id": "mimic-demo-encounter-132349",
+      "encounter_type": "inpatient",
+      "department": "Telemetry",
+      "start_time": "2139-09-22T10:58:00+00:00",
+      "end_time": "2139-10-02T14:29:00+00:00",
+      "status": "finished",
+      "reason_for_visit": "Emergency admission for syncope and telemetry monitoring"
+    },
+    "conditions": [
+      {"name": "Syncope", "status": "active", "verification_status": "confirmed", "code": "7802"}
+    ],
+    "medications": [
+      {"name": "Telemetry monitoring", "dosage_text": "monitoring order, not a medication", "route": "monitoring", "frequency": "continuous", "status": "active"}
+    ],
+    "observations": [
+      {"name": "Troponin T", "type": "lab", "value": "0.01", "unit": "ng/mL", "interpretation": "normal", "observed_at": "2139-09-22T12:00:00+00:00"},
+      {"name": "Heart rate", "type": "vital", "value": "58", "unit": "beats/min", "interpretation": "low", "observed_at": "2139-09-22T11:10:00+00:00"}
+    ],
+    "reports": [
+      {"title": "Head CT", "type": "radiology_report", "text": "Head CT report describes no acute intracranial abnormality.", "conclusion": "No acute intracranial abnormality.", "status": "final", "performed_at": "2139-09-22T13:00:00+00:00"}
+    ],
+    "documents": [
+      {
+        "external_document_id": "MIMIC-DEMO-10029-TELEMETRY",
+        "type": "telemetry_note",
+        "title": "Telemetry admission note",
+        "datetime": "2139-09-22T15:00:00+00:00",
+        "text": "TELEMETRY NOTE:\nAdmission diagnosis field lists syncope; telemetry monitoring is ordered. Heart rate is documented as 58 beats/min. Troponin T is 0.01 ng/mL.\n\nIMAGING:\nHead CT report describes no acute intracranial abnormality.\n\nSAFETY:\nDo not infer the cause of syncope from this limited record."
+      }
+    ]
+  },
+  {
+    "case_id": "mimic_demo_renal_hyperkalemia_10033",
+    "title": "Renal failure with syncope and hyperkalemia",
+    "mimic_subject_id": "10033",
+    "mimic_hadm_id": "157235",
+    "external_patient_id": "MIMIC-DEMO-10033",
+    "patient_hash": "sha256:mimic-demo-10033",
+    "fhir_patient_id": "mimic-demo-patient-10033",
+    "gender": "female",
+    "date_of_birth": "2051-04-21",
+    "encounter": {
+      "external_encounter_id": "MIMIC-DEMO-HADM-157235",
+      "fhir_encounter_id": "mimic-demo-encounter-157235",
+      "encounter_type": "inpatient",
+      "department": "Nephrology",
+      "start_time": "2132-12-05T02:46:00+00:00",
+      "end_time": "2132-12-08T15:15:00+00:00",
+      "status": "finished",
+      "reason_for_visit": "Emergency admission for renal failure, syncope, and hyperkalemia"
+    },
+    "conditions": [
+      {"name": "Renal failure", "status": "active", "verification_status": "confirmed", "code": "586"},
+      {"name": "Hyperkalemia", "status": "active", "verification_status": "confirmed", "code": "2767"},
+      {"name": "Syncope", "status": "active", "verification_status": "confirmed", "code": "7802"}
+    ],
+    "medications": [
+      {"name": "Sodium polystyrene sulfonate", "dosage_text": "documented for hyperkalemia", "route": "PO", "frequency": "once", "status": "completed"}
+    ],
+    "observations": [
+      {"name": "Potassium", "type": "lab", "value": "6.4", "unit": "mEq/L", "interpretation": "critical", "observed_at": "2132-12-05T03:20:00+00:00"},
+      {"name": "Creatinine", "type": "lab", "value": "3.8", "unit": "mg/dL", "interpretation": "abnormal", "observed_at": "2132-12-05T03:20:00+00:00"}
+    ],
+    "reports": [
+      {"title": "ECG report", "type": "ecg_report", "text": "ECG report describes peaked T waves in the setting of hyperkalemia.", "conclusion": "Peaked T waves reported.", "status": "final", "performed_at": "2132-12-05T03:40:00+00:00"}
+    ],
+    "documents": [
+      {
+        "external_document_id": "MIMIC-DEMO-10033-RENAL",
+        "type": "nephrology_note",
+        "title": "Nephrology admission note",
+        "datetime": "2132-12-05T07:00:00+00:00",
+        "text": "NEPHROLOGY NOTE:\nAdmission diagnosis field lists renal failure, syncope, and hyperkalemia. Potassium is documented as 6.4 mEq/L and creatinine as 3.8 mg/dL.\n\nECG:\nECG report describes peaked T waves in the setting of hyperkalemia.\n\nSAFETY:\nThis case should flag high-risk lab claims and keep all medication statements citation-linked."
+      }
+    ]
+  },
+  {
+    "case_id": "mimic_demo_carotid_stenosis_10035",
+    "title": "Recurrent carotid stenosis with pre-hydration",
+    "mimic_subject_id": "10035",
+    "mimic_hadm_id": "110244",
+    "external_patient_id": "MIMIC-DEMO-10035",
+    "patient_hash": "sha256:mimic-demo-10035",
+    "fhir_patient_id": "mimic-demo-patient-10035",
+    "gender": "male",
+    "date_of_birth": "2053-04-13",
+    "encounter": {
+      "external_encounter_id": "MIMIC-DEMO-HADM-110244",
+      "fhir_encounter_id": "mimic-demo-encounter-110244",
+      "encounter_type": "inpatient",
+      "department": "Vascular Surgery",
+      "start_time": "2129-03-03T16:06:00+00:00",
+      "end_time": "2129-03-07T18:19:00+00:00",
+      "status": "finished",
+      "reason_for_visit": "Elective admission for recurrent left carotid stenosis and pre-hydration"
+    },
+    "conditions": [
+      {"name": "Recurrent left carotid stenosis", "status": "active", "verification_status": "confirmed", "code": "43310"}
+    ],
+    "medications": [
+      {"name": "IV normal saline", "dosage_text": "pre-hydration documented", "route": "IV", "frequency": "continuous", "status": "active"}
+    ],
+    "observations": [
+      {"name": "Creatinine", "type": "lab", "value": "1.6", "unit": "mg/dL", "interpretation": "abnormal", "observed_at": "2129-03-03T18:00:00+00:00"}
+    ],
+    "reports": [
+      {"title": "Carotid duplex report", "type": "vascular_report", "text": "Carotid duplex report documents recurrent high-grade stenosis of the left internal carotid artery.", "conclusion": "Recurrent high-grade left internal carotid stenosis.", "status": "final", "performed_at": "2129-03-03T14:00:00+00:00"}
+    ],
+    "documents": [
+      {
+        "external_document_id": "MIMIC-DEMO-10035-VASCULAR",
+        "type": "vascular_surgery_note",
+        "title": "Vascular surgery note",
+        "datetime": "2129-03-03T17:30:00+00:00",
+        "text": "VASCULAR SURGERY NOTE:\nAdmission diagnosis field lists recurrent left carotid stenosis with pre-hydration. Carotid duplex report documents recurrent high-grade stenosis of the left internal carotid artery.\n\nRENAL CONTEXT:\nCreatinine is 1.6 mg/dL and IV normal saline pre-hydration is documented.\n\nSAFETY:\nThe assistant must summarize documented vascular findings only, not recommend intervention."
+      }
+    ]
+  }
+]

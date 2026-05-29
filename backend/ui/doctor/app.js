@@ -524,12 +524,12 @@ function renderClaim(claim) {
 
 function statusLabel(status) {
   const labels = {
-    draft: "Draft — Cần bác sĩ kiểm duyệt.",
-    under_review: "Under Review — Doctor is checking citations and safety flags.",
-    edited: "Edited — Clinician changes saved; citation mapping may need revalidation.",
-    approved: "Approved — Clinician approved. Locked from normal editing.",
-    rejected: "Rejected — Not usable as clinical documentation.",
-    archived: "Archived — Historical version only.",
+    draft: "Draft - Can bac si kiem duyet.",
+    under_review: "Under Review - Doctor is checking citations and safety flags.",
+    edited: "Edited - Clinician changes saved; citation mapping may need revalidation.",
+    approved: "Approved - Clinician approved. Locked from normal editing.",
+    rejected: "Rejected - Not usable as clinical documentation.",
+    archived: "Archived - Historical version only.",
   };
   return labels[status] || status;
 }
@@ -589,7 +589,7 @@ function renderSafetyPanel() {
     </div>
     ${summary.unsupported_claim_count > 0 ? `<div class="message error">Unsupported or insufficient-evidence claims remain visible. Approval may be blocked for critical unsupported claims.</div>` : ""}
     ${summary.citation_revalidation_required ? `<div class="message error">Edited text may differ from the original claim-to-citation mapping and requires clinician revalidation.</div>` : ""}
-    ${summary.rejection_reason ? `<div class="message error">Rejected reason: ${escapeHtml(summary.rejection_reason)}${summary.latest_review_comment ? ` — ${escapeHtml(summary.latest_review_comment)}` : ""}</div>` : ""}
+    ${summary.rejection_reason ? `<div class="message error">Rejected reason: ${escapeHtml(summary.rejection_reason)}${summary.latest_review_comment ? ` - ${escapeHtml(summary.latest_review_comment)}` : ""}</div>` : ""}
     <div class="warning-list">${warnings}</div>
   `;
 }
@@ -780,6 +780,8 @@ function resetEvidencePanel() {
 function renderEvidencePanel(source) {
   hide(nodes.evidenceEmpty);
   show(nodes.evidenceContent);
+  const highlightedText = source.highlighted_span?.text || "";
+  const context = source.surrounding_context || "No surrounding context available.";
   const documentMeta = source.document
     ? `
       <div class="evidence-row">
@@ -801,13 +803,25 @@ function renderEvidencePanel(source) {
     </div>
     <div class="evidence-row">
       <span class="evidence-label">Surrounding context</span>
-      <div class="context">${escapeHtml(source.surrounding_context || "No surrounding context available.")}</div>
+      <div class="context">${renderHighlightedContext(context, highlightedText)}</div>
     </div>
     <div class="evidence-row">
       <span class="evidence-label">Source metadata</span>
       <pre class="context">${escapeHtml(JSON.stringify(source.source_metadata || {}, null, 2))}</pre>
     </div>
   `;
+}
+
+function renderHighlightedContext(context, highlightedText) {
+  if (!highlightedText) return escapeHtml(context);
+  const start = context.toLowerCase().indexOf(highlightedText.toLowerCase());
+  if (start < 0) return escapeHtml(context);
+  const end = start + highlightedText.length;
+  return [
+    escapeHtml(context.slice(0, start)),
+    `<mark class="inline-highlight">${escapeHtml(context.slice(start, end))}</mark>`,
+    escapeHtml(context.slice(end)),
+  ].join("");
 }
 
 document.addEventListener("click", (event) => {

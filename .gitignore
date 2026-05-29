@@ -15,6 +15,7 @@ data/raw/
 data/raw_*/
 data/credentialed/
 data/mimic/
+data/mimic-iii-clinical-database-demo-*/
 data/mimic-iv-note/
 data/mimic_iv_note/
 data/mimic-iv-ext-bhc/

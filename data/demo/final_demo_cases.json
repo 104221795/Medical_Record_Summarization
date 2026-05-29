@@ -1,0 +1,367 @@
+[
+  {
+    "case_id": "final_supported_citations_001",
+    "title": "Normal case with supported citations",
+    "demo_focus": "Show a draft patient snapshot where major claims can be linked to structured records and document chunks.",
+    "suggested_provider": "deterministic",
+    "expected_behavior": [
+      "Patient, encounter, document, condition, medication, observation, and report records import successfully.",
+      "Generated summary remains draft.",
+      "Supported clinical claims have citations.",
+      "Citation source panel shows same-patient evidence.",
+      "Safety panel shows citation coverage and unsupported claim count."
+    ],
+    "fhir_like_import": {
+      "source_system": "final_demo_supported",
+      "ingestion_type": "fhir_like_json",
+      "records": {
+        "patients": [
+          {
+            "resourceType": "Patient",
+            "id": "final-supported-patient-001",
+            "identifier": [
+              {
+                "value": "MRN-FINAL-SUPPORTED-001"
+              }
+            ],
+            "gender": "female",
+            "birthDate": "1975-04-12",
+            "is_deidentified": true
+          }
+        ],
+        "encounters": [
+          {
+            "resourceType": "Encounter",
+            "id": "final-supported-encounter-001",
+            "identifier": [
+              {
+                "value": "VISIT-FINAL-SUPPORTED-001"
+              }
+            ],
+            "status": "finished",
+            "class": {
+              "code": "AMB"
+            },
+            "subject": {
+              "reference": "Patient/final-supported-patient-001"
+            },
+            "period": {
+              "start": "2026-05-20T08:00:00Z"
+            },
+            "reasonCode": {
+              "text": "Follow-up visit for documented hypertension and fatigue"
+            }
+          }
+        ],
+        "conditions": [
+          {
+            "resourceType": "Condition",
+            "id": "final-supported-condition-001",
+            "subject": {
+              "reference": "Patient/final-supported-patient-001"
+            },
+            "encounter": {
+              "reference": "Encounter/final-supported-encounter-001"
+            },
+            "code": {
+              "text": "Hypertension"
+            },
+            "clinicalStatus": {
+              "coding": [
+                {
+                  "code": "active"
+                }
+              ]
+            }
+          }
+        ],
+        "observations": [
+          {
+            "resourceType": "Observation",
+            "id": "final-supported-observation-001",
+            "subject": {
+              "reference": "Patient/final-supported-patient-001"
+            },
+            "encounter": {
+              "reference": "Encounter/final-supported-encounter-001"
+            },
+            "code": {
+              "text": "Blood pressure"
+            },
+            "valueString": "128/78 mmHg",
+            "category": [
+              {
+                "coding": [
+                  {
+                    "code": "vital-signs"
+                  }
+                ]
+              }
+            ],
+            "effectiveDateTime": "2026-05-20T08:15:00Z"
+          }
+        ],
+        "medications": [
+          {
+            "resourceType": "MedicationStatement",
+            "id": "final-supported-medication-001",
+            "subject": {
+              "reference": "Patient/final-supported-patient-001"
+            },
+            "encounter": {
+              "reference": "Encounter/final-supported-encounter-001"
+            },
+            "medicationCodeableConcept": {
+              "text": "Amlodipine"
+            },
+            "dosageInstruction": [
+              {
+                "text": "5 mg by mouth once daily"
+              }
+            ],
+            "status": "active"
+          }
+        ],
+        "diagnostic_reports": [
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "final-supported-report-001",
+            "subject": {
+              "reference": "Patient/final-supported-patient-001"
+            },
+            "encounter": {
+              "reference": "Encounter/final-supported-encounter-001"
+            },
+            "status": "final",
+            "code": {
+              "text": "Chest X-ray"
+            },
+            "conclusion": "No acute cardiopulmonary process."
+          }
+        ],
+        "documents": [
+          {
+            "resourceType": "DocumentReference",
+            "id": "final-supported-document-001",
+            "identifier": [
+              {
+                "value": "NOTE-FINAL-SUPPORTED-001"
+              }
+            ],
+            "subject": {
+              "reference": "Patient/final-supported-patient-001"
+            },
+            "context": {
+              "encounter": [
+                {
+                  "reference": "Encounter/final-supported-encounter-001"
+                }
+              ]
+            },
+            "type": {
+              "text": "Progress Note"
+            },
+            "date": "2026-05-20T09:00:00Z",
+            "raw_text": "ASSESSMENT: Hypertension is listed as an active problem. MEDICATIONS: Amlodipine 5 mg by mouth once daily is documented as active. VITALS: Blood pressure recorded as 128/78 mmHg. COURSE: Patient reports fatigue but is clinically stable for outpatient follow-up. IMAGING: Chest X-ray report states no acute cardiopulmonary process."
+          }
+        ]
+      }
+    }
+  },
+  {
+    "case_id": "final_missing_information_002",
+    "title": "Missing information case",
+    "demo_focus": "Show that the system does not invent conditions, medications, labs, or reports when they are absent.",
+    "suggested_provider": "deterministic",
+    "expected_behavior": [
+      "Summary remains draft.",
+      "Available clinical-course claims can cite the document.",
+      "Medication, labs, imaging, or problem-list gaps appear in Needs Clinician Review.",
+      "Missing information is not converted into a diagnosis or treatment recommendation."
+    ],
+    "fhir_like_import": {
+      "source_system": "final_demo_missing",
+      "ingestion_type": "fhir_like_json",
+      "records": {
+        "patients": [
+          {
+            "resourceType": "Patient",
+            "id": "final-missing-patient-002",
+            "identifier": [
+              {
+                "value": "MRN-FINAL-MISSING-002"
+              }
+            ],
+            "gender": "male",
+            "birthDate": "1988-09-01",
+            "is_deidentified": true
+          }
+        ],
+        "encounters": [
+          {
+            "resourceType": "Encounter",
+            "id": "final-missing-encounter-002",
+            "identifier": [
+              {
+                "value": "VISIT-FINAL-MISSING-002"
+              }
+            ],
+            "status": "finished",
+            "class": {
+              "code": "AMB"
+            },
+            "subject": {
+              "reference": "Patient/final-missing-patient-002"
+            },
+            "period": {
+              "start": "2026-05-21T10:00:00Z"
+            },
+            "reasonCode": {
+              "text": "Visit note with incomplete supporting records"
+            }
+          }
+        ],
+        "conditions": [],
+        "observations": [],
+        "medications": [],
+        "diagnostic_reports": [],
+        "documents": [
+          {
+            "resourceType": "DocumentReference",
+            "id": "final-missing-document-002",
+            "identifier": [
+              {
+                "value": "NOTE-FINAL-MISSING-002"
+              }
+            ],
+            "subject": {
+              "reference": "Patient/final-missing-patient-002"
+            },
+            "context": {
+              "encounter": [
+                {
+                  "reference": "Encounter/final-missing-encounter-002"
+                }
+              ]
+            },
+            "type": {
+              "text": "Triage Note"
+            },
+            "date": "2026-05-21T10:30:00Z",
+            "raw_text": "TRIAGE NOTE: Patient reports fatigue. Medication list is not available in the provided record. No laboratory results are included. No diagnostic imaging report is included. Problem list is not included in the provided extract."
+          }
+        ]
+      }
+    }
+  },
+  {
+    "case_id": "final_unsupported_weak_evidence_003",
+    "title": "Unsupported or weak evidence case",
+    "demo_focus": "Show conflict and weak-evidence handling without turning uncertainty into clinical advice.",
+    "suggested_provider": "deterministic",
+    "expected_behavior": [
+      "Conflicting allergy evidence is visible for clinician review.",
+      "Unverified home medication wording remains weak evidence.",
+      "Unsupported or conflicting claims are not marked as cleanly supported without citations.",
+      "Doctor can reject or edit the draft during HITL review."
+    ],
+    "fhir_like_import": {
+      "source_system": "final_demo_weak_evidence",
+      "ingestion_type": "fhir_like_json",
+      "records": {
+        "patients": [
+          {
+            "resourceType": "Patient",
+            "id": "final-weak-patient-003",
+            "identifier": [
+              {
+                "value": "MRN-FINAL-WEAK-003"
+              }
+            ],
+            "gender": "female",
+            "birthDate": "1992-02-18",
+            "is_deidentified": true
+          }
+        ],
+        "encounters": [
+          {
+            "resourceType": "Encounter",
+            "id": "final-weak-encounter-003",
+            "identifier": [
+              {
+                "value": "VISIT-FINAL-WEAK-003"
+              }
+            ],
+            "status": "finished",
+            "class": {
+              "code": "AMB"
+            },
+            "subject": {
+              "reference": "Patient/final-weak-patient-003"
+            },
+            "period": {
+              "start": "2026-05-22T12:00:00Z"
+            },
+            "reasonCode": {
+              "text": "Review of conflicting allergy documentation"
+            }
+          }
+        ],
+        "conditions": [],
+        "observations": [],
+        "medications": [],
+        "diagnostic_reports": [],
+        "documents": [
+          {
+            "resourceType": "DocumentReference",
+            "id": "final-weak-document-003a",
+            "identifier": [
+              {
+                "value": "NOTE-FINAL-WEAK-003A"
+              }
+            ],
+            "subject": {
+              "reference": "Patient/final-weak-patient-003"
+            },
+            "context": {
+              "encounter": [
+                {
+                  "reference": "Encounter/final-weak-encounter-003"
+                }
+              ]
+            },
+            "type": {
+              "text": "Intake Note"
+            },
+            "date": "2026-05-22T12:15:00Z",
+            "raw_text": "INTAKE NOTE: No known drug allergies documented during intake. Patient reports intermittent headache. Patient may have taken an unknown pain medication at home, but name and dose are not documented."
+          },
+          {
+            "resourceType": "DocumentReference",
+            "id": "final-weak-document-003b",
+            "identifier": [
+              {
+                "value": "NOTE-FINAL-WEAK-003B"
+              }
+            ],
+            "subject": {
+              "reference": "Patient/final-weak-patient-003"
+            },
+            "context": {
+              "encounter": [
+                {
+                  "reference": "Encounter/final-weak-encounter-003"
+                }
+              ]
+            },
+            "type": {
+              "text": "Nursing Addendum"
+            },
+            "date": "2026-05-22T12:45:00Z",
+            "raw_text": "NURSING ADDENDUM: Patient later reports penicillin allergy. Allergy documentation conflicts with the intake note and requires clinician verification."
+          }
+        ]
+      }
+    }
+  }
+]

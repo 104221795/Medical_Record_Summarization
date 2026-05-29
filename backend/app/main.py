@@ -34,6 +34,7 @@ CITATION_UI_DIR = Path(__file__).resolve().parents[1] / "ui" / "citation"
 DOCTOR_UI_DIR = Path(__file__).resolve().parents[1] / "ui" / "doctor"
 ADMIN_UI_DIR = Path(__file__).resolve().parents[1] / "ui" / "admin"
 EVALUATION_UI_DIR = Path(__file__).resolve().parents[1] / "ui" / "evaluation"
+UNIFIED_UI_DIR = Path(__file__).resolve().parents[1] / "ui" / "unified"
 
 
 def create_app(
@@ -98,6 +99,11 @@ def create_app(
         StaticFiles(directory=EVALUATION_UI_DIR),
         name="evaluation-assets",
     )
+    app.mount(
+        "/demo-console-assets",
+        StaticFiles(directory=UNIFIED_UI_DIR),
+        name="demo-console-assets",
+    )
 
     @app.get("/citation-demo", include_in_schema=False)
     def citation_demo() -> FileResponse:
@@ -114,6 +120,10 @@ def create_app(
     @app.get("/evaluation-demo", include_in_schema=False)
     def evaluation_demo() -> FileResponse:
         return FileResponse(EVALUATION_UI_DIR / "index.html")
+
+    @app.get("/demo-console", include_in_schema=False)
+    def demo_console() -> FileResponse:
+        return FileResponse(UNIFIED_UI_DIR / "index.html")
 
     @app.get("/healthz", response_model=HealthResponse, tags=["Operations"])
     def health() -> HealthResponse:

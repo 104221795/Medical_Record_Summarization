@@ -1,265 +1,308 @@
-# 03 — Evaluation Plan v1.0: Four-layer Evaluation Strategy
+# 03 — Evaluation Plan v1.0: Chiến lược đánh giá bốn tầng
 
-**Document type:** Mentor-facing Evaluation Strategy  
-**Version:** v1.0  
+**Loại tài liệu:** Chiến lược đánh giá dành cho mentor
+**Phiên bản:** v1.0
 
 ---
 
-## 1. Purpose
+## 1. Mục đích tài liệu
 
-This document defines the evaluation strategy for the Medical Record Summarization MVP. The main principle is to avoid overclaiming model quality when real EHR note-level benchmark data is not yet available.
+Tài liệu này xác định chiến lược đánh giá cho hệ thống **Medical Record Summarization MVP**. Nguyên tắc chính là tránh đánh giá quá mức năng lực của mô hình khi hiện tại chưa có bộ dữ liệu benchmark EHR note-level thật.
 
-The evaluation is split into four layers:
+Chiến lược đánh giá được chia thành bốn tầng:
 
 ```text
-Layer A — Functional validation with mock/demo data
-Layer B — Structured EHR validation with MIMIC-III demo DB
+Layer A — Functional validation với dữ liệu mock/demo
+Layer B — Structured EHR validation với MIMIC-III demo database
 Layer C — BART/Pegasus proxy medical text evaluation
-Layer D — Real EHR note-level benchmark pending MIMIC-IV-Ext-BHC / MIMIC-IV-Note
+Layer D — Real EHR note-level benchmark, pending MIMIC-IV-Ext-BHC / MIMIC-IV-Note
 ```
+
+Việc chia tầng này giúp dự án phân biệt rõ giữa:
+
+* kiểm thử hệ thống có hoạt động end-to-end hay không;
+* kiểm thử khả năng xử lý dữ liệu EHR có cấu trúc;
+* đánh giá mô hình trên các dataset medical text proxy;
+* và benchmark thật trên clinical notes khi có quyền truy cập dataset phù hợp.
 
 ---
 
-## 2. Evaluation Principles
+## 2. Nguyên tắc đánh giá
 
-| Principle | Meaning |
-|---|---|
-| Separate workflow validation from model quality | Mock/demo data can prove system flow, not model performance |
-| Do not overclaim | Proxy datasets must not be called real EHR benchmark |
-| Evaluate traceability | Citation coverage and citation quality matter |
-| Keep human review | Automatic metrics are not sufficient for clinical summary quality |
-| Respect data governance | Restricted clinical datasets must not be committed or sent externally without approval |
-| Compare providers fairly | Deterministic, BART, Pegasus, Gemini should be evaluated under clear dataset assumptions |
+| Nguyên tắc                                  | Ý nghĩa                                                                                             |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Tách workflow validation khỏi model quality | Mock/demo data có thể chứng minh hệ thống chạy đúng flow, nhưng không chứng minh chất lượng mô hình |
+| Không overclaim                             | Proxy dataset không được gọi là real EHR benchmark                                                  |
+| Đánh giá traceability                       | Citation coverage và citation quality là các chỉ số quan trọng                                      |
+| Giữ human review                            | Automatic metrics không đủ để đánh giá chất lượng clinical summary                                  |
+| Tôn trọng data governance                   | Restricted clinical datasets không được commit hoặc gửi ra bên ngoài nếu chưa được phê duyệt        |
+| So sánh provider một cách công bằng         | Deterministic, BART, Pegasus và Gemini cần được đánh giá trong điều kiện dữ liệu rõ ràng            |
 
 ---
 
 ## 3. Layer A — Functional Validation
 
-### Purpose
+### Mục đích
 
-Validate that the product workflow works end-to-end.
+Kiểm tra hệ thống sản phẩm có hoạt động end-to-end hay không.
 
 ### Dataset
 
-Mock/de-identified demo data.
+Dữ liệu mock/de-identified demo.
 
-### What it proves
+### Layer này chứng minh điều gì?
 
-| Check | Meaning |
-|---|---|
-| Patient list works | UI/API integration works |
-| Patient detail loads | Data retrieval works |
-| Summary generation works | Provider pipeline works |
-| Draft status is enforced | Safety workflow works |
-| Claims/citations render | Citation UX works |
-| HITL approve/reject works | Doctor workflow works |
-| Audit logs exist | Traceability works |
-| Dashboard updates | Monitoring works |
+| Hạng mục kiểm tra             | Ý nghĩa                      |
+| ----------------------------- | ---------------------------- |
+| Patient list hoạt động        | UI/API integration hoạt động |
+| Patient detail load được      | Data retrieval hoạt động     |
+| Summary generation hoạt động  | Provider pipeline hoạt động  |
+| Draft status được enforce     | Safety workflow hoạt động    |
+| Claims/citations render được  | Citation UX hoạt động        |
+| HITL approve/reject hoạt động | Doctor workflow hoạt động    |
+| Audit logs tồn tại            | Traceability hoạt động       |
+| Dashboard cập nhật            | Monitoring hoạt động         |
 
-### What it does not prove
+### Layer này không chứng minh điều gì?
 
-It does not prove model quality, clinical validity, or real EHR benchmark performance.
+Layer này **không chứng minh**:
+
+* chất lượng mô hình summarization;
+* clinical validity;
+* real EHR benchmark performance;
+* khả năng tổng quát hóa của mô hình trên dữ liệu bệnh án thật.
+
+Do đó, functional validation chỉ nên được hiểu là kiểm thử workflow và khả năng vận hành của MVP.
 
 ---
 
 ## 4. Layer B — Structured EHR Validation
 
-### Purpose
+### Mục đích
 
-Validate that the system can work with structured EHR-style data rather than only mock records.
+Kiểm tra hệ thống có thể làm việc với dữ liệu EHR có cấu trúc, thay vì chỉ chạy trên mock records.
 
 ### Dataset
 
 MIMIC-III Clinical Database Demo.
 
-### Dataset role
+### Vai trò của dataset
 
-The MIMIC-III demo DB is suitable for:
+MIMIC-III demo database phù hợp để kiểm thử:
 
-- patient ingestion
-- admissions/encounters
-- diagnoses
-- labs
-- medications
-- structured citations
-- monitoring dashboard
+* patient ingestion;
+* admissions/encounters;
+* diagnoses;
+* labs;
+* medications;
+* structured citations;
+* monitoring dashboard.
 
-It is not suitable for note summarization training if NOTEEVENTS has no clinical narrative rows.
+Tuy nhiên, dataset này **không phù hợp để train mô hình note summarization** nếu `NOTEEVENTS` không có clinical narrative rows.
 
 ### Metrics/checks
 
-| Area | Check |
-|---|---|
-| Import | patients, admissions, diagnoses, labs, prescriptions imported |
-| Mapping | structured records map to internal patient/encounter/condition/observation/medication tables |
-| Summary | structured patient summary generated |
-| Citation | claims can cite diagnosis/lab/medication sources |
-| Dashboard | counts and audit logs update |
+| Nhóm kiểm tra | Nội dung kiểm tra                                                                                  |
+| ------------- | -------------------------------------------------------------------------------------------------- |
+| Import        | patients, admissions, diagnoses, labs, prescriptions được import                                   |
+| Mapping       | structured records được map vào internal patient/encounter/condition/observation/medication tables |
+| Summary       | structured patient summary được tạo                                                                |
+| Citation      | claims có thể cite diagnosis/lab/medication sources                                                |
+| Dashboard     | counts và audit logs được cập nhật                                                                 |
 
-### Reporting wording
+### Cách diễn đạt trong báo cáo
 
 > Structured EHR validation was performed using the MIMIC-III demo database. This validates ingestion and structured evidence workflows, but not note-level summarization benchmark performance.
+
+Bản tiếng Việt:
+
+> Structured EHR validation được thực hiện bằng MIMIC-III demo database. Layer này giúp kiểm tra khả năng ingestion và evidence mapping đối với dữ liệu EHR có cấu trúc, nhưng không chứng minh hiệu năng benchmark cho bài toán note-level summarization.
 
 ---
 
 ## 5. Layer C — BART/Pegasus Proxy Medical Text Evaluation
 
-### Purpose
+### Mục đích
 
-Satisfy the required BART/Pegasus evaluation track using available medical/clinical text summarization datasets.
+Đáp ứng yêu cầu đánh giá BART/Pegasus bằng các medical/clinical text summarization datasets hiện có.
 
 ### Dataset candidates
 
-| Dataset | Role |
-|---|---|
-| OPI/Open-I | Radiology-style report summarization proxy |
-| D2N/dialogue-to-note | Clinical conversation-to-note proxy |
-| CHQ/MeQSum | Consumer health question summarization proxy |
+| Dataset              | Vai trò                                          |
+| -------------------- | ------------------------------------------------ |
+| OPI/Open-I           | Proxy cho radiology-style report summarization   |
+| D2N/dialogue-to-note | Proxy cho clinical conversation-to-note          |
+| CHQ/MeQSum           | Proxy cho consumer health question summarization |
 
-### Important limitation
+### Giới hạn quan trọng
 
-These datasets are not equivalent to real EHR discharge-note summarization. They are used as **proxy medical text summarization benchmarks**.
+Các dataset này **không tương đương** với real EHR discharge-note summarization.
+
+Chúng được sử dụng như:
+
+```text
+proxy medical text summarization benchmarks
+```
+
+không phải:
+
+```text
+real EHR note-level benchmark
+```
+
+Vì vậy, kết quả trên Layer C chỉ dùng để so sánh baseline BART/Pegasus/Gemini/deterministic trong bối cảnh proxy medical text, không nên được diễn giải thành hiệu năng thực tế trên discharge summaries hoặc clinical notes thật.
 
 ### Models
 
-| Model | Role |
-|---|---|
-| BART | Baseline abstractive summarization model |
-| Pegasus | Baseline abstractive summarization model |
-| Deterministic | Stable baseline/control |
-| Gemini | Optional real LLM provider if data policy allows |
+| Model         | Vai trò                                             |
+| ------------- | --------------------------------------------------- |
+| BART          | Baseline abstractive summarization model            |
+| Pegasus       | Baseline abstractive summarization model            |
+| Deterministic | Stable baseline/control                             |
+| Gemini        | Optional real LLM provider nếu data policy cho phép |
 
 ### Metrics
 
-| Metric | Purpose |
-|---|---|
-| ROUGE-1 | unigram overlap |
-| ROUGE-2 | bigram overlap |
-| ROUGE-L | sequence overlap |
-| BERTScore | semantic similarity, optional |
-| Latency | performance comparison |
-| Summary length | verbosity/compression check |
-| Citation coverage | percentage of generated claims/sentences with source match |
-| Citation similarity | average strength of matched evidence |
-| Unsupported claim count | hallucination proxy |
+| Metric                  | Mục đích                                         |
+| ----------------------- | ------------------------------------------------ |
+| ROUGE-1                 | unigram overlap                                  |
+| ROUGE-2                 | bigram overlap                                   |
+| ROUGE-L                 | sequence overlap                                 |
+| BERTScore               | semantic similarity, optional                    |
+| Latency                 | so sánh hiệu năng/thời gian phản hồi             |
+| Summary length          | kiểm tra độ dài và mức độ compression            |
+| Citation coverage       | tỷ lệ generated claims/sentences có source match |
+| Citation similarity     | độ mạnh trung bình của matched evidence          |
+| Unsupported claim count | proxy cho hallucination risk                     |
 
 ---
 
 ## 6. Layer D — Real EHR Note-level Benchmark
 
-### Purpose
+### Mục đích
 
-Perform true clinical note summarization benchmark once credentialed dataset access is available.
+Thực hiện benchmark thật cho bài toán clinical note summarization khi có quyền truy cập dataset phù hợp.
 
 ### Preferred dataset
 
-MIMIC-IV-Ext-BHC because it provides labeled input-target pairs for Brief Hospital Course summarization.
+**MIMIC-IV-Ext-BHC** là lựa chọn ưu tiên vì dataset này cung cấp các cặp input-target đã được gán nhãn cho bài toán **Brief Hospital Course summarization**.
 
 ### Fallback dataset
 
-MIMIC-IV-Note discharge summaries. If used, the system must extract Brief Hospital Course as the target and use remaining discharge content as input.
+**MIMIC-IV-Note discharge summaries** có thể được dùng làm fallback. Nếu dùng dataset này, hệ thống cần extract phần **Brief Hospital Course** làm target summary và dùng phần discharge content còn lại làm input.
 
-### Status
+### Trạng thái hiện tại
 
+```text
 Pending credentialed access.
+```
 
-### Reporting rule
+### Quy tắc báo cáo
 
-If the dataset is unavailable, the system must clearly display:
+Nếu chưa có dataset này, hệ thống phải hiển thị rõ:
 
 ```text
 Real EHR note-level benchmark: Pending credentialed dataset.
 No benchmark performance claim is made from mock/demo data.
 ```
 
+Bản tiếng Việt:
+
+```text
+Real EHR note-level benchmark: Đang chờ quyền truy cập dataset hợp lệ.
+Không đưa ra claim về benchmark performance dựa trên mock/demo data.
+```
+
 ---
 
 ## 7. Human Evaluation
 
-### Purpose
+### Mục đích
 
-Assess output quality beyond automatic metrics.
+Đánh giá chất lượng đầu ra vượt ra ngoài các automatic metrics.
+
+Automatic metrics như ROUGE hoặc BERTScore có thể hỗ trợ so sánh mô hình, nhưng chưa đủ để đánh giá đầy đủ clinical summary quality, đặc biệt với các tiêu chí như factual correctness, usefulness, citation usefulness và hallucination risk.
 
 ### Sample size
 
-| Context | Recommended size |
-|---|---:|
-| Internship MVP | 10–30 summaries |
-| Stronger internal validation | 30–50 summaries |
-| Clinical pilot | 50+ clinician-reviewed summaries |
+| Bối cảnh                     |               Cỡ mẫu khuyến nghị |
+| ---------------------------- | -------------------------------: |
+| Internship MVP               |                  10–30 summaries |
+| Stronger internal validation |                  30–50 summaries |
+| Clinical pilot               | 50+ clinician-reviewed summaries |
 
 ### Rubric
 
-| Criterion | Scale | Meaning |
-|---|---:|---|
-| Factual correctness | 1–5 | Is the summary supported by source? |
-| Completeness | 1–5 | Does it capture important information? |
-| Conciseness | 1–5 | Is it appropriately short? |
-| Readability | 1–5 | Is it clear for clinical review? |
-| Citation usefulness | 1–5 | Do citations help verification? |
-| Hallucination risk | low/medium/high | Does it appear to add unsupported information? |
+| Tiêu chí            |      Thang điểm | Ý nghĩa                                               |
+| ------------------- | --------------: | ----------------------------------------------------- |
+| Factual correctness |             1–5 | Summary có được source hỗ trợ không?                  |
+| Completeness        |             1–5 | Summary có bao phủ thông tin quan trọng không?        |
+| Conciseness         |             1–5 | Summary có đủ ngắn gọn và đúng trọng tâm không?       |
+| Readability         |             1–5 | Summary có rõ ràng cho clinical review không?         |
+| Citation usefulness |             1–5 | Citation có giúp kiểm chứng thông tin không?          |
+| Hallucination risk  | low/medium/high | Summary có vẻ thêm thông tin không được hỗ trợ không? |
 
 ### Human evaluator types
 
-| Evaluator | Use |
-|---|---|
-| Medical/healthcare student | preliminary domain-aware review |
-| Clinician if available | stronger clinical validation |
-| Product/AI reviewer | usability and workflow feedback |
-| Non-domain reviewer | readability and UI feedback only |
+| Evaluator                  | Mục đích sử dụng                        |
+| -------------------------- | --------------------------------------- |
+| Medical/healthcare student | preliminary domain-aware review         |
+| Clinician nếu có           | stronger clinical validation            |
+| Product/AI reviewer        | usability và workflow feedback          |
+| Non-domain reviewer        | chỉ dùng cho readability và UI feedback |
 
 ---
 
 ## 8. Functional Validation Test Cases
 
-| ID | Test case | Expected result |
-|---|---|---|
-| FV-001 | Seed demo data | demo patient records available |
-| FV-002 | Open patient list | patients displayed |
-| FV-003 | Generate summary | draft summary created |
-| FV-004 | Click citation | evidence panel opens |
-| FV-005 | Unsupported claim exists | appears in safety panel |
-| FV-006 | Start review | status under_review |
-| FV-007 | Edit summary | status edited |
-| FV-008 | Approve summary | status approved, audit created |
-| FV-009 | Reject summary | status rejected with reason |
-| FV-010 | Open dashboard | metrics visible |
+| ID     | Test case                | Expected result                |
+| ------ | ------------------------ | ------------------------------ |
+| FV-001 | Seed demo data           | demo patient records available |
+| FV-002 | Open patient list        | patients displayed             |
+| FV-003 | Generate summary         | draft summary created          |
+| FV-004 | Click citation           | evidence panel opens           |
+| FV-005 | Unsupported claim exists | appears in safety panel        |
+| FV-006 | Start review             | status under_review            |
+| FV-007 | Edit summary             | status edited                  |
+| FV-008 | Approve summary          | status approved, audit created |
+| FV-009 | Reject summary           | status rejected with reason    |
+| FV-010 | Open dashboard           | metrics visible                |
 
 ---
 
 ## 9. Safety Evaluation Cases
 
-| Case | Expected behavior |
-|---|---|
-| Missing allergy data | System must not claim no allergy |
-| One lab value only | System must not claim trend |
-| Diagnosis absent | System must not invent diagnosis |
-| Medication missing | System must not invent medication |
-| Weak citation | Claim marked insufficient_evidence |
-| Wrong patient source | Citation blocked or not returned |
-| Critical unsupported claim | Approval blocked or requires resolution |
-| External LLM disabled | Gemini not called unless explicitly enabled |
+| Case                       | Expected behavior                           |
+| -------------------------- | ------------------------------------------- |
+| Missing allergy data       | System must not claim no allergy            |
+| One lab value only         | System must not claim trend                 |
+| Diagnosis absent           | System must not invent diagnosis            |
+| Medication missing         | System must not invent medication           |
+| Weak citation              | Claim marked insufficient_evidence          |
+| Wrong patient source       | Citation blocked or not returned            |
+| Critical unsupported claim | Approval blocked or requires resolution     |
+| External LLM disabled      | Gemini not called unless explicitly enabled |
 
 ---
 
 ## 10. MVP Readiness Gates
 
-| Gate | Target |
-|---|---:|
-| AI summaries start as draft | 100% |
-| No auto-approval | 100% |
-| Audit logs for sensitive actions | 100% for tested actions |
-| Citation source belongs to same patient | 100% |
-| Functional validation | Pass |
-| Human evaluation form | Available |
-| Real EHR benchmark status | Clearly marked pending if missing |
-| No fake benchmark metrics | 100% |
+| Gate                                    |                            Target |
+| --------------------------------------- | --------------------------------: |
+| AI summaries start as draft             |                              100% |
+| No auto-approval                        |                              100% |
+| Audit logs for sensitive actions        |           100% for tested actions |
+| Citation source belongs to same patient |                              100% |
+| Functional validation                   |                              Pass |
+| Human evaluation form                   |                         Available |
+| Real EHR benchmark status               | Clearly marked pending if missing |
+| No fake benchmark metrics               |                              100% |
 
 ---
 
 ## 11. Evaluation Report Structure
 
-Final report should include:
+Final report nên bao gồm:
 
 1. Evaluation overview
 2. Dataset strategy
@@ -277,3 +320,7 @@ Final report should include:
 ## 12. Recommended Mentor-facing Statement
 
 > The system is evaluated in multiple layers. Mock data is used only to validate end-to-end functionality. The MIMIC-III demo database is used to validate structured EHR ingestion and evidence mapping. BART/Pegasus are evaluated on available medical text summarization proxy datasets. True EHR note-level benchmark evaluation remains pending until credentialed access to MIMIC-IV-Ext-BHC or MIMIC-IV-Note is available.
+
+Bản tiếng Việt đề xuất:
+
+> Hệ thống được đánh giá theo nhiều tầng. Mock data chỉ được sử dụng để kiểm thử chức năng end-to-end. MIMIC-III demo database được sử dụng để kiểm tra structured EHR ingestion và evidence mapping. BART/Pegasus được đánh giá trên các medical text summarization proxy datasets hiện có. Benchmark thật cho bài toán EHR note-level summarization vẫn đang chờ quyền truy cập hợp lệ vào MIMIC-IV-Ext-BHC hoặc MIMIC-IV-Note.

@@ -47,6 +47,8 @@ def test_claim_citation_and_source_apis_return_same_patient_evidence(
     assert source["claim_id"] == supported_claim["claim_id"]
     assert source["patient_id"] == patient_id
     assert source["highlighted_span"] is not None
+    if source["surrounding_context"] and source["highlighted_span"]["text"]:
+        assert source["highlighted_span"]["text"] in source["surrounding_context"]
     assert source["source_type"]
 
 

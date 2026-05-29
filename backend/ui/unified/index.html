@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Unified Demo Console | Medical Record Summarization MVP</title>
+    <link rel="stylesheet" href="/demo-console-assets/styles.css" />
+  </head>
+  <body>
+    <section id="loginScreen" class="login-screen">
+      <div class="login-hero">
+        <p class="eyebrow">Clinical documentation demo</p>
+        <h1>Unified Demo Console</h1>
+        <p>
+          Citation-grounded medical record summarization workspace for mentor
+          demos. The system drafts documentation only; it does not recommend
+          diagnosis, treatment, prescriptions, discharge approval, or image diagnosis.
+        </p>
+        <div class="trust-strip">
+          <span>Draft summary - requires doctor review</span>
+          <span>Demo/de-identified data</span>
+          <span>Role-based access headers</span>
+        </div>
+      </div>
+      <form id="loginForm" class="login-card">
+        <div>
+          <p class="eyebrow">Mock role login</p>
+          <h2>Choose demo role</h2>
+          <p class="copy">
+            This is a local demo session. It stores tenant, user, and role in
+            the browser and sends them to the backend on every API request.
+          </p>
+        </div>
+        <label>
+          Tenant
+          <input id="loginTenantInput" value="sandbox" autocomplete="off" />
+        </label>
+        <label>
+          User ID
+          <input id="loginUserInput" value="doctor-demo" autocomplete="off" />
+        </label>
+        <label>
+          Role
+          <select id="loginRoleSelect">
+            <option value="doctor">doctor</option>
+            <option value="clinical_admin">clinical_admin</option>
+            <option value="auditor">auditor</option>
+            <option value="ai_safety_reviewer">ai_safety_reviewer</option>
+            <option value="it_admin">it_admin</option>
+            <option value="nurse">nurse</option>
+          </select>
+        </label>
+        <button type="submit">Enter Console</button>
+        <div class="quick-login-grid">
+          <button data-login-role="doctor" data-login-user="doctor-demo" type="button">Doctor</button>
+          <button data-login-role="clinical_admin" data-login-user="admin-demo" type="button">Clinical Admin</button>
+          <button data-login-role="auditor" data-login-user="auditor-demo" type="button">Auditor</button>
+        </div>
+        <p class="safety-banner">
+          Mock login only. Production requires SSO/OAuth, RBAC, and audit controls.
+        </p>
+      </form>
+    </section>
+
+    <div id="appShell" class="app-shell hidden">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Medical Record Summarization MVP</p>
+        <h1>Unified Demo Console</h1>
+        <p class="subtitle">
+          Citation-grounded documentation assistant for demo workflows. Draft
+          summaries require doctor review and approval before clinical use.
+        </p>
+        <p class="safety-banner">
+          Demo/de-identified data only. This console does not provide diagnosis,
+          treatment, prescription, discharge approval, or image diagnosis.
+        </p>
+      </div>
+      <section class="session-card" aria-label="Demo session">
+        <label>
+          Tenant
+          <input id="tenantInput" value="sandbox" />
+        </label>
+        <label>
+          User
+          <input id="userInput" value="doctor-demo" />
+        </label>
+        <label>
+          Role
+          <select id="roleSelect">
+            <option value="doctor">doctor</option>
+            <option value="clinical_admin">clinical_admin</option>
+            <option value="auditor">auditor</option>
+            <option value="ai_safety_reviewer">ai_safety_reviewer</option>
+            <option value="it_admin">it_admin</option>
+            <option value="nurse">nurse</option>
+          </select>
+        </label>
+        <button id="saveSessionBtn" type="button">Apply Session</button>
+        <button id="logoutBtn" class="secondary" type="button">Logout</button>
+        <p id="sessionLabel" class="hint">sandbox | doctor-demo | doctor</p>
+        <p id="roleAccessLabel" class="role-access-note">Doctor workspace access</p>
+      </section>
+    </header>
+
+    <main>
+      <nav class="tabs" aria-label="Unified demo tabs">
+        <button class="tab active" data-tab="setup" type="button">Demo Setup</button>
+        <button class="tab" data-tab="patients" type="button">Patient Registry</button>
+        <button class="tab" data-tab="encounters" type="button">Encounter & Documents</button>
+        <button class="tab" data-tab="workspace" type="button">Doctor Workspace</button>
+        <button class="tab" data-tab="hitl" type="button">HITL Review</button>
+        <button class="tab" data-tab="citations" type="button">Citation Explorer</button>
+        <button class="tab" data-tab="admin" type="button">Admin Dashboard</button>
+        <button class="tab" data-tab="audit" type="button">Audit Log</button>
+        <button class="tab" data-tab="evaluation" type="button">Evaluation Center</button>
+        <button class="tab" data-tab="integration" type="button">FHIR / Integration</button>
+      </nav>
+
+      <div id="globalMessage" class="message hidden" role="status"></div>
+
+      <section id="tab-setup" class="tab-panel active">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Step 1</p>
+            <h2>Demo Setup</h2>
+            <p class="copy">Check readiness and seed mock/de-identified demo data.</p>
+          </div>
+          <div class="toolbar">
+            <button id="checkReadinessBtn" type="button">Check Readiness</button>
+            <button id="seedDemoBtn" type="button">Seed Demo Data</button>
+          </div>
+        </div>
+        <div id="setupContent" class="card-grid"></div>
+      </section>
+
+      <section id="tab-patients" class="tab-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Step 2</p>
+            <h2>Patient Registry</h2>
+            <p class="copy">Load patients from the persisted database APIs.</p>
+          </div>
+          <div class="toolbar">
+            <input id="patientSearchInput" placeholder="Search patient ID/hash" />
+            <button id="loadPatientsBtn" type="button">Load Patients</button>
+          </div>
+        </div>
+        <div id="patientState" class="message hidden"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Patient</th>
+                <th>Gender</th>
+                <th>FHIR ID</th>
+                <th>Source</th>
+                <th>Demo mode</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="patientTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="tab-encounters" class="tab-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Step 3</p>
+            <h2>Encounter & Documents</h2>
+            <p id="selectedPatientLabel" class="copy">Select a patient first.</p>
+          </div>
+          <button id="loadPatientContextBtn" type="button">Reload Context</button>
+        </div>
+        <div class="grid-two">
+          <article class="panel-card">
+            <h3>Patient Detail</h3>
+            <dl id="patientDetailList"></dl>
+          </article>
+          <article class="panel-card">
+            <h3>Encounters</h3>
+            <div id="encounterList" class="stack-list"></div>
+          </article>
+        </div>
+        <article class="panel-card">
+          <h3>Clinical Documents</h3>
+          <div id="documentList" class="stack-list"></div>
+        </article>
+      </section>
+
+      <section id="tab-workspace" class="tab-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Step 4</p>
+            <h2>Doctor Workspace</h2>
+            <p class="copy">Generate and inspect a draft summary with claims and citations.</p>
+          </div>
+          <div class="draft-badge">Draft summary - requires doctor review</div>
+        </div>
+        <div class="controls-row">
+          <label>
+            Summary type
+            <select id="summaryTypeSelect">
+              <option value="patient_snapshot">patient_snapshot</option>
+            </select>
+          </label>
+          <label>
+            Provider
+            <select id="providerSelect">
+              <option value="deterministic">deterministic</option>
+              <option value="gemini">gemini</option>
+              <option value="bart">bart</option>
+              <option value="pegasus">pegasus</option>
+            </select>
+          </label>
+          <label>
+            Encounter
+            <select id="summaryEncounterSelect"></select>
+          </label>
+          <button id="generateSummaryBtn" type="button">Generate Draft Summary</button>
+        </div>
+        <div class="controls-row">
+          <label class="wide-control">
+            Load summary by ID
+            <input id="summaryIdInput" placeholder="UUID" />
+          </label>
+          <button id="loadSummaryBtn" type="button">Load Summary</button>
+        </div>
+        <div id="summaryState" class="message hidden"></div>
+        <div class="grid-two wide-left">
+          <article class="panel-card">
+            <h3>Generated Draft</h3>
+            <div id="summaryMeta" class="metric-list"></div>
+            <div id="summarySections" class="summary-sections"></div>
+          </article>
+          <aside class="panel-card">
+            <h3>Safety Panel</h3>
+            <div id="safetyPanel" class="metric-list"></div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="tab-hitl" class="tab-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Step 5</p>
+            <h2>HITL Review</h2>
+            <p class="copy">Approved only after human review. Unsupported claims require review.</p>
+          </div>
+          <button id="loadReviewsBtn" type="button">Load Review History</button>
+        </div>
+        <div class="toolbar wrap">
+          <button id="startReviewBtn" type="button">Start Review</button>
+          <button id="saveEditBtn" type="button">Save Edit</button>
+          <button id="approveSummaryBtn" type="button">Approve</button>
+          <button id="rejectSummaryBtn" class="danger" type="button">Reject</button>
+        </div>
+        <div class="grid-two">
+          <article class="panel-card">
+            <h3>Edit Draft Summary</h3>
+            <label>
+              Edited summary text
+              <textarea id="editSummaryText" rows="12" placeholder="Load or generate a summary first."></textarea>
+            </label>
+            <label>
+              Edit comment
+              <input id="editCommentInput" placeholder="Reason for edit" />
+            </label>
+          </article>
+          <article class="panel-card">
+            <h3>Reject Summary</h3>
+            <label>
+              Rejection reason
+              <select id="rejectionReasonSelect">
+                <option value="unsupported_claim">unsupported_claim</option>
+                <option value="wrong_citation">wrong_citation</option>
+                <option value="missing_critical_info">missing_critical_info</option>
+                <option value="incorrect_clinical_fact">incorrect_clinical_fact</option>
+                <option value="conflicting_evidence">conflicting_evidence</option>
+                <option value="poor_readability">poor_readability</option>
+                <option value="too_generic">too_generic</option>
+                <option value="unsafe_output">unsafe_output</option>
+                <option value="other">other</option>
+              </select>
+            </label>
+            <label>
+              Rejection comment
+              <textarea id="rejectionCommentInput" rows="7" placeholder="Required when rejecting."></textarea>
+            </label>
+            <label>
+              Approval comment
+              <input id="approvalCommentInput" value="Reviewed and approved for clinician workflow use." />
+            </label>
+          </article>
+        </div>
+        <article class="panel-card">
+          <h3>Review History</h3>
+          <div id="reviewHistoryList" class="stack-list"></div>
+        </article>
+      </section>
+
+      <section id="tab-citations" class="tab-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Evidence</p>
+            <h2>Citation Explorer</h2>
+            <p class="copy">Inspect source evidence for claim citations.</p>
+          </div>
+          <div class="toolbar">
+            <input id="citationIdInput" placeholder="Citation UUID" />
+            <button id="loadCitationBtn" type="button">Load Citation</button>
+          </div>
+        </div>
+        <div class="grid-two wide-left">
+          <article class="panel-card">
+            <h3>Claims and Citation Badges</h3>
+            <div id="citationClaimList" class="summary-sections"></div>
+          </article>
+          <aside class="panel-card">
+            <h3>Source Panel</h3>
+            <div id="citationSourcePanel" class="metric-list"></div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="tab-admin" class="tab-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Quality</p>
+            <h2>Admin Dashboard</h2>
+            <p class="copy">Global metrics require clinical_admin, auditor, it_admin, or ai_safety_reviewer role.</p>
+          </div>
+          <button id="loadMetricsBtn" type="button">Load Metrics</button>
+        </div>
+        <div id="adminMetrics" class="card-grid"></div>
+      </section>
+
+      <section id="tab-audit" class="tab-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Auditability</p>
+            <h2>Audit Log</h2>
+            <p class="copy">Sensitive actions should create audit events.</p>
+          </div>
+          <button id="loadAuditBtn" type="button">Load Audit Logs</button>
+        </div>
+        <div class="controls-row">
+          <label><span>Action</span><input id="auditActionInput" placeholder="generate_summary" /></label>
+          <label><span>Patient ID</span><input id="auditPatientInput" placeholder="UUID" /></label>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Action</th>
+                <th>User</th>
+                <th>Patient</th>
+                <th>Resource</th>
+              </tr>
+            </thead>
+            <tbody id="auditTableBody"></tbody>
+          </table>
+        </div>
+        <article class="panel-card">
+          <h3>Audit Detail</h3>
+          <div id="auditDetailPanel" class="metric-list"></div>
+        </article>
+      </section>
+
+      <section id="tab-evaluation" class="tab-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Evaluation</p>
+            <h2>Evaluation Center</h2>
+            <p class="copy">Functional validation is separate from real EHR benchmark performance.</p>
+          </div>
+          <div class="toolbar">
+            <button id="loadEvaluationBtn" type="button">Load Evaluation Status</button>
+            <button id="runFunctionalBtn" type="button">Run Functional Validation</button>
+          </div>
+        </div>
+        <div id="evaluationStatus" class="card-grid"></div>
+        <article class="panel-card">
+          <h3>Functional Validation</h3>
+          <div id="functionalChecks" class="stack-list"></div>
+        </article>
+        <article class="panel-card">
+          <h3>Human Evaluation Summary</h3>
+          <div id="humanEvaluationSummary" class="metric-list"></div>
+        </article>
+      </section>
+
+      <section id="tab-integration" class="tab-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Integration</p>
+            <h2>FHIR / Integration</h2>
+            <p class="copy">Import de-identified FHIR-like JSON only. Do not use real PHI in local demo.</p>
+          </div>
+          <div class="toolbar">
+            <button id="checkHealthBtn" type="button">Check Health</button>
+            <button id="importFhirBtn" type="button">Import JSON</button>
+          </div>
+        </div>
+        <div id="integrationStatus" class="metric-list"></div>
+        <label>
+          FHIR-like import payload
+          <textarea id="fhirPayloadInput" rows="16" placeholder="Paste a FHIR-like import payload here."></textarea>
+        </label>
+        <p class="hint">
+          Main import endpoint: POST /api/v1/ingestion/import. Real EHR writeback is not enabled.
+        </p>
+      </section>
+    </main>
+    </div>
+
+    <script type="module" src="/demo-console-assets/app.js"></script>
+  </body>
+</html>
