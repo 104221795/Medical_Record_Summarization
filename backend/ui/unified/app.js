@@ -1277,10 +1277,12 @@ function settledCard(title, settled, fallback) {
 }
 
 function card(title, body, status = "ready") {
+  const bodyText = displayValue(body);
+  const bodyClass = bodyText.length <= 28 ? "card-body metric-value" : "card-body";
   return `
     <div class="card">
-      <span>${escapeHtml(title)}</span>
-      <strong>${escapeHtml(displayValue(body))}</strong>
+      <span class="card-title">${escapeHtml(title)}</span>
+      <p class="${bodyClass}">${escapeHtml(bodyText)}</p>
       <div class="badge ${escapeHtml(status)}">${escapeHtml(status)}</div>
     </div>
   `;

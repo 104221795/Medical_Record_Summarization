@@ -35,4 +35,5 @@ def test_unified_demo_console_ui_is_served(tmp_path: Path) -> None:
     assert "X-Role-Code" in script.text
     assert styles.status_code == 200
     assert ".metric strong" in styles.text
+    assert ".card-body" in styles.text
     assert "overflow-wrap: anywhere" in styles.text

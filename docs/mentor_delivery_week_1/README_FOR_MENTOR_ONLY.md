@@ -8,7 +8,7 @@ GitHub Repository:
 https://github.com/104221795/Medical_Record_Summarization
 
 YouTube Demo Link:
-*Sẽ được bổ sung sau khi hoàn thiện video demo MVP.*
+(https://www.youtube.com/watch?v=dj4nVNfN_Yw)
 
 ---
 
@@ -41,7 +41,7 @@ Thay vào đó, hệ thống tập trung vào:
 Trong tuần 1, các tài liệu mentor nên review trước nằm trong thư mục:
 
 ```text
-docs/mentor_delivery/
+docs/mentor_delivery_week_1/
 ├── 01_PRD_V1_MEDICAL_RECORD_SUMMARIZATION.md
 ├── 02_USER_FLOW_V1.md
 ├── 03_EVALUATION_PLAN_V1.md
@@ -71,11 +71,33 @@ Thứ tự đọc được đề xuất:
 
 Các file còn lại cung cấp thêm chi tiết về UI, hallucination mitigation và phân quyền theo vai trò.
 
+The main Week 1 deliverables are PRD and User Flow. Additional documents are
+included as supporting appendix for evaluation, safety, UI direction, and
+role-based access.
+
+**Main delivery**
+
+* `01_PRD_V1_MEDICAL_RECORD_SUMMARIZATION.md`
+* `02_USER_FLOW_V1.md`
+* `README_FOR_MENTOR_ONLY.md`
+
+**Appendix / supporting documents**
+
+* `03_EVALUATION_PLAN_V1.md`
+* `04_RESEARCH_BACKGROUND_AND_GAPS.md`
+* `05_SURVEY_PLAN.md`
+* `06_GOLDEN_PATH_UI_V1.md`
+* `07_HALLUCINATION_MITIGATION_V1.md`
+* `08_ROLE_BASED_UI.md`
+
 ---
 
 ## 3. Định hướng hiện tại của dự án
 
 Dự án được phát triển theo hướng **production-style MVP prototype**, không chỉ là một notebook chạy mô hình tóm tắt văn bản.
+
+This is a production-style MVP prototype, not a production-ready medical
+device or certified clinical system.
 
 Hệ thống hiện được chia thành hai hướng chính:
 
@@ -137,6 +159,24 @@ Repository hiện bao gồm:
 * thiết kế human evaluation;
 * định hướng role-based UI;
 * chiến lược safety và hallucination mitigation.
+
+### Week 1 Delivery Status
+
+| Item | Status | Note |
+|---|---|---|
+| PRD | Completed | Defines product scope, users, requirements, data/model strategy and evaluation direction |
+| User Flow | Completed | Covers doctor golden path, citation verification, HITL review, admin/evaluation flows |
+| Unified Demo Console | Early prototype completed | Used to demonstrate the workflow in one page |
+| Evaluation Strategy | Draft completed | Multi-layer design; real EHR benchmark remains pending |
+| Human Evaluation | Planned | Form and scoring workflow to be improved in next phase |
+
+### Next Week Priority
+
+1. Polish Unified Demo Console.
+2. Run end-to-end demo with synthetic/de-identified cases.
+3. Improve Gemini provider testing.
+4. Prepare BART/Pegasus proxy evaluation.
+5. Add evaluation report output.
 
 Phần source code được gửi kèm như bằng chứng cho tiến độ triển khai sớm. Tuy nhiên, trọng tâm review của tuần 1 vẫn là **PRD, User Flow, research framing và evaluation design**.
 
@@ -470,6 +510,7 @@ backend/app/
   db/                      DB session, base metadata, seed utilities
 
 backend/ui/
+  unified/                 Unified role-based demo console
   doctor/                  Doctor Golden Path UI
   admin/                   Admin metrics and audit dashboard
   citation/                Citation demo UI
@@ -527,16 +568,13 @@ python -m uvicorn backend.app.main:app --reload --port 8080
 OpenAPI:
 http://127.0.0.1:8080/docs
 
-Doctor UI:
+Main Unified Demo Console:
+http://127.0.0.1:8080/demo-console
+
+Legacy / separated demo pages, optional:
 http://127.0.0.1:8080/doctor-demo
-
-Admin Dashboard:
 http://127.0.0.1:8080/admin/dashboard
-
-Evaluation & Demo Control Center:
 http://127.0.0.1:8080/evaluation-demo
-
-Citation Demo:
 http://127.0.0.1:8080/citation-demo
 ```
 
@@ -549,7 +587,7 @@ Video YouTube demo sẽ đi theo flow sau:
 ```text
 1. Giới thiệu vấn đề: bác sĩ phải review nhiều dữ liệu bệnh án phân tán.
 2. Giải thích hệ thống: trợ lý tóm tắt bệnh án có citation và doctor review.
-3. Mở Doctor UI.
+3. Mở Unified Demo Console tại /demo-console.
 4. Chọn mock doctor role.
 5. Mở patient list.
 6. Chọn patient.

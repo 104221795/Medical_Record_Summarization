@@ -455,6 +455,46 @@ main {
   margin-top: 0.2rem;
 }
 
+.card {
+  align-content: start;
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.card-title {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.card-body {
+  color: #25384d;
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1.48;
+  margin: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  word-break: normal;
+}
+
+.card-body.metric-value {
+  color: var(--text);
+  font-size: 1.45rem;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.card > .badge {
+  align-self: end;
+  justify-self: start;
+}
+
 .metric-list,
 .stack-list,
 .summary-sections {

@@ -10,7 +10,10 @@
 
 ## 1. Executive Summary
 
-Dự án xây dựng một **production-style MVP** cho hệ thống tóm tắt bệnh án, tập trung vào việc hỗ trợ bác sĩ đọc nhanh bối cảnh bệnh nhân từ dữ liệu EHR/HIS-style. Hệ thống không được định vị như một “AI doctor”; thay vào đó, nó là một **clinical documentation assistant** tạo **draft summary**, gắn **citation** cho từng clinical claim quan trọng, flag claim thiếu bằng chứng, và yêu cầu bác sĩ review trước khi approve.
+Dự án xây dựng một **production-style MVP prototype** cho hệ thống tóm tắt bệnh án, tập trung vào việc hỗ trợ bác sĩ đọc nhanh bối cảnh bệnh nhân từ dữ liệu EHR/HIS-style. Hệ thống không được định vị như một “AI doctor”; thay vào đó, nó là một **clinical documentation assistant** tạo **draft summary**, gắn **citation** cho từng clinical claim quan trọng, flag claim thiếu bằng chứng, và yêu cầu bác sĩ review trước khi approve.
+
+This is a production-style MVP prototype, not a production-ready medical device
+or certified clinical system.
 
 Dự án có hai track song song:
 
@@ -56,7 +59,7 @@ Các mô hình AI/LLM có thể giúp tóm tắt thông tin, nhưng với dữ l
 | Nguồn dữ liệu không rõ | Bác sĩ khó tin summary | Citation Evidence Panel |
 | Không có quy trình review | AI output dễ bị hiểu nhầm là official | Draft → Review → Approve/Reject workflow |
 | Thiếu audit | Khó truy vết ai tạo/sửa/phê duyệt | Audit logs + review history |
-| Đánh giá model khó | ROUGE chưa đủ cho y tế | 4-layer evaluation design |
+| Đánh giá model khó | ROUGE chưa đủ cho y tế | multi-layer evaluation design |
 
 ---
 
@@ -107,7 +110,7 @@ Các nguồn dữ liệu như MIMIC-IV-Note cung cấp discharge summaries và r
 | Gap 3 — Weak clinical workflow integration | Nhiều prototype chỉ là notebook/model output | Doctor UI + HITL workflow |
 | Gap 4 — Hallucination risk | LLM có thể thêm thông tin không có trong record | Unsupported claim detection + safety panel |
 | Gap 5 — No auditability | Khó truy vết ai tạo/approve/sửa summary | Audit log + review history |
-| Gap 6 — Data access constraint | Real EHR note data bị restricted | 4-layer evaluation with pending real benchmark |
+| Gap 6 — Data access constraint | Real EHR note data bị restricted | multi-layer evaluation with pending real benchmark |
 | Gap 7 — Model comparison thiếu workflow | Model evaluation thường tách khỏi product UI | Provider selection + evaluation center |
 
 ---
@@ -166,6 +169,20 @@ Các nguồn dữ liệu như MIMIC-IV-Note cung cấp discharge summaries và r
 | Evaluation center | functional validation, structured EHR validation, BART/Pegasus proxy eval, real benchmark pending, human eval |
 | Documentation | PRD, User Flow, Evaluation Plan, Survey Plan, Research Gaps |
 
+### 7.1.1 Current implementation status clarity
+
+| Component | Status |
+|---|---|
+| FastAPI backend | Implemented |
+| Demo seed data | Implemented |
+| Unified Demo Console | Implemented |
+| Citation-grounded summary flow | Implemented / demo-ready |
+| HITL review workflow | Implemented |
+| Gemini provider integration | Implemented, requires API key and explicit external-provider flags |
+| BART/Pegasus proxy evaluation | Partially implemented / prepared for optional local model execution |
+| MIMIC-IV real benchmark | Planned / pending credentialed access |
+| Human evaluation with clinicians | Planned |
+
 ### 7.2 Out of scope
 
 | Out-of-scope item | Reason |
@@ -185,10 +202,11 @@ Các nguồn dữ liệu như MIMIC-IV-Note cung cấp discharge summaries và r
 
 | Data layer | Dataset/source | Purpose | Status |
 |---|---|---|---|
-| Functional demo | Mock/de-identified data | UI/API workflow validation | Available |
-| Structured EHR validation | MIMIC-III demo structured DB | Patient/encounter/lab/diagnosis/medication workflow | Available / importer planned |
-| Proxy model evaluation | OPI/D2N/CHQ or available medical summarization data | BART/Pegasus evaluation requirement | Available/proxy |
-| Real note benchmark | MIMIC-IV-Ext-BHC / MIMIC-IV-Note | True EHR note-level summarization benchmark | Pending credentialed access |
+| Functional demo | Mock/de-identified data | UI/API workflow validation | Implemented |
+| Structured EHR validation | MIMIC-III demo structured DB | Patient/encounter/lab/diagnosis/medication workflow | Partially implemented |
+| Proxy model evaluation | OPI/D2N/CHQ or available medical summarization data | BART/Pegasus evaluation requirement | Partially implemented / proxy only |
+| Real note benchmark | MIMIC-IV-Ext-BHC / MIMIC-IV-Note | True EHR note-level summarization benchmark | Planned / pending credentialed access |
+| Human evaluation | Demo summaries and reviewer scoring | Human quality and usability assessment | Planned |
 
 ### 8.2 Important dataset boundary
 
@@ -376,14 +394,16 @@ And aggregate human evaluation metrics update
 
 ## 14. Evaluation Strategy
 
-The evaluation design is separated into four layers to avoid overclaiming model quality.
+The evaluation design is a multi-layer evaluation design to avoid overclaiming
+model quality.
 
 | Layer | Dataset | Purpose | Status |
 |---|---|---|---|
-| A — Functional validation | Mock/demo data | Prove end-to-end system workflow | Available |
-| B — Structured EHR validation | MIMIC-III demo DB | Validate structured EHR ingestion, citation and dashboard workflow | Available/planned |
-| C — BART/Pegasus proxy evaluation | OPI/D2N/CHQ or equivalent medical text datasets | Satisfy model comparison requirement | Available/proxy |
-| D — Real EHR note benchmark | MIMIC-IV-Ext-BHC / MIMIC-IV-Note | True note-level EHR benchmark | Pending credentialed access |
+| A — Functional validation | Mock/demo data | Prove end-to-end system workflow | Implemented |
+| B — Structured EHR validation | MIMIC-III demo DB | Validate structured EHR ingestion, citation and dashboard workflow | Partially implemented |
+| C — BART/Pegasus proxy evaluation | OPI/D2N/CHQ or equivalent medical text datasets | Satisfy model comparison requirement | Partially implemented / proxy only |
+| D — Real EHR note benchmark | MIMIC-IV-Ext-BHC / MIMIC-IV-Note | True note-level EHR benchmark | Planned / pending credentialed access |
+| E — Human evaluation | Demo or governed de-identified summaries | Score factuality, completeness, readability and citation usefulness | Planned |
 
 ### Success metrics
 
