@@ -51,7 +51,7 @@ PowerShell commands for the complete currently routed backend surface:
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install -r requirements-mlops.txt -r requirements-guardrails-onnx.txt
+python -m pip install -r requirements.txt
 python -m alembic -c alembic.ini upgrade head
 python -m backend.app.db.seed
 python -m pytest backend\tests -p no:cacheprovider -q

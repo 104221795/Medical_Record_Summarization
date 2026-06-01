@@ -1,2 +1,0 @@
--r requirements-rag.txt
-fastembed>=0.6,<1

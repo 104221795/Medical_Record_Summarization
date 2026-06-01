@@ -137,7 +137,7 @@ terminology service, medication reconciliation hay thẩm định bác sĩ. Các
 ## Chạy Local
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-rag.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload --port 8080
 ```
 
@@ -157,7 +157,7 @@ Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8080/api/v1/patients/patie
 Để dùng embedding ONNX nội bộ:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-rag-onnx.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 $env:RAG_EMBEDDING_PROVIDER = "fastembed"
 $env:RAG_FASTEMBED_MODEL = "intfloat/multilingual-e5-large"
 .\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --port 8080

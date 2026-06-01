@@ -60,7 +60,7 @@ class MlflowTelemetry(SummaryTelemetry):
         except ImportError as exc:
             raise RuntimeError(
                 "MLflow tracking is enabled but mlflow is not installed. "
-                "Install requirements-mlops.txt."
+                "Install requirements.txt."
             ) from exc
         self.mlflow = mlflow
         self.log_redacted_artifacts = settings.mlflow_log_redacted_safety_artifacts

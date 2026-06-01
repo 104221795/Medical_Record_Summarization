@@ -1,661 +1,288 @@
-# README Dành Cho Mentor — Delivery Week 1
+# Mentor README — Week 1 Delivery
 
-## Tên dự án
+## 1. Project Overview
 
-**Medical Record Summarization MVP: Hệ thống hỗ trợ tóm tắt bệnh án có citation và kiểm duyệt bởi bác sĩ**
+**Project:** Medical Record Summarization MVP
+**Positioning:** Citation-grounded clinical documentation assistant with clinician review
+**Week 1 focus:** PRD, User Flow, safety boundary, research framing and evaluation strategy
 
-GitHub Repository:
-https://github.com/104221795/Medical_Record_Summarization
+Dự án này xây dựng một **production-style MVP prototype** cho hệ thống hỗ trợ tóm tắt bệnh án. Hệ thống không phải medical device, không phải autonomous clinician, không phải diagnosis system, không phải treatment recommendation system, và không phải production HIS/EMR integration.
 
-YouTube Demo Link:
-(https://www.youtube.com/watch?v=dj4nVNfN_Yw)
+Hệ thống được định vị là một **clinical documentation support prototype**: AI-generated summaries luôn ở trạng thái **draft** cho đến khi được bác sĩ có thẩm quyền review, edit, approve hoặc reject.
 
----
+Core safety boundary:
 
-## 1. Mục đích của bản nộp tuần 1
-
-Bản nộp tuần 1 này bao gồm cả **tài liệu định hướng nghiên cứu/sản phẩm** và **prototype triển khai sớm** cho dự án Medical Record Summarization MVP.
-
-Mục tiêu chính của dự án là thiết kế và xây dựng một hệ thống **hỗ trợ tóm tắt hồ sơ bệnh án** theo hướng an toàn hơn, có khả năng truy xuất nguồn thông tin, hỗ trợ bác sĩ kiểm duyệt và phục vụ đánh giá chất lượng đầu ra.
-
-Dự án **không được định vị là hệ thống ra quyết định y khoa tự động**. Hệ thống không thực hiện:
-
-* khuyến nghị chẩn đoán;
-* khuyến nghị điều trị;
-* kê đơn thuốc;
-* tự động phê duyệt xuất viện;
-* chẩn đoán hình ảnh y tế.
-
-Thay vào đó, hệ thống tập trung vào:
-
-* tóm tắt dữ liệu hồ sơ bệnh án đã có;
-* gắn citation cho các claim quan trọng;
-* flag các thông tin thiếu bằng chứng hoặc có rủi ro;
-* yêu cầu bác sĩ kiểm duyệt trước khi phê duyệt;
-* ghi nhận audit log và hỗ trợ monitoring.
+> Dự án chỉ đánh giá những gì có thể được đánh giá hợp lệ ở mức dữ liệu hiện tại, đồng thời giữ các claim về real EHR note-level benchmark cho giai đoạn tương lai khi có credentialed datasets phù hợp.
 
 ---
 
-## 2. Các tài liệu nên review trước
+## 2. Week 1 Executive Summary
 
-Trong tuần 1, các tài liệu mentor nên review trước nằm trong thư mục:
+Week 1 tập trung vào việc xác định **product scope** và **clinical workflow** cho một hệ thống tóm tắt bệnh án có kiểm soát. Đóng góp chính của Week 1 không chỉ là mô tả một AI model tạo summary, mà là thiết kế một **controlled clinical documentation lifecycle**:
 
 ```text
-docs/mentor_delivery_week_1/
-├── 01_PRD_V1_MEDICAL_RECORD_SUMMARIZATION.md
-├── 02_USER_FLOW_V1.md
-├── 03_EVALUATION_PLAN_V1.md
-├── 04_RESEARCH_BACKGROUND_AND_GAPS.md
-├── 05_SURVEY_PLAN.md
-├── 06_GOLDEN_PATH_UI_V1.md
-├── 07_HALLUCINATION_MITIGATION_V1.md
-└── 08_ROLE_BASED_UI.md
+source clinical data
+→ draft AI summary
+→ claim/citation verification
+→ unsupported claim visibility
+→ doctor review
+→ approve/reject
+→ audit log
+→ evaluation and monitoring
 ```
 
-Thứ tự đọc được đề xuất:
+Luận điểm trung tâm của dự án:
+
+> Medical summarization không chỉ là bài toán sinh văn bản. Trong y tế, summarization là bài toán về trust, verification, accountability và workflow integration.
+
+Vì vậy, hệ thống tập trung vào:
+
+* citation-grounded draft summaries;
+* unsupported claim flags;
+* doctor-in-the-loop review;
+* auditability;
+* role-based responsibilities;
+* multi-layer evaluation strategy.
+
+---
+
+## 3. What Week 1 Delivers
+
+Week 1 deliverables được chia thành ba nhóm.
+
+### 3.1 Required Week 1 Deliverables
+
+| Deliverable          | Purpose                                                                                            | Status    |
+| -------------------- | -------------------------------------------------------------------------------------------------- | --------- |
+| PRD                  | Xác định product scope, user, requirements, data strategy, evaluation direction và risk boundaries | Completed |
+| User Flow / Workflow | Mô tả Doctor Golden Path, citation verification, HITL review, audit và role-based flow             | Completed |
+
+### 3.2 Supporting Research / Design Documents
+
+| Document                                 | Purpose                                                                |
+| ---------------------------------------- | ---------------------------------------------------------------------- |
+| Evaluation Plan                          | Giải thích multi-layer evaluation strategy và giới hạn claim           |
+| Research Background and Gaps             | Làm rõ research motivation, gaps và contribution                       |
+| Survey Plan                              | Xác thực problem perception, trust requirement và workflow assumptions |
+| Golden Path UI                           | Mô tả UI flow theo hướng clinical workflow                             |
+| Hallucination Mitigation Plan            | Xác định safety risks, hallucination types và mitigation strategy      |
+| Role-Based UI                            | Làm rõ permission boundaries và accountability                         |
+| Dataset Strategy and Research Evaluation | Phân tầng dataset, allowed claims và benchmark logic                   |
+| Hybrid Input Normalization               | Giải thích hướng xử lý messy clinical input                            |
+
+### 3.3 Early Prototype / Ahead-of-Schedule Work
+
+Nếu repo hiện có `/demo-console`, backend, citation flow, HITL review, audit log hoặc Evaluation Center, các phần này nên được hiểu là **early workflow feasibility evidence**, không phải claim rằng hệ thống đã production-ready.
+
+---
+
+## 4. What This Project Is Not Claiming
+
+Week 1 **không claim**:
+
+* hệ thống đã đạt real EHR benchmark performance;
+* hệ thống đã được clinical validation;
+* hệ thống có khả năng chẩn đoán;
+* hệ thống có khả năng khuyến nghị điều trị;
+* BART/Pegasus đã được clinically validated;
+* MultiClinSum là real EHR benchmark;
+* mock/de-identified demo data chứng minh clinical model performance;
+* hệ thống đã sẵn sàng production deployment;
+* hệ thống đã đạt chuẩn certified medical device.
+
+---
+
+## 5. Recommended Review Order
+
+Mentor nên review theo thứ tự sau:
 
 1. `01_PRD_V1_MEDICAL_RECORD_SUMMARIZATION.md`
-   Tài liệu PRD chính, bao gồm tổng quan sản phẩm, vấn đề, người dùng mục tiêu, user stories, yêu cầu chức năng, chiến lược dữ liệu, chiến lược AI, đánh giá, rủi ro và hướng phát triển.
-
 2. `02_USER_FLOW_V1.md`
-   Tài liệu mô tả luồng người dùng chính, bao gồm Doctor Golden Path, citation flow, safety panel, HITL review, admin monitoring, evaluation reviewer flow và role-based access.
+3. `03_EVALUATION_PLAN_V1.md`
+4. `04_RESEARCH_BACKGROUND_AND_GAPS.md`
+5. `09_DATASET_STRATEGY_AND_RESEARCH_EVALUATION.md`
+6. `10_HYBRID_INPUT_NORMALIZATION_AND_EVALUATION.md`
+7. `07_HALLUCINATION_MITIGATION_V1.md`
+8. `06_GOLDEN_PATH_UI_V1.md`
+9. `08_ROLE_BASED_UI.md`
+10. `05_SURVEY_PLAN.md`
 
-3. `04_RESEARCH_BACKGROUND_AND_GAPS.md`
-   Tài liệu nền tảng nghiên cứu, giải thích vì sao bài toán quan trọng, các khoảng trống nghiên cứu và cách hệ thống đề xuất xử lý các khoảng trống đó.
-
-4. `03_EVALUATION_PLAN_V1.md`
-   Tài liệu thiết kế đánh giá, tách rõ functional validation, structured EHR validation, BART/Pegasus proxy evaluation, real EHR benchmark pending và human evaluation.
-
-5. `05_SURVEY_PLAN.md`
-   Kế hoạch khảo sát nhằm xác thực vấn đề, nhu cầu người dùng, yếu tố tạo niềm tin và kỳ vọng về workflow.
-
-Các file còn lại cung cấp thêm chi tiết về UI, hallucination mitigation và phân quyền theo vai trò.
-
-The main Week 1 deliverables are PRD and User Flow. Additional documents are
-included as supporting appendix for evaluation, safety, UI direction, and
-role-based access.
-
-**Main delivery**
-
-* `01_PRD_V1_MEDICAL_RECORD_SUMMARIZATION.md`
-* `02_USER_FLOW_V1.md`
-* `README_FOR_MENTOR_ONLY.md`
-
-**Appendix / supporting documents**
-
-* `03_EVALUATION_PLAN_V1.md`
-* `04_RESEARCH_BACKGROUND_AND_GAPS.md`
-* `05_SURVEY_PLAN.md`
-* `06_GOLDEN_PATH_UI_V1.md`
-* `07_HALLUCINATION_MITIGATION_V1.md`
-* `08_ROLE_BASED_UI.md`
+Lý do: PRD và User Flow là deliverables chính. Các tài liệu còn lại giải thích chiều sâu nghiên cứu, safety logic và evaluation boundary.
 
 ---
 
-## 3. Định hướng hiện tại của dự án
+## 6. Evidence Ladder
 
-Dự án được phát triển theo hướng **production-style MVP prototype**, không chỉ là một notebook chạy mô hình tóm tắt văn bản.
+Dự án không xem mọi dataset là bằng chứng cho cùng một claim. Mỗi loại dữ liệu chỉ hỗ trợ một mức evidence nhất định.
 
-This is a production-style MVP prototype, not a production-ready medical
-device or certified clinical system.
-
-Hệ thống hiện được chia thành hai hướng chính:
-
-### Track A — Product MVP
-
-Track này tập trung vào workflow sản phẩm end-to-end:
-
-```text
-EHR / mock / de-identified data
-→ ingestion
-→ database
-→ clinical documents / structured records
-→ summary generation
-→ claims
-→ citations
-→ safety checks
-→ doctor review
-→ audit logs
-→ monitoring dashboard
-```
-
-### Track B — Research and Evaluation
-
-Track này đáp ứng yêu cầu đánh giá BART/Pegasus và đánh giá chất lượng summarization:
-
-```text
-medical text dataset
-→ BART / Pegasus / Gemini / deterministic summarization
-→ automatic metrics
-→ citation metrics
-→ human evaluation
-→ final comparison report
-```
-
-Do đó, dự án không chỉ chứng minh rằng mô hình có thể sinh summary, mà còn đặt summary vào một workflow có kiểm soát, có citation, có human review và có monitoring.
+| Level         | Evidence source                  | What it validates                                                                            | What it does not validate                           |
+| ------------- | -------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| A             | Mock/de-identified demo data     | Product workflow, UI/API routing, citation display, review status, audit events              | Clinical model performance                          |
+| B             | MIMIC-III demo structured data   | Structured EHR ingestion and mapping for patients, encounters, labs, diagnoses, medications  | Note-level summarization quality                    |
+| C.1           | MultiClinSum                     | Primary open clinical summarization benchmark with source/reference pairs                    | Real hospital EHR note performance                  |
+| C.2           | MTS-Dialog                       | Auxiliary dialogue-to-note section proxy evaluation                                          | Full medical record summarization                   |
+| C.3           | ACI-BENCH                        | Optional full-visit dialogue-to-note proxy evaluation                                        | Real EHR discharge-note benchmark                   |
+| Normalization | BIOMEDNLP/mtsamples_clean        | Messy clinical transcription normalization and chunking robustness                           | Main supervised summarization benchmark performance |
+| D             | MIMIC-IV-Ext-BHC / MIMIC-IV-Note | Future real EHR note-level benchmark after credentialed access                               | Available in Week 1                                 |
+| E             | Human evaluation                 | Perceived usefulness, factuality review, readability, citation usefulness, safety perception | Fully automated clinical validation                 |
 
 ---
 
-## 4. Tiến độ triển khai vượt yêu cầu ban đầu
+## 7. Current Layer C Strategy
 
-Bên cạnh PRD và User Flow, một prototype MVP đã được chuẩn bị sớm để chứng minh tính khả thi của hướng triển khai.
+| Layer                     | Dataset                   | Role                                                                                            |
+| ------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------- |
+| Layer C.1                 | MultiClinSum              | Primary open clinical summarization benchmark for Pegasus/BART evaluation                       |
+| Layer C.2                 | MTS-Dialog                | Auxiliary dialogue-to-note section proxy evaluation                                             |
+| Layer C.3                 | ACI-BENCH                 | Optional auxiliary full-visit dialogue-to-note proxy evaluation                                 |
+| Normalization stress test | BIOMEDNLP/mtsamples_clean | Messy medical transcription normalization only; not the main supervised summarization benchmark |
 
-Repository hiện bao gồm:
-
-* FastAPI backend;
-* SQLAlchemy database persistence;
-* Alembic migration setup;
-* data models cho patient, encounter, document, summary, claim, citation, review, audit log và model run;
-* FHIR-like ingestion design;
-* Doctor Golden Path UI;
-* Citation Evidence Panel;
-* Safety Panel;
-* Human-in-the-loop review workflow: edit, approve, reject;
-* Admin metrics và audit dashboard;
-* Evaluation & Demo Control Center;
-* Deterministic summary provider;
-* BART/Pegasus baseline provider adapters và evaluation scripts;
-* Gemini provider integration vào persisted draft summary workflow;
-* thiết kế human evaluation;
-* định hướng role-based UI;
-* chiến lược safety và hallucination mitigation.
-
-### Week 1 Delivery Status
-
-| Item | Status | Note |
-|---|---|---|
-| PRD | Completed | Defines product scope, users, requirements, data/model strategy and evaluation direction |
-| User Flow | Completed | Covers doctor golden path, citation verification, HITL review, admin/evaluation flows |
-| Unified Demo Console | Early prototype completed | Used to demonstrate the workflow in one page |
-| Evaluation Strategy | Draft completed | Multi-layer design; real EHR benchmark remains pending |
-| Human Evaluation | Planned | Form and scoring workflow to be improved in next phase |
-
-### Next Week Priority
-
-1. Polish Unified Demo Console.
-2. Run end-to-end demo with synthetic/de-identified cases.
-3. Improve Gemini provider testing.
-4. Prepare BART/Pegasus proxy evaluation.
-5. Add evaluation report output.
-
-Phần source code được gửi kèm như bằng chứng cho tiến độ triển khai sớm. Tuy nhiên, trọng tâm review của tuần 1 vẫn là **PRD, User Flow, research framing và evaluation design**.
+Older references to OPI/D2N/CHQ as the main Layer C strategy should be treated as historical or optional context. Week 1 now uses the clearer MultiClinSum/MTS-Dialog/ACI-BENCH split.
 
 ---
 
-## 5. Ý tưởng MVP chính
+## 8. What Current Results Mean / Do Not Mean
 
-Nguyên tắc thiết kế cốt lõi của MVP là:
+### 8.1 Current results can mean
 
-> AI-generated summary có thể hỗ trợ bác sĩ review hồ sơ nhanh hơn, nhưng các claim y khoa quan trọng cần có nguồn chứng minh và cần được con người kiểm duyệt trước khi phê duyệt.
+Nếu deterministic evaluation, importer hoặc dry-run đã chạy, các kết quả đó có thể cho thấy:
 
-Vì vậy, output của AI luôn được xem là:
+* processed MultiClinSum path có thể tạo source/reference pairs cho small proxy evaluation run;
+* deterministic baseline runner có thể generate local outputs không cần model downloads;
+* ROUGE metrics có thể được tính và ghi ra JSON/CSV/Markdown artifacts;
+* optional BERTScore đã được thiết kế như semantic metric nếu dependency/model có sẵn;
+* BART/Pegasus có thể được kiểm tra bằng readiness hoặc dry-run path trước khi tải model thật.
 
-```text
-draft
-```
+### 8.2 Current results do not mean
 
-không phải kết luận y khoa chính thức.
+Các kết quả hiện tại **không có nghĩa là**:
 
-Luồng người dùng chính:
-
-```text
-Doctor selects patient
-→ reviews patient context
-→ generates draft summary
-→ checks claim-level citations
-→ reviews safety warnings
-→ edits if needed
-→ approves or rejects summary
-→ system stores audit log and review history
-```
+* MultiClinSum là real EHR benchmark;
+* MTS-Dialog là real EHR benchmark;
+* mtsamples_clean là main supervised summarization benchmark;
+* mock/de-identified data chứng minh clinical model performance;
+* BART/Pegasus đã được clinically validated;
+* hệ thống sẵn sàng real EMR writeback;
+* hệ thống có khả năng chẩn đoán hoặc khuyến nghị điều trị.
 
 ---
 
-## 6. Người dùng mục tiêu
+## 9. Week 1 Mentor Narrative
 
-Hệ thống được thiết kế xoay quanh nhiều vai trò khác nhau.
 
-| Role                | Trách nhiệm chính                                               |
-| ------------------- | --------------------------------------------------------------- |
-| Doctor              | Tạo, review, chỉnh sửa, approve hoặc reject summary             |
-| Nurse               | Xem approved summary và thông tin hỗ trợ trong phạm vi cho phép |
-| Clinical Admin      | Theo dõi chất lượng, metrics và hiệu quả workflow               |
-| IT Admin            | Quản lý ingestion, cấu hình hệ thống, provider status và setup  |
-| Auditor             | Xem audit logs và review history ở chế độ read-only             |
-| AI Safety Reviewer  | Theo dõi unsupported claims, citation quality và safety issues  |
-| Evaluation Reviewer | Chấm điểm human evaluation cho generated summaries              |
 
-Trong MVP hiện tại, role-based access được mô phỏng bằng lightweight mock role mechanism. Production SSO/OAuth và hardened RBAC được xem là future work.
+> Week 1 tập trung vào việc thiết kế một hướng MVP thận trọng về mặt clinical AI. Summary do AI tạo ra chỉ là draft; các claim quan trọng cần citation hoặc phải được flag nếu thiếu bằng chứng; doctor review vẫn là bắt buộc. Evaluation được chia thành nhiều tầng để tránh overclaim: mock data dùng để validate workflow, MIMIC-III demo dùng cho structured EHR mapping, MultiClinSum dùng cho open clinical summarization benchmark, MTS-Dialog là auxiliary dialogue-to-note dataset, mtsamples_clean dùng để stress test input normalization, còn real EHR benchmark được giữ cho giai đoạn tương lai với MIMIC-IV-Ext-BHC hoặc MIMIC-IV-Note.
 
 ---
 
-## 7. Các chức năng chính của hệ thống
+## 10. Mentor Q&A
 
-### 7.1 Doctor Workspace
+### 1. Is this a diagnosis system?
 
-Doctor UI hỗ trợ:
+No. Hệ thống không chẩn đoán, không khuyến nghị điều trị và không kê đơn. Nó chỉ hỗ trợ tạo draft clinical documentation summaries từ dữ liệu đã có.
 
-* danh sách bệnh nhân;
-* chi tiết bệnh nhân;
-* overview về encounter và clinical documents;
-* tạo summary;
-* lựa chọn provider;
-* hiển thị claims và citations;
-* citation source panel;
-* safety panel;
-* edit / approve / reject workflow;
-* review history.
+### 2. What makes this different from a chatbot?
 
-### 7.2 Citation-Based Summary
+Khác biệt chính là hệ thống có structured workflow: patient context, source documents, draft summary, claim-level citation, safety panel, HITL review, audit log và evaluation center. Chatbot thường chỉ sinh text; hệ thống này quản lý lifecycle của clinical documentation output.
 
-Mỗi clinical claim quan trọng nên rơi vào một trong hai nhóm:
+### 3. What happens if AI hallucinates?
 
-* có citation liên kết tới nguồn dữ liệu;
-* hoặc được flag là unsupported, conflicting, unchecked hoặc insufficiently evidenced.
+Claim thiếu bằng chứng sẽ được flag là unsupported hoặc insufficient evidence. High-risk claims cần citation hoặc doctor review. Summary không được xem là final cho đến khi doctor approve.
 
-Citation workflow là phần cốt lõi của dự án vì nó cho phép người dùng kiểm tra lại nguồn gốc của các thông tin trong summary.
+### 4. Why use MultiClinSum?
 
-### 7.3 Hallucination Mitigation
+MultiClinSum có source/reference summary pairs phù hợp cho Pegasus/BART evaluation bằng ROUGE và BERTScore. Nó là lựa chọn chính cho Layer C vì mentor requirement có BERT/Pegasus và evaluation.
 
-Dự án giảm rủi ro hallucination thông qua:
+### 5. Why not call MultiClinSum a real EHR benchmark?
 
-* citation-required clinical claims;
-* unsupported claim detection;
-* missing-data policy;
-* safety panel;
-* doctor review trước khi approve;
-* audit logs;
-* evaluation metrics.
+Vì MultiClinSum là open clinical summarization benchmark, không phải credentialed real EHR note-level benchmark như MIMIC-IV-Ext-BHC hoặc MIMIC-IV-Note. Nó hữu ích cho proxy/open benchmark, nhưng không chứng minh production EHR performance.
 
-Hệ thống nên ưu tiên nói rằng dữ liệu không có sẵn, thay vì tự suy luận thông tin chưa được chứng minh.
+### 6. Why keep MTS-Dialog as auxiliary?
 
-### 7.4 Human-in-the-Loop Review
+MTS-Dialog kiểm tra dialogue-to-note-section behavior. Task này liên quan đến clinical documentation nhưng khác với source-note-to-summary evaluation, nên nó nằm ở Layer C.2 thay vì thay thế MultiClinSum.
 
-Generated summary luôn bắt đầu ở trạng thái:
+### 7. Why use mtsamples_clean for normalization only?
 
-```text
-draft
-```
+mtsamples_clean chứa medical transcription-style text có format không đồng nhất. Nó hữu ích để test section detection, difficult-case routing và safe normalization, nhưng không phải main supervised summarization benchmark nếu không có reliable reference summaries.
 
-Sau đó bác sĩ có thể:
+### 8. What does BERT do here?
 
-```text
-start review
-→ edit
-→ approve
-→ reject
-```
+BERT-style models được dùng cho semantic evaluation, đặc biệt là BERTScore hoặc claim-source similarity. BERT không phải main generator trong summarization pipeline.
 
-Approved summary sẽ bị khóa khỏi việc chỉnh sửa thông thường. Rejected summary cần có lý do từ chối.
+### 9. What do Pegasus and BART do here?
 
-### 7.5 Monitoring và Audit
+Pegasus và BART là abstractive summarization baselines cho Layer C benchmark evaluation. Real model loading nên bị tắt mặc định, trừ khi người dùng bật rõ bằng `--allow-model-downloads` hoặc `RUN_REAL_BASELINES=1`.
 
-Admin Dashboard hỗ trợ theo dõi:
+### 10. What does Gemini do here?
 
-* số lượng summary;
-* thống kê approve/reject;
-* citation coverage;
-* unsupported claim count;
-* review metrics;
-* audit log visibility;
-* MVP readiness indicators.
+Gemini có thể đóng vai trò product LLM provider hoặc controlled difficult-case input normalization assistant. Khi dùng cho normalization, Gemini chỉ được classify/normalize/extract source-backed sections; không được tự thêm facts, chẩn đoán hoặc recommend treatment.
 
-### 7.6 Evaluation & Demo Control Center
+### 11. Why is LLM-assisted normalization controlled?
 
-Evaluation & Demo Control Center là trang tổng hợp để hỗ trợ final demo, bao gồm:
+Vì messy clinical text có thể hưởng lợi từ LLM, nhưng LLM cũng có rủi ro hallucination. Raw text phải luôn là source of truth, normalized sections phải giữ `source_text`, và Gemini chỉ nên được gọi cho difficult cases khi explicit allowed và có giới hạn số lần gọi.
 
-* golden path readiness;
-* provider readiness;
-* citation/safety status;
-* HITL review status;
-* monitoring summary;
-* functional validation;
-* trạng thái real EHR benchmark pending;
-* human evaluation form/status;
-* final demo checklist.
+### 12. What remains future work?
+
+Future work gồm credentialed MIMIC-IV-Ext-BHC/MIMIC-IV-Note evaluation, clinician-led human evaluation, stronger citation/factuality scoring, production RBAC/SSO, EMR/FHIR writeback governance và broader clinical safety testing.
 
 ---
 
-## 8. Chiến lược dữ liệu
+## 11. Current Local Validation Commands
 
-Chiến lược dữ liệu của dự án được tách theo mục đích sử dụng.
-
-| Data Source                    | Mục đích                                    | Vai trò hiện tại                                            |
-| ------------------------------ | ------------------------------------------- | ----------------------------------------------------------- |
-| Mock/de-identified demo data   | Functional validation và UI demo            | Available                                                   |
-| MIMIC-III demo database        | Structured EHR workflow validation          | Phù hợp cho patient/encounter/diagnosis/lab/medication flow |
-| OPI / D2N / CHQ style datasets | BART/Pegasus proxy medical text evaluation  | Hữu ích cho proxy evaluation                                |
-| MIMIC-IV-Ext-BHC               | Real EHR note-level summarization benchmark | Pending credentialed access                                 |
-| MIMIC-IV-Note                  | Fallback cho real clinical note dataset     | Pending credentialed access                                 |
-
-Điểm cần làm rõ:
-
-MIMIC-III demo database hữu ích để validate structured EHR ingestion và workflow, nhưng chưa đủ để train hoặc benchmark đầy đủ cho bài toán clinical note summarization vì bản demo không có đủ clinical note text cho note-to-summary benchmark training.
-
-Do đó, real EHR note-level benchmark vẫn đang ở trạng thái pending cho đến khi có quyền truy cập hợp lệ vào MIMIC-IV-Ext-BHC hoặc MIMIC-IV-Note.
-
----
-
-## 9. Chiến lược đánh giá
-
-Evaluation plan được chia thành nhiều tầng.
-
-### Layer A — Functional Validation
-
-Mục đích:
-
-```text
-Chứng minh product workflow chạy end-to-end.
-```
-
-Dataset:
-
-```text
-Mock/de-identified demo data.
-```
-
-Các bước kiểm tra:
-
-* data seeding;
-* patient list;
-* patient detail;
-* document loading;
-* summary generation;
-* citation display;
-* safety panel;
-* edit / approve / reject;
-* audit log;
-* metrics dashboard;
-* Evaluation Center status.
-
-### Layer B — Structured EHR Validation
-
-Mục đích:
-
-```text
-Validate hệ thống trên dữ liệu EHR có cấu trúc.
-```
-
-Dataset:
-
-```text
-MIMIC-III demo database.
-```
-
-Các bước kiểm tra:
-
-* patient ingestion;
-* admission/encounter ingestion;
-* diagnosis mapping;
-* lab observation mapping;
-* medication mapping;
-* structured citation support;
-* dashboard monitoring.
-
-### Layer C — BART/Pegasus Proxy Medical Text Evaluation
-
-Mục đích:
-
-```text
-Đáp ứng yêu cầu đánh giá BART/Pegasus bằng các medical text summarization datasets sẵn có.
-```
-
-Metrics:
-
-* ROUGE-1;
-* ROUGE-2;
-* ROUGE-L;
-* optional BERTScore;
-* latency;
-* generated summary length;
-* citation coverage nếu áp dụng được.
-
-Layer này được xem là proxy medical text evaluation, không phải final real EHR benchmark performance.
-
-### Layer D — Real EHR Note-Level Benchmark
-
-Mục đích:
-
-```text
-Đánh giá chất lượng summarization trên clinical notes thật đã được de-identified.
-```
-
-Target datasets:
-
-* MIMIC-IV-Ext-BHC;
-* MIMIC-IV-Note.
-
-Trạng thái:
-
-```text
-Pending credentialed dataset access.
-```
-
-Hệ thống sẽ không đưa ra claim về model quality chỉ dựa trên mock data.
-
-### Layer E — Human Evaluation
-
-Mục đích:
-
-```text
-Thu thập đánh giá của con người về chất lượng summary và citation usefulness.
-```
-
-Tiêu chí:
-
-* factual correctness;
-* completeness;
-* conciseness;
-* readability;
-* citation usefulness;
-* hallucination risk;
-* comments.
-
----
-
-## 10. Research gaps mà dự án xử lý
-
-Dự án được thiết kế để xử lý các khoảng trống nghiên cứu và sản phẩm sau:
-
-| Gap                                                   | Cách dự án xử lý                                                                            |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Clinical summaries thường thiếu traceable evidence    | Claim-level citation và source evidence panel                                               |
-| Automatic metrics chưa đủ để đánh giá clinical safety | Bổ sung human evaluation và citation metrics                                                |
-| LLM có thể tạo unsupported clinical facts             | Safety panel và unsupported claim flagging                                                  |
-| AI output có thể bị tin quá mức                       | Draft-only output và doctor approval workflow                                               |
-| Research prototypes thường thiếu workflow integration | Doctor UI, HITL review, audit logs và dashboard                                             |
-| Real EHR data bị hạn chế truy cập                     | Tách mock validation, structured EHR validation, proxy evaluation và pending real benchmark |
-
----
-
-## 11. Safety boundaries
-
-Hệ thống không triển khai:
-
-* diagnosis recommendation;
-* treatment recommendation;
-* prescription;
-* autonomous discharge approval;
-* medical image diagnosis.
-
-Tất cả AI-generated summaries phải ở trạng thái draft cho đến khi được bác sĩ review.
-
-Mỗi clinical claim quan trọng cần có citation hoặc được flag rõ ràng.
-
-MVP này nên được hiểu là:
-
-```text
-clinical documentation support
-```
-
-không phải:
-
-```text
-clinical decision automation
-```
-
----
-
-## 12. Cấu trúc repository
-
-Repository được tổ chức như sau:
-
-```text
-backend/app/
-  main.py                  FastAPI application setup
-  routers/                 API endpoints
-  services/                Business logic and workflow services
-  repositories/            Database query/write layer
-  models/                  SQLAlchemy ORM models
-  db/                      DB session, base metadata, seed utilities
-
-backend/ui/
-  unified/                 Unified role-based demo console
-  doctor/                  Doctor Golden Path UI
-  admin/                   Admin metrics and audit dashboard
-  citation/                Citation demo UI
-
-src/
-  data/                    Dataset loading and normalization
-  models/                  Deterministic, BART, Pegasus baseline providers
-  evaluation/              Evaluation utilities where applicable
-
-scripts/
-  baseline and evaluation command-line utilities
-
-docs/
-  product, research, technical, and mentor-delivery documentation
-
-data/evaluation/
-  mock/de-identified sample data for testing and demo
-
-deploy/k8s/
-  Kubernetes deployment manifests for future deployment work
-```
-
----
-
-## 13. Cách chạy local demo
-
-Local demo hiện được thiết kế cho development và mentor review.
-
-### Bước 1 — Tạo môi trường
+Targeted Week 1 tests:
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements-mlops.txt -r requirements-guardrails-onnx.txt
+python -m pytest backend/tests/test_multiclinsum_importer.py backend/tests/test_mtsamples_importer.py backend/tests/test_mts_dialog_importer.py backend/tests/test_summarization_baseline_runner.py backend/tests/test_semantic_metrics.py -q
 ```
 
-### Bước 2 — Setup local database
+MultiClinSum import with auto-detected zip:
 
 ```powershell
-$env:RAG_DATABASE_URL = "sqlite:///./var/clin_summ.db"
-python -m alembic -c alembic.ini upgrade head
-python -m backend.app.db.seed
+python -m backend.app.evaluation.datasets.multiclinsum_importer --limit 20
 ```
 
-### Bước 3 — Chạy backend
+Deterministic proxy baseline:
 
 ```powershell
-python -m uvicorn backend.app.main:app --reload --port 8080
+python -m backend.app.evaluation.summarization_baseline_runner `
+  --dataset multiclinsum `
+  --input data/processed/multiclinsum/multiclinsum_train.jsonl `
+  --model deterministic `
+  --limit 5 `
+  --include-bertscore
 ```
 
-### Bước 4 — Mở các trang demo
+Pegasus readiness dry-run:
 
-```text
-OpenAPI:
-http://127.0.0.1:8080/docs
-
-Main Unified Demo Console:
-http://127.0.0.1:8080/demo-console
-
-Legacy / separated demo pages, optional:
-http://127.0.0.1:8080/doctor-demo
-http://127.0.0.1:8080/admin/dashboard
-http://127.0.0.1:8080/evaluation-demo
-http://127.0.0.1:8080/citation-demo
+```powershell
+python -m backend.app.evaluation.summarization_baseline_runner `
+  --dataset multiclinsum `
+  --input data/processed/multiclinsum/multiclinsum_train.jsonl `
+  --model pegasus `
+  --limit 3 `
+  --dry-run
 ```
 
----
+Real Pegasus should only be run intentionally:
 
-## 14. Demo flow đề xuất
-
-Video YouTube demo sẽ đi theo flow sau:
-
-```text
-1. Giới thiệu vấn đề: bác sĩ phải review nhiều dữ liệu bệnh án phân tán.
-2. Giải thích hệ thống: trợ lý tóm tắt bệnh án có citation và doctor review.
-3. Mở Unified Demo Console tại /demo-console.
-4. Chọn mock doctor role.
-5. Mở patient list.
-6. Chọn patient.
-7. Generate draft summary.
-8. Hiển thị claim-level citations.
-9. Click citation để xem evidence.
-10. Hiển thị safety panel và unsupported claim handling.
-11. Start review.
-12. Edit / approve / reject summary.
-13. Mở Admin Dashboard.
-14. Hiển thị metrics và audit log.
-15. Mở Evaluation & Demo Control Center.
-16. Giải thích functional validation và human evaluation design.
-17. Giải thích trạng thái real EHR benchmark pending.
-18. Tổng kết limitation và future work.
+```powershell
+python -m backend.app.evaluation.summarization_baseline_runner `
+  --dataset multiclinsum `
+  --input data/processed/multiclinsum/multiclinsum_train.jsonl `
+  --model pegasus `
+  --limit 3 `
+  --allow-model-downloads `
+  --include-bertscore
 ```
 
 ---
 
-## 15. Pending items và future work
+## 12. Week 2  Next Steps (dự định tuần tiếp theo)
 
-Dự án hiện là demo-ready MVP prototype, chưa phải production medical AI system.
-
-Các phần pending hoặc future work bao gồm:
-
-* credentialed real EHR benchmark bằng MIMIC-IV-Ext-BHC hoặc MIMIC-IV-Note;
-* clinical expert evaluation;
-* production SSO/OAuth;
-* hardened RBAC;
-* full HIS/EMR integration;
-* SMART on FHIR integration;
-* production security review;
-* production audit retention policy;
-* advanced retrieval evaluation;
-* stronger wrong-patient retrieval tracking;
-* broader clinical safety testing;
-* real-world pilot với governed de-identified data.
-
----
-
-## 16. Các câu hỏi mong muốn nhận feedback từ mentor
-
-Em mong muốn nhận feedback từ mentor về các điểm sau:
-
-1. Scope PRD hiện tại có phù hợp với kỳ vọng của internship evaluation không?
-2. User Flow đã đủ rõ cho main clinical workflow chưa?
-3. Việc tách product MVP, proxy model evaluation và pending real EHR benchmark như hiện tại đã rõ chưa?
-4. Citation-first và doctor-in-the-loop workflow có phù hợp với định hướng của dự án không?
-5. Trong tuần tiếp theo, em nên ưu tiên UI demo polish, BART/Pegasus evaluation, real structured EHR import hay survey/user validation?
-6. Evaluation strategy hiện tại có chấp nhận được trong bối cảnh chưa có credentialed real EHR note data không?
-7. Có rủi ro scope hoặc logic nào cần chỉnh trước final demo không?
-
----
-
-## 17. Tóm tắt
-
-Bản nộp tuần 1 cung cấp định hướng sản phẩm có cơ sở nghiên cứu và prototype triển khai sớm cho Medical Record Summarization MVP.
-
-Dự án được xây dựng trên quan điểm rằng medical summarization không nên chỉ dừng ở việc sinh text. Một workflow an toàn và có giá trị hơn cần bao gồm:
-
-```text
-summary generation
-+ citation evidence
-+ unsupported claim detection
-+ doctor review
-+ audit logs
-+ monitoring
-+ evaluation
-```
-
-Repository hiện tại thể hiện tiến độ theo hướng đó, đồng thời tách rõ phần đã hoàn thành trong MVP với phần còn pending cho real EHR benchmark validation.
+1. Finalize MultiClinSum importer and run small Layer C.1 evaluation.
+2. Run deterministic baseline first, then Pegasus/BART dry-run.
+3. Run Pegasus/BART real smoke test only with explicit model download permission.
+4. Add or refine MTS-Dialog importer as Layer C.2 auxiliary evaluation.
+5. Use mtsamples_clean for normalization stress test.
+6. Add human evaluation form/report if not already complete.
+7. Continue avoiding any real EHR benchmark claim until credentialed MIMIC-IV-Ext-BHC/MIMIC-IV-Note access is available.

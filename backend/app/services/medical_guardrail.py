@@ -114,7 +114,7 @@ class OnnxNliContradictionDetector(ContradictionDetector):
         except ImportError as exc:
             raise RuntimeError(
                 "ONNX NLI requires onnxruntime, numpy and transformers. "
-                "Install requirements-multimodal.txt and requirements-rag-onnx.txt."
+                "Install requirements.txt."
             ) from exc
 
         model_path = model_directory / "model.onnx"

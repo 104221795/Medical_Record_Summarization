@@ -14,8 +14,16 @@ INTERNAL_SCHEMA_FIELDS = (
     "dataset",
     "split",
 )
-SUPPORTED_DATASETS = {"mock", "mimic_iv_note", "mimic_iv_ext_bhc"}
-SUPPORTED_SPLITS = {"train", "validation", "test"}
+SUPPORTED_DATASETS = {
+    "mock",
+    "multiclinsum",
+    "mts_dialog",
+    "aci_bench",
+    "mtsamples_clean",
+    "mimic_iv_note",
+    "mimic_iv_ext_bhc",
+}
+SUPPORTED_SPLITS = {"train", "validation", "test", "test_1", "test_2"}
 
 
 class DatasetValidationError(ValueError):
@@ -120,6 +128,15 @@ def _clean_dataset(value: str) -> str:
         "mimic_iv_notes": "mimic_iv_note",
         "mimic_iv_ext_bhc": "mimic_iv_ext_bhc",
         "mimicivextbhc": "mimic_iv_ext_bhc",
+        "multi_clin_sum": "multiclinsum",
+        "multi_clinsum": "multiclinsum",
+        "multi_clinical_summarization": "multiclinsum",
+        "mtsdialog": "mts_dialog",
+        "mts_dialogue": "mts_dialog",
+        "aci": "aci_bench",
+        "acibench": "aci_bench",
+        "aci-bench": "aci_bench",
+        "biomednlp_mtsamples_clean": "mtsamples_clean",
     }
     normalized = aliases.get(normalized, normalized)
     if normalized not in SUPPORTED_DATASETS:

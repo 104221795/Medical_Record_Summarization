@@ -16,9 +16,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ffmpeg libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements-api.txt requirements-rag.txt requirements-rag-onnx.txt requirements-multimodal.txt requirements-mlops.txt ./
+COPY requirements.txt ./
 RUN python -m pip install --upgrade pip \
-    && python -m pip install -r requirements-mlops.txt \
+    && python -m pip install -r requirements.txt \
     && if [ "${ORT_FLAVOR}" = "intel" ]; then \
          python -m pip uninstall -y onnxruntime \
          && python -m pip install "onnxruntime-openvino>=1.21,<2"; \

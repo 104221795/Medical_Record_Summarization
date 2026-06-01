@@ -66,7 +66,7 @@ khong an toan, endpoint tra HTTP `422` va khong tao transaction cho EMR.
 Cai dependency:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-guardrails-onnx.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 Model directory can co:

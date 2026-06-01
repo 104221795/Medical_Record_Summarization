@@ -3,10 +3,58 @@
 This repository contains a final internship-demo Medical Record Summarization
 MVP with database persistence, FHIR-like ingestion, provider-selectable draft
 summary generation, citation evidence, clinician review workflow, auditability,
-monitoring, and a three-layer evaluation readiness center.
+monitoring, and a multi-layer evaluation strategy.
 
 The implementation is a local/development prototype. It is not a production
 HIS/EMR integration and must use de-identified or mock data by default.
+
+## Quick Start
+
+Use one dependency file for the whole prototype:
+
+```powershell
+cd D:\MyNewDesktop\clin-summ
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+Then initialize the local database and start the API:
+
+```powershell
+$env:RAG_DATABASE_URL = "sqlite:///./var/clin_summ.db"
+python -m alembic -c alembic.ini upgrade head
+python -m backend.app.db.seed
+python -m uvicorn backend.app.main:app --reload --port 8080
+```
+
+Main local URLs:
+
+| Surface | URL |
+| --- | --- |
+| API docs | `http://127.0.0.1:8080/docs` |
+| Unified Demo Console | `http://127.0.0.1:8080/demo-console` |
+| Doctor UI | `http://127.0.0.1:8080/doctor-demo` |
+| Admin dashboard | `http://127.0.0.1:8080/admin/dashboard` |
+| Evaluation center | `http://127.0.0.1:8080/evaluation-demo` |
+| Citation demo | `http://127.0.0.1:8080/citation-demo` |
+
+## Repository Guide
+
+| Area | Path | Purpose |
+| --- | --- | --- |
+| Backend app | `backend/app/` | FastAPI routes, services, repositories, models, database setup |
+| Backend tests | `backend/tests/` | Regression, workflow, importer, baseline, and safety tests |
+| Demo UIs | `backend/ui/` | Doctor, admin, unified, evaluation, and citation demo pages |
+| Evaluation importers | `backend/app/evaluation/` | Dataset import and summarization baseline runners |
+| Research utilities | `src/` | Dataset loading and baseline model adapters |
+| Data | `data/` | Mock/demo fixtures, local external dataset placement, processed outputs |
+| Docs | `docs/` | Mentor delivery, product specs, safety docs, evaluation plans |
+| Deploy | `deploy/k8s/` | Prototype Kubernetes manifests |
+| Requirements | `requirements.txt` | Single dependency entrypoint for local/dev/test/Docker setup |
+
+For docs navigation, start with `docs/README.md`.
 
 ## Current Implementation Status
 
@@ -48,7 +96,7 @@ review before approval. Every important clinical claim must be citation-linked
 or visibly flagged as unsupported, conflicting, unchecked, or insufficiently
 evidenced. Sensitive actions create audit logs.
 
-## Repository Layout
+## Repository Layout Details
 
 ```text
 backend/app/
@@ -108,7 +156,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
 python -m pip install --upgrade pip
-python -m pip install -r requirements-mlops.txt -r requirements-guardrails-onnx.txt
+python -m pip install -r requirements.txt
 ```
 
 Confirm that you are using the correct interpreter:
@@ -285,13 +333,13 @@ or patient names.
 2. Open `http://127.0.0.1:8080/evaluation-demo`.
 3. Review golden path, provider, citation/safety, HITL, and monitoring status.
 4. Click `Run Functional Validation` to execute the mock/de-identified workflow check.
-5. Confirm Layer B says `pending_dataset` until
+5. Confirm the real EHR note benchmark layer says `pending_dataset` until
    `data/processed/ehr_benchmark/test.jsonl` exists.
 6. Submit human evaluation scores for a generated summary ID if you want demo
    usability feedback.
 
-Layer A functional validation uses mock/de-identified data only. Layer B real
-EHR benchmark status remains pending until credentialed MIMIC-IV-Note or
+Layer A functional validation uses mock/de-identified data only. The real EHR
+note benchmark layer remains pending until credentialed MIMIC-IV-Note or
 MIMIC-IV-Ext-BHC data is processed locally. Mock data is never used to claim
 real benchmark performance.
 
@@ -407,7 +455,7 @@ BART/Pegasus execution uses Hugging Face Transformers and is disabled by
 default so CI/tests do not download models. To run real local baselines:
 
 ```powershell
-python -m pip install -r requirements-baselines.txt
+python -m pip install -r requirements.txt
 $env:RUN_REAL_BASELINES = "1"
 
 .\.venv\Scripts\python.exe -m scripts.run_baseline_summarization `
@@ -493,7 +541,7 @@ Enable real BART/Pegasus model loading only when you intentionally want local
 Hugging Face execution:
 
 ```powershell
-python -m pip install -r requirements-baselines.txt
+python -m pip install -r requirements.txt
 $env:RUN_REAL_BASELINES = "1"
 
 .\.venv\Scripts\python.exe -m scripts.run_provider_evaluation `
@@ -632,7 +680,7 @@ Enable real BART/Pegasus execution only when you intentionally want local model
 loading:
 
 ```powershell
-python -m pip install -r requirements-baselines.txt
+python -m pip install -r requirements.txt
 $env:RUN_REAL_BASELINES = "1"
 $env:BART_MODEL_NAME = "facebook/bart-large-cnn"
 $env:PEGASUS_MODEL_NAME = "google/pegasus-xsum"

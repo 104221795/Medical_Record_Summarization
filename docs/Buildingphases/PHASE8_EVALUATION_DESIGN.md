@@ -1,6 +1,6 @@
 # Phase 8 Evaluation Design
 
-This MVP uses a three-layer evaluation system so demo readiness is not confused
+This MVP uses a multi-layer evaluation strategy so demo readiness is not confused
 with real clinical benchmark performance.
 
 ## Layer A: Functional Validation

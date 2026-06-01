@@ -136,7 +136,7 @@ POST /api/v1/patients/{patient_id}/records:ingest
 ## Chạy Module
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-multimodal.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload --port 8080
 ```
 

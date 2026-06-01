@@ -4,6 +4,7 @@
 __pycache__/
 *.py[cod]
 output/
+outputs/
 results/
 models_tuned/
 backend/var/
@@ -25,6 +26,11 @@ data/evaluation/credentialed/
 data/processed/ehr_benchmark/*.jsonl
 data/processed/ehr_benchmark/*.json
 data/processed/ehr_benchmark/*.csv
+data/external/**/*.zip
+data/external/**/extracted/
+data/processed/multiclinsum/*.jsonl
+data/processed/mts_dialog/*.jsonl
+data/processed/mtsamples_clean/*.jsonl
 
 # Large local dataset artifacts and caches.
 *.sqlite

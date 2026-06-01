@@ -81,7 +81,7 @@ class HuggingFaceWhisperTranscriber(SpeechTranscriber):
                 from transformers import pipeline
             except ImportError as exc:
                 raise MediaProcessingError(
-                    "Transformers is not installed; install requirements-multimodal.txt."
+                    "Transformers is not installed; install requirements.txt."
                 ) from exc
             try:
                 self._pipeline = pipeline(

@@ -63,7 +63,7 @@ class FastEmbedProvider(EmbeddingProvider):
             from fastembed import TextEmbedding
         except ImportError as exc:
             raise RuntimeError(
-                "fastembed is not installed. Install requirements-rag-onnx.txt "
+                "fastembed is not installed. Install requirements.txt "
                 "for local ONNX embeddings."
             ) from exc
         self.model_name = model_name

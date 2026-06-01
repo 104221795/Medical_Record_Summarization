@@ -1,2 +1,0 @@
--r requirements-multimodal.txt
-mlflow>=3.0,<4

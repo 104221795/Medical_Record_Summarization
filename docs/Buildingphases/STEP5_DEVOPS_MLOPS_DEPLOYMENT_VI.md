@@ -155,7 +155,7 @@ failure telemetry được ghi vào application log thay vì làm hỏng request
 | `Dockerfile` | CPU / Intel OpenVINO image |
 | `Dockerfile.nvidia` | NVIDIA CUDA image |
 | `.dockerignore` | Không đưa `.env`, dữ liệu và artifacts vào build context |
-| `requirements-mlops.txt` | MLflow runtime dependency; hỗ trợ local SQLite validation và remote server |
+| `requirements.txt` | Unified runtime, evaluation, and MLflow dependencies for local SQLite validation and remote server |
 | `backend/app/services/telemetry.py` | Metrics/safety logging |
 | `deploy/k8s/deployment.yaml` | Kubernetes workload và autoscaling |
 | `deploy/k8s/deployment-nvidia-patch.yaml` | GPU deployment override |

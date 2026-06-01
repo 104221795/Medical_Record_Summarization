@@ -15,7 +15,7 @@ cd D:\MyNewDesktop\clin-summ
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install -r requirements-mlops.txt -r requirements-guardrails-onnx.txt
+python -m pip install -r requirements.txt
 ```
 
 ## Database Setup
@@ -48,10 +48,10 @@ Open:
 .\.venv\Scripts\python.exe -m pytest backend\tests -p no:cacheprovider -q
 ```
 
-Expected final validation result:
+Expected result:
 
 ```text
-101 passed
+All selected tests pass. The exact count may change as evaluation/importer tests are added.
 ```
 
 ## Run Functional Validation
@@ -122,9 +122,9 @@ These are mock/de-identified fixtures for demonstration only.
 - [ ] Open Evaluation & Demo Control Center.
 - [ ] Show golden path status.
 - [ ] Show provider status.
-- [ ] Show three-layer evaluation cards.
+- [ ] Show multi-layer evaluation strategy / Evidence Ladder.
 - [ ] Run functional validation.
-- [ ] Show Layer B `pending_dataset`.
+- [ ] Show real EHR note benchmark as pending until credentialed data exists.
 - [ ] Explain mock data is not benchmark evidence.
 - [ ] Optionally submit human evaluation for a generated summary.
 
