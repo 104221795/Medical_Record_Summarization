@@ -34,7 +34,9 @@ from .services.review_service import ReviewService
 from .services.safety_service import SafetyService
 
 
-IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9._-]{2,128}$")
+TENANT_RE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
+ROLE_RE = re.compile(r"^[A-Za-z0-9._-]{2,128}$")
+USER_HEADER_RE = re.compile(r"^[A-Za-z0-9._@+-]{2,255}$")
 
 
 @dataclass(frozen=True)
@@ -49,12 +51,13 @@ def get_request_context(
     x_user_id: Annotated[str, Header(alias="X-User-ID")],
     x_role_code: Annotated[str, Header(alias="X-Role-Code")] = "doctor",
 ) -> RequestContext:
-    for label, value in (
-        ("X-Tenant-ID", x_tenant_id),
-        ("X-User-ID", x_user_id),
-        ("X-Role-Code", x_role_code),
-    ):
-        if not IDENTIFIER_RE.fullmatch(value):
+    validators = (
+        ("X-Tenant-ID", x_tenant_id, TENANT_RE),
+        ("X-User-ID", x_user_id, USER_HEADER_RE),
+        ("X-Role-Code", x_role_code, ROLE_RE),
+    )
+    for label, value, pattern in validators:
+        if not pattern.fullmatch(value):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"{label} contains invalid characters.",

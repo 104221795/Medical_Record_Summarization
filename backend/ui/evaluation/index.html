@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>MVP Evaluation & Demo Control Center</title>
-    <link rel="stylesheet" href="/evaluation-assets/styles.css" />
+    <link rel="stylesheet" href="/evaluation-assets/styles.css?v=benchmark-20260604" />
   </head>
   <body>
     <header class="hero">
@@ -83,6 +83,38 @@
         <div id="evaluationLayers" class="layer-grid"></div>
       </section>
 
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>Model Evaluation Dashboard</h2>
+          <button id="refreshBenchmarkBtn" type="button">Refresh Results</button>
+        </div>
+        <p id="benchmarkWarning" class="warning muted-warning"></p>
+        <div id="benchmarkSummary" class="benchmark-summary"></div>
+        <div id="benchmarkPubMed" class="stack"></div>
+        <div id="benchmarkCharts" class="benchmark-chart-grid"></div>
+        <div class="table-wrap">
+          <table class="benchmark-table">
+            <thead>
+              <tr>
+                <th>Provider</th>
+                <th>Checkpoint</th>
+                <th>Stage</th>
+                <th>Domain fit</th>
+                <th>Status</th>
+                <th>Records</th>
+                <th>ROUGE-1</th>
+                <th>ROUGE-2</th>
+                <th>ROUGE-L</th>
+                <th>Avg latency</th>
+              </tr>
+            </thead>
+            <tbody id="benchmarkTableBody"></tbody>
+          </table>
+        </div>
+        <div id="benchmarkFiles" class="benchmark-files"></div>
+        <div id="benchmarkPaths" class="stack"></div>
+      </section>
+
       <section class="grid-two">
         <article class="panel">
           <h2>Layer A — Functional Validation</h2>
@@ -111,6 +143,8 @@
                 <option value="">Use summary model run</option>
                 <option value="deterministic">deterministic</option>
                 <option value="bart">bart</option>
+                <option value="pegasus_pubmed">pegasus_pubmed</option>
+                <option value="pegasus_cnn_dailymail">pegasus_cnn_dailymail</option>
                 <option value="pegasus">pegasus</option>
                 <option value="gemini">gemini</option>
               </select>
@@ -144,6 +178,6 @@
       </section>
     </main>
 
-    <script src="/evaluation-assets/app.js"></script>
+    <script src="/evaluation-assets/app.js?v=benchmark-20260604"></script>
   </body>
 </html>

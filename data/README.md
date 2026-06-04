@@ -37,6 +37,20 @@ data/
 | `BIOMEDNLP/mtsamples_clean` | Messy transcription normalization stress test | Not main supervised summarization benchmark |
 | `data/processed/ehr_benchmark/` | Reserved for future MIMIC-IV-Ext-BHC / MIMIC-IV-Note processing | Pending credentialed access |
 
+## Dataset Resources
+
+| Dataset/resource | Best use in this repo | Link |
+| --- | --- | --- |
+| MultiClinSum | Layer C.1 primary open proxy clinical summarization benchmark | https://zenodo.org/records/17341582 |
+| BioASQ MultiClinSum task | Background for MultiClinSum task framing | https://participants-area.bioasq.org/general_information/MultiClinSum/ |
+| MTS-Dialog | Layer C.2 auxiliary dialogue-to-note section evaluation | https://github.com/abachaa/MTS-Dialog |
+| MEDIQA-Chat 2023 | Challenge context for MTS-Dialog and ACI-BENCH tasks | https://github.com/abachaa/MEDIQA-Chat-2023 |
+| ACI-BENCH | Optional Layer C.3 full-visit dialogue-to-note proxy | https://github.com/wyim/aci-bench |
+| MTSamples | Normalization stress-test source family | https://mtsamples.com/ |
+| MIMIC-III demo | Structured EHR workflow validation | https://physionet.org/content/mimiciii-demo/1.4/ |
+| MIMIC-IV-Ext-BHC | Future real EHR note-level benchmark | https://physionet.org/content/labelled-notes-hospital-course/ |
+| MIMIC-IV-Note | Future governed clinical note corpus | https://physionet.org/content/mimic-iv-note/ |
+
 ## Setup
 
 Install dependencies from the single root requirements file:

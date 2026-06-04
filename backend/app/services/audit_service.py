@@ -110,7 +110,7 @@ class AuditService:
     def _require_list_permission(role_code: str | None, *, has_filter: bool) -> None:
         if role_code in GLOBAL_AUDIT_ROLES:
             return
-        if role_code == LIMITED_AUDIT_ROLE and has_filter:
+        if role_code == LIMITED_AUDIT_ROLE:
             return
         raise AuditPermissionError("This role cannot view global audit logs.")
 

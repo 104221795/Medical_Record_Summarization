@@ -1,6 +1,8 @@
 import hashlib
 import math
+import os
 import re
+from pathlib import Path
 from abc import ABC, abstractmethod
 
 
@@ -87,4 +89,65 @@ class FastEmbedProvider(EmbeddingProvider):
     def _prefix(self, text: str, role: str) -> str:
         if "e5" in self.model_name.casefold():
             return f"{role}: {text}"
+        return text
+
+
+class SentenceTransformersEmbeddingProvider(EmbeddingProvider):
+    """SentenceTransformers embeddings for local evaluation and production-style retrieval."""
+
+    name = "sentence-transformers"
+
+    def __init__(
+        self,
+        model_name: str,
+        *,
+        cache_folder: str | Path | None = None,
+        local_files_only: bool = True,
+    ):
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError as exc:
+            raise RuntimeError(
+                "sentence-transformers is not installed. Install requirements.txt "
+                "or use embedding_provider=fastembed."
+            ) from exc
+        cache = str(cache_folder or os.environ.get("HF_HOME") or "D:/hf_cache")
+        try:
+            self._model = SentenceTransformer(
+                model_name,
+                cache_folder=cache,
+                local_files_only=local_files_only,
+            )
+        except TypeError:
+            if local_files_only:
+                raise RuntimeError(
+                    "Installed sentence-transformers does not support local_files_only; "
+                    "cache the model first or use a fastembed backend."
+                )
+            self._model = SentenceTransformer(model_name, cache_folder=cache)
+        self.model_name = model_name
+        self.dimension = self._embedding_dimension()
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        inputs = [self._prefix(text, "passage") for text in texts]
+        return self._model.encode(inputs, normalize_embeddings=True, show_progress_bar=False).tolist()
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._model.encode(
+            [self._prefix(text, "query")],
+            normalize_embeddings=True,
+            show_progress_bar=False,
+        )[0].tolist()
+
+    def _embedding_dimension(self) -> int:
+        if hasattr(self._model, "get_embedding_dimension"):
+            return int(self._model.get_embedding_dimension() or 0)
+        return int(self._model.get_sentence_embedding_dimension() or 0)
+
+    def _prefix(self, text: str, role: str) -> str:
+        normalized = self.model_name.casefold()
+        if "e5" in normalized:
+            return f"{role}: {text}"
+        if "bge" in normalized and role == "query":
+            return f"Represent this sentence for searching relevant passages: {text}"
         return text

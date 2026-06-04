@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, status
 
 from ..dependencies import RequestContext, get_evaluation_service, get_request_context
 from ..persistence_schemas import (
+    BenchmarkResultsResponse,
     BenchmarkStatusResponse,
     EvaluationStatusResponse,
     FunctionalValidationResponse,
@@ -54,6 +55,14 @@ def benchmark_status(
     service: Annotated[EvaluationService, Depends(get_evaluation_service)],
 ) -> BenchmarkStatusResponse:
     return service.benchmark_status()
+
+
+@router.get("/benchmark/results", response_model=BenchmarkResultsResponse)
+def benchmark_results(
+    _context: Annotated[RequestContext, Depends(get_request_context)],
+    service: Annotated[EvaluationService, Depends(get_evaluation_service)],
+) -> BenchmarkResultsResponse:
+    return service.benchmark_results()
 
 
 @router.post(

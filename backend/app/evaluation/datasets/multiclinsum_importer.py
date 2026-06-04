@@ -268,11 +268,12 @@ def main() -> None:
     parser.add_argument("--zip", dest="zip_path", default=None)
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT_PATH))
     parser.add_argument("--limit", type=int, default=500)
+    parser.add_argument("--full", action="store_true", help="Import all available rows instead of the default cap.")
     args = parser.parse_args()
     rows = import_multiclinsum_dataset(
         zip_path=args.zip_path,
         output_path=args.output,
-        limit=args.limit,
+        limit=None if args.full else args.limit,
     )
     print(f"Wrote {len(rows)} MultiClinSum rows to {args.output}")
 

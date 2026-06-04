@@ -34,11 +34,11 @@ MUTABLE_REVIEW_STATUSES = {
     SummaryStatus.DRAFT,
     SummaryStatus.UNDER_REVIEW,
     SummaryStatus.EDITED,
+    SummaryStatus.APPROVED,
+    SummaryStatus.REJECTED,
 }
 START_REVIEW_STATUSES = {SummaryStatus.DRAFT, SummaryStatus.EDITED}
 LOCKED_STATUSES = {
-    SummaryStatus.APPROVED,
-    SummaryStatus.REJECTED,
     SummaryStatus.ARCHIVED,
 }
 
@@ -73,14 +73,18 @@ class ReviewService:
             raise ReviewTransitionError(
                 f"Cannot start review for a summary in {previous.value} status."
             )
-        if previous not in START_REVIEW_STATUSES and previous != SummaryStatus.UNDER_REVIEW:
+        if previous not in START_REVIEW_STATUSES and previous not in {
+            SummaryStatus.UNDER_REVIEW,
+            SummaryStatus.APPROVED,
+            SummaryStatus.REJECTED,
+        }:
             raise ReviewTransitionError(
                 f"Cannot start review from {previous.value} status."
             )
 
         actor = self._resolve_actor(actor_external_id, role_code)
         now = datetime.now(UTC)
-        if previous != SummaryStatus.UNDER_REVIEW:
+        if previous in START_REVIEW_STATUSES:
             summary.status = SummaryStatus.UNDER_REVIEW
         summary.reviewed_by = actor.user_id
         summary.reviewed_at = now
@@ -133,6 +137,10 @@ class ReviewService:
         summary.status = SummaryStatus.EDITED
         summary.reviewed_by = actor.user_id
         summary.reviewed_at = now
+        summary.approved_by = None
+        summary.approved_at = None
+        summary.rejected_at = None
+        summary.rejection_reason = None
         review = self._add_review(
             summary,
             actor,

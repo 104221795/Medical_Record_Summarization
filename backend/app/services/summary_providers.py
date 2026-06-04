@@ -216,7 +216,7 @@ class BartProvider(HuggingFaceTextProvider):
 
 class PegasusProvider(HuggingFaceTextProvider):
     provider_name = "pegasus"
-    default_model_name = "google/pegasus-xsum"
+    default_model_name = "google/pegasus-pubmed"
 
     def __init__(self, **kwargs: Any):
         kwargs.setdefault(
@@ -230,6 +230,42 @@ class PegasusProvider(HuggingFaceTextProvider):
 
         self._summarizer = PegasusSummarizer(model_name=self.model_name, device=self.device)
         return self._summarizer
+
+
+class PegasusPubMedProvider(PegasusProvider):
+    provider_name = "pegasus_pubmed"
+    default_model_name = "google/pegasus-pubmed"
+
+    def __init__(self, **kwargs: Any):
+        kwargs.setdefault(
+            "model_name",
+            os.environ.get("PEGASUS_PUBMED_MODEL_NAME") or "google/pegasus-pubmed",
+        )
+        super().__init__(**kwargs)
+
+
+class PegasusCnnDailyMailProvider(PegasusProvider):
+    provider_name = "pegasus_cnn_dailymail"
+    default_model_name = "google/pegasus-cnn_dailymail"
+
+    def __init__(self, **kwargs: Any):
+        kwargs.setdefault(
+            "model_name",
+            os.environ.get("PEGASUS_CNN_DAILYMAIL_MODEL_NAME") or "google/pegasus-cnn_dailymail",
+        )
+        super().__init__(**kwargs)
+
+
+class PegasusXSumProvider(PegasusProvider):
+    provider_name = "pegasus_xsum"
+    default_model_name = "google/pegasus-xsum"
+
+    def __init__(self, **kwargs: Any):
+        kwargs.setdefault(
+            "model_name",
+            os.environ.get("PEGASUS_XSUM_MODEL_NAME") or "google/pegasus-xsum",
+        )
+        super().__init__(**kwargs)
 
 
 def _real_baselines_enabled() -> bool:

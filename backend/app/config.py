@@ -22,7 +22,10 @@ class Settings(BaseSettings):
     environment: Literal["development", "test", "production"] = "development"
     api_prefix: str = "/api/v1"
 
-    database_url: str = "sqlite:///./var/clin_summ.db"
+    database_url: str = Field(
+        default="sqlite:///./var/clin_summ.db",
+        validation_alias=AliasChoices("RAG_DATABASE_URL", "DATABASE_URL"),
+    )
     database_echo: bool = False
 
     qdrant_url: str | None = None
@@ -30,9 +33,11 @@ class Settings(BaseSettings):
     qdrant_path: Path | None = None
     qdrant_collection: str = "clinical_record_chunks"
 
-    embedding_provider: Literal["hashing", "fastembed"] = "hashing"
+    embedding_provider: Literal["hashing", "fastembed", "sentence_transformers"] = "hashing"
     embedding_dimension: int = 384
     fastembed_model: str = "intfloat/multilingual-e5-large"
+    sentence_transformers_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    sentence_transformers_local_files_only: bool = True
     ort_execution_provider: Literal[
         "CPUExecutionProvider",
         "OpenVINOExecutionProvider",
@@ -46,6 +51,12 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("RAG_GEMINI_API_KEY", "GEMINI_API_KEY"),
     )
     gemini_model: str = "gemini-2.5-flash-lite"
+    google_client_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("RAG_GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_ID"),
+    )
+    auth_secret_key: SecretStr = Field(default=SecretStr("dev-change-me-auth-secret"))
+    auth_token_ttl_minutes: int = 60 * 12
 
     llm_provider: Literal["mock", "deterministic", "local", "external", "gemini"] = "deterministic"
     llm_mock_behavior: Literal["normal", "invalid_json", "unsupported_claim"] = "normal"

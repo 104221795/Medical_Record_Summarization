@@ -13,7 +13,12 @@ from ..schemas import (
     SummaryResponse,
 )
 from .chunking import ClinicalChunker
-from .embeddings import EmbeddingProvider, FastEmbedProvider, HashingEmbeddingProvider
+from .embeddings import (
+    EmbeddingProvider,
+    FastEmbedProvider,
+    HashingEmbeddingProvider,
+    SentenceTransformersEmbeddingProvider,
+)
 from .generators import ExtractiveGenerator, GeminiGroundedGenerator, SummaryGenerator
 from .guardrails import GroundingGuardrail
 from .telemetry import SummaryTelemetry, SummaryTelemetryEvent, TokenEstimator, build_telemetry
@@ -179,6 +184,11 @@ def build_rag_service(settings: Settings) -> RagService:
             settings.fastembed_model,
             settings.ort_execution_provider,
             settings.ort_intra_op_threads,
+        )
+    elif settings.embedding_provider == "sentence_transformers":
+        embedding_provider = SentenceTransformersEmbeddingProvider(
+            settings.sentence_transformers_model,
+            local_files_only=settings.sentence_transformers_local_files_only,
         )
     else:
         embedding_provider = HashingEmbeddingProvider(settings.embedding_dimension)

@@ -1,4 +1,5 @@
 from pathlib import Path
+import logging
 
 from fastapi import FastAPI, Request, status
 from fastapi.responses import FileResponse, JSONResponse
@@ -9,6 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from .config import Settings, get_settings
 from .db.session import build_engine_from_settings, create_session_factory
 from .routers.audit import router as audit_router
+from .routers.auth import router as auth_router
 from .routers.citations import router as citation_router
 from .routers.clinical import router as clinical_router
 from .routers.claims import router as claim_router
@@ -21,6 +23,7 @@ from .routers.ingestion import router as ingestion_router
 from .routers.metrics import router as metrics_router
 from .routers.multimodal import router as multimodal_router
 from .routers.patients import router as patient_router
+from .routers.providers import router as provider_router
 from .routers.rag import router as rag_router
 from .routers.summaries import router as summary_router
 from .schemas import HealthResponse
@@ -35,6 +38,7 @@ DOCTOR_UI_DIR = Path(__file__).resolve().parents[1] / "ui" / "doctor"
 ADMIN_UI_DIR = Path(__file__).resolve().parents[1] / "ui" / "admin"
 EVALUATION_UI_DIR = Path(__file__).resolve().parents[1] / "ui" / "evaluation"
 UNIFIED_UI_DIR = Path(__file__).resolve().parents[1] / "ui" / "unified"
+logger = logging.getLogger(__name__)
 
 
 def create_app(
@@ -58,6 +62,7 @@ def create_app(
         build_engine_from_settings(configured_settings)
     )
     app.state.rag_service = rag_service or build_rag_service(configured_settings)
+    app.state.summary_model_providers = {}
     app.state.clinical_pipeline_service = ClinicalSummaryPipelineService(app.state.rag_service)
     app.state.multimodal_service = multimodal_service or MultimodalService(configured_settings)
     app.state.fhir_mapper_service = fhir_mapper_service or FhirMapperService(configured_settings)
@@ -77,6 +82,7 @@ def create_app(
         )
 
     app.include_router(rag_router, prefix=configured_settings.api_prefix)
+    app.include_router(auth_router, prefix=configured_settings.api_prefix)
     app.include_router(patient_router, prefix=configured_settings.api_prefix)
     app.include_router(encounter_router, prefix=configured_settings.api_prefix)
     app.include_router(document_router, prefix=configured_settings.api_prefix)
@@ -84,6 +90,7 @@ def create_app(
     app.include_router(audit_router, prefix=configured_settings.api_prefix)
     app.include_router(metrics_router, prefix=configured_settings.api_prefix)
     app.include_router(summary_router, prefix=configured_settings.api_prefix)
+    app.include_router(provider_router, prefix=configured_settings.api_prefix)
     app.include_router(claim_router, prefix=configured_settings.api_prefix)
     app.include_router(citation_router, prefix=configured_settings.api_prefix)
     app.include_router(demo_router, prefix=configured_settings.api_prefix)
@@ -91,6 +98,7 @@ def create_app(
     app.include_router(clinical_router, prefix=configured_settings.api_prefix)
     app.include_router(multimodal_router, prefix=configured_settings.api_prefix)
     app.include_router(fhir_router, prefix=configured_settings.api_prefix)
+    _log_registered_auth_routes(app)
     app.mount("/citation-assets", StaticFiles(directory=CITATION_UI_DIR), name="citation-assets")
     app.mount("/doctor-assets", StaticFiles(directory=DOCTOR_UI_DIR), name="doctor-assets")
     app.mount("/admin-assets", StaticFiles(directory=ADMIN_UI_DIR), name="admin-assets")
@@ -141,6 +149,16 @@ def create_app(
         )
 
     return app
+
+
+def _log_registered_auth_routes(app: FastAPI) -> None:
+    api_prefix = getattr(app.state.settings, "api_prefix", "/api/v1")
+    auth_routes = sorted(
+        route.path
+        for route in app.routes
+        if getattr(route, "path", "").startswith(f"{api_prefix}/auth")
+    )
+    logger.info("Registered authentication routes: %s", ", ".join(auth_routes))
 
 
 app = create_app()

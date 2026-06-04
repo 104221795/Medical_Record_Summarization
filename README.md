@@ -8,6 +8,158 @@ monitoring, and a multi-layer evaluation strategy.
 The implementation is a local/development prototype. It is not a production
 HIS/EMR integration and must use de-identified or mock data by default.
 
+## Project Snapshot
+
+**Medical Record Summarization** is a role-based clinical NLP platform prototype
+for generating citation-grounded draft summaries from de-identified/mock patient
+records. The system separates AI draft generation from doctor review, keeps
+clinical evidence visible, records audit events, and provides admin-facing model
+evaluation and dataset governance dashboards.
+
+Proxy evaluation only. These results do not demonstrate clinical safety,
+clinical effectiveness, or real-world healthcare performance. Real EHR
+evaluation requires credentialed datasets such as MIMIC-IV-Note or MIMIC-IV-BHC
+under approved governance processes.
+
+## Tech Stack
+
+| Layer | Technology |
+| --- | --- |
+| Frontend | React, JSX, Vite, React Router, modular component/layout structure |
+| Backend API | FastAPI, Pydantic, SQLAlchemy, Alembic |
+| Persistence | PostgreSQL via `DATABASE_URL`/`RAG_DATABASE_URL`, SQLite fallback for quick local checks |
+| Clinical data model | FHIR-like ingestion models, SQLAlchemy entities for patients, encounters, documents, chunks, summaries, reviews, audit logs |
+| Retrieval | Configurable embedding backend, default `sentence-transformers/all-MiniLM-L6-v2` |
+| Summarization providers | Deterministic baseline, Gemini governed provider, BART, Pegasus PubMed, Pegasus CNN/DailyMail, optional Pegasus XSum |
+| Model execution | Hugging Face `AutoTokenizer` + `AutoModelForSeq2SeqLM` + `model.generate()`; no summarization pipeline for BART/Pegasus |
+| Evaluation | ROUGE metrics, per-record predictions, model comparison CSV, evaluation reports, dataset governance workflow |
+| Local model/cache | Hugging Face cache on `D:\hf_cache` |
+| Dev/runtime | PowerShell on Windows, Docker PostgreSQL, Python virtualenv |
+
+## Architecture
+
+```mermaid
+flowchart LR
+    User[Doctor / Admin User] --> FE[React Role-Based Frontend]
+    FE --> Auth[Demo Auth + Header RBAC]
+    FE --> API[FastAPI Backend]
+
+    API --> Patients[Patient / Encounter / Document APIs]
+    API --> Summary[Summary Generation Service]
+    API --> Review[Human Review Service]
+    API --> Audit[Audit Service]
+    API --> Eval[Evaluation Service]
+    API --> Gateway[Summary Provider Gateway]
+
+    Patients --> DB[(PostgreSQL / SQLite)]
+    Summary --> Retrieval[Retrieval + Evidence Context]
+    Retrieval --> Embeddings[Sentence-Transformers Embeddings]
+    Summary --> Gateway
+    Gateway --> Deterministic[Deterministic]
+    Gateway --> Gemini[Gemini Optional]
+    Gateway --> BART[BART]
+    Gateway --> Pegasus[Pegasus PubMed / CNN-DM / XSum]
+
+    Review --> DB
+    Audit --> DB
+    Eval --> Outputs[outputs/evaluation + D:/clin_summ_outputs]
+    Eval --> Reports[Reports / CSV / JSONL]
+```
+
+## Highlight Features
+
+- **Doctor workspace:** patient list, patient detail, clinical timeline, document viewer, summary workspace, citation panel, claim validation, unsupported-claim panel, review actions, audit history.
+- **Admin workspace:** operational dashboard, model evaluation dashboard, benchmark results page, dataset governance explanation, audit logs, settings.
+- **Provider selection:** frontend reads provider metadata from `GET /api/v1/providers` and can send deterministic, Gemini, BART, Pegasus PubMed, Pegasus CNN/DailyMail, or optional Pegasus XSum.
+- **Review lifecycle:** generated draft -> start review -> edit/save -> approve or reject -> audit log.
+- **Citation and safety posture:** important claims stay linked to evidence or flagged as unsupported/conflicting/insufficient.
+- **Dataset governance:** separates Synthea/SyntheticMass ingestion validation, MultiClinSum proxy benchmark, future MTS-Dialog/MEDIQA-Sum cross-dataset checks, and future credentialed MIMIC evaluation.
+- **Evaluation visibility:** model comparison table, ROUGE charts, records-evaluated charts, failure-pattern charts, prediction-file availability, proxy warning, Pegasus domain-fit explanation, benchmark artifact paths.
+- **PostgreSQL-ready persistence:** users, summaries, reviews, audit logs, patients, documents, and evaluation metadata can persist through SQLAlchemy/Alembic.
+
+## Current Frontend Routes
+
+| Area | Route | Purpose |
+| --- | --- | --- |
+| Public | `/` | Home page |
+| Public | `/about` | Mission, architecture, governance explanation |
+| Public | `/login` | Demo role-aware login |
+| Public | `/forgot-password` | Demo reset flow |
+| Doctor | `/doctor` or `/doctor/dashboard` | Doctor dashboard |
+| Doctor | `/doctor/patients` | Patient list |
+| Doctor | `/doctor/patients/:patientId` | Patient detail and summary workspace |
+| Doctor | `/doctor/review` | Summary review workspace |
+| Doctor | `/doctor/audit` | Doctor audit history |
+| Admin | `/admin` or `/admin/dashboard` | Admin dashboard |
+| Admin | `/admin/evaluation` | Operational evaluation dashboard |
+| Admin | `/admin/evaluation/benchmark` | Benchmark artifacts and detailed model results |
+| Admin | `/admin/datasets` | Dataset governance |
+| Admin | `/admin/audit` | Audit logs |
+| Admin | `/admin/settings` | Settings |
+
+## Key Backend APIs
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/v1/auth/login` | Create demo doctor/admin session |
+| `POST /api/v1/auth/logout` | Clear demo session on client |
+| `GET /api/v1/providers` | List summary providers, model names, domain fit, and readiness status |
+| `GET /api/v1/patients` | List persisted de-identified/mock patients |
+| `GET /api/v1/patients/{patient_id}` | Patient detail |
+| `POST /api/v1/patients/{patient_id}/summaries/generate` | Generate draft summary with selected provider |
+| `POST /api/v1/summaries/{summary_id}/review/start` | Start doctor review |
+| `PATCH /api/v1/summaries/{summary_id}/edit` | Save edited draft |
+| `POST /api/v1/summaries/{summary_id}/approve` | Approve reviewed summary |
+| `POST /api/v1/summaries/{summary_id}/reject` | Reject reviewed summary |
+| `GET /api/v1/audit/logs` | View audit history |
+| `GET /api/v1/evaluation/benchmark/results` | Discover benchmark folders, merge model comparison CSV with prediction JSONL metrics, and return benchmark artifacts |
+
+## Evaluation Outputs
+
+The controlled summarization benchmark writes local artifacts such as:
+
+```text
+D:\clin_summ_outputs\medium_benchmark_bart_pegasus\
+  evaluation_run_manifest.json
+  model_comparison.csv
+  per_record_metrics.csv
+  deterministic_predictions.jsonl
+  bart_predictions.jsonl
+  pegasus_predictions.jsonl
+  pegasus_pubmed_predictions.jsonl
+  pegasus_cnn_dailymail_predictions.jsonl
+  all_predictions.jsonl
+  failure_analysis.md
+  EVALUATION_REPORT.md
+```
+
+Admin Evaluation and Benchmark Results pages read these outputs through
+`GET /api/v1/evaluation/benchmark/results`. The backend discovers these folders,
+prefers the newest valid run with a 200-record Pegasus PubMed prediction file,
+and merges prediction JSONL metrics into the dashboard response when a model is
+missing from `model_comparison.csv`.
+
+Current local benchmark folders inspected by the dashboard:
+
+```text
+D:\clin_summ_outputs\medium_benchmark
+D:\clin_summ_outputs\medium_benchmark_bart_pegasus
+D:\clin_summ_outputs\performance_benchmark
+```
+
+Latest valid local medium benchmark snapshot, updated June 4, 2026:
+
+| Provider | Checkpoint | Records | ROUGE-1 | ROUGE-2 | ROUGE-L | Notes |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| deterministic | `deterministic_sentence_baseline` | 50/50 | 0.3138 | 0.1504 | 0.2407 | Fast extractive baseline |
+| BART | `facebook/bart-large-cnn` | 200/200 | 0.3379 | 0.1615 | 0.2533 | Best ROUGE-L in current proxy run |
+| Pegasus XSum | `google/pegasus-xsum` | 200/200 | 0.1804 | 0.0512 | 0.1340 | Accepted with static positional embedding warning |
+| Pegasus PubMed | `google/pegasus-pubmed` | 200/200 | 0.3301 | 0.1099 | 0.2108 | Loaded from `pegasus_pubmed_predictions.jsonl` |
+| Pegasus CNN/DailyMail | `google/pegasus-cnn_dailymail` | 104/104 | 0.2810 | 0.1499 | 0.2303 | Partial auxiliary comparison file |
+
+These are proxy/open benchmark numbers only. They are not evidence of clinical
+safety or real EHR performance.
+
 ## Quick Start
 
 Use one dependency file for the whole prototype:
@@ -20,7 +172,7 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-Then initialize the local database and start the API:
+Then initialize the local database and start the API with SQLite:
 
 ```powershell
 $env:RAG_DATABASE_URL = "sqlite:///./var/clin_summ.db"
@@ -29,15 +181,60 @@ python -m backend.app.db.seed
 python -m uvicorn backend.app.main:app --reload --port 8080
 ```
 
+For PostgreSQL instead of SQLite, use `RAG_DATABASE_URL=postgresql+psycopg://...` and follow [docs/POSTGRES_SETUP.md](docs/POSTGRES_SETUP.md).
+
+Recommended PostgreSQL local setup uses host port `5433` to avoid collisions
+with native Windows PostgreSQL services on `5432`:
+
+```powershell
+docker run --name clin-summ-postgres `
+  -e POSTGRES_USER=clin_summ `
+  -e POSTGRES_PASSWORD=clin_summ_dev `
+  -e POSTGRES_DB=clin_summ `
+  -p 5433:5432 `
+  -v clin_summ_pgdata:/var/lib/postgresql/data `
+  -d postgres:16
+
+$env:DATABASE_URL = "postgresql+psycopg://clin_summ:clin_summ_dev@127.0.0.1:5433/clin_summ"
+python -m alembic -c alembic.ini upgrade head
+python -m backend.app.db.seed
+python -m uvicorn backend.app.main:app --reload --port 8080
+```
+
+Run the React frontend:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+The Vite dev server proxies `/api` to the FastAPI backend on port `8080`.
+Keep both terminals open while using the React app:
+
+```text
+Backend:  http://127.0.0.1:8080
+Frontend: http://127.0.0.1:5173
+```
+
+Build the React frontend:
+
+```powershell
+cd frontend
+npm run build
+```
+
 Main local URLs:
 
 | Surface | URL |
 | --- | --- |
 | API docs | `http://127.0.0.1:8080/docs` |
+| React frontend | `http://127.0.0.1:5173` when `npm run dev` is running |
+| React Benchmark Results | `http://127.0.0.1:5173/admin/evaluation/benchmark` |
 | Unified Demo Console | `http://127.0.0.1:8080/demo-console` |
 | Doctor UI | `http://127.0.0.1:8080/doctor-demo` |
 | Admin dashboard | `http://127.0.0.1:8080/admin/dashboard` |
-| Evaluation center | `http://127.0.0.1:8080/evaluation-demo` |
+| Static Evaluation center | `http://127.0.0.1:8080/evaluation-demo` |
 | Citation demo | `http://127.0.0.1:8080/citation-demo` |
 
 ## Repository Guide
@@ -212,7 +409,7 @@ The seed command is idempotent and creates de-identified sandbox data:
 Use PostgreSQL when you want to test the production-style database backend:
 
 ```powershell
-$env:RAG_DATABASE_URL = "postgresql+psycopg://<user>:<password>@localhost:5432/clin_summ"
+$env:DATABASE_URL = "postgresql+psycopg://clin_summ:clin_summ_dev@127.0.0.1:5433/clin_summ"
 
 python -m alembic -c alembic.ini upgrade head
 python -m backend.app.db.seed
@@ -230,6 +427,10 @@ $env:RAG_DATABASE_URL = "sqlite:///./var/clin_summ.db"
 python -m uvicorn backend.app.main:app --reload --port 8080
 ```
 
+If you changed backend Python code or benchmark discovery logic, restart the
+backend process and hard-refresh the browser (`Ctrl + F5`). A running Uvicorn
+process can otherwise keep serving the old response shape.
+
 Backend URLs:
 
 - OpenAPI: `http://127.0.0.1:8080/docs`
@@ -239,6 +440,11 @@ Backend URLs:
 - Admin dashboard: `http://127.0.0.1:8080/admin/dashboard`
 - Evaluation & Demo Control Center: `http://127.0.0.1:8080/evaluation-demo`
 - Citation demo: `http://127.0.0.1:8080/citation-demo`
+
+React development URLs:
+
+- App root: `http://127.0.0.1:5173`
+- Admin benchmark dashboard: `http://127.0.0.1:5173/admin/evaluation/benchmark`
 
 If the app reports that the schema is not initialized, run:
 
@@ -333,15 +539,24 @@ or patient names.
 2. Open `http://127.0.0.1:8080/evaluation-demo`.
 3. Review golden path, provider, citation/safety, HITL, and monitoring status.
 4. Click `Run Functional Validation` to execute the mock/de-identified workflow check.
-5. Confirm the real EHR note benchmark layer says `pending_dataset` until
+5. Review the model benchmark dashboard. It reads discovered benchmark folders,
+   shows the selected output directory, charts ROUGE and records evaluated, and
+   displays Pegasus PubMed when `pegasus_pubmed_predictions.jsonl` exists.
+6. Confirm the real EHR note benchmark layer says `pending_dataset` until
    `data/processed/ehr_benchmark/test.jsonl` exists.
-6. Submit human evaluation scores for a generated summary ID if you want demo
+7. Submit human evaluation scores for a generated summary ID if you want demo
    usability feedback.
 
 Layer A functional validation uses mock/de-identified data only. The real EHR
 note benchmark layer remains pending until credentialed MIMIC-IV-Note or
 MIMIC-IV-Ext-BHC data is processed locally. Mock data is never used to claim
 real benchmark performance.
+
+For the richer React dashboard, run the frontend and open:
+
+```text
+http://127.0.0.1:5173/admin/evaluation/benchmark
+```
 
 ## Final Demo Cases
 
@@ -485,6 +700,161 @@ installed.
 
 Generated baseline files under `results/` are ignored by git.
 
+## Evaluation Pipeline
+
+The full layered evaluation pipeline is the recommended entrypoint for proxy
+evaluation runs. It validates the processed JSONL input, runs dataset governance
+and data-quality routing, checks chunking/retrieval sanity signals, runs the
+selected providers, writes per-record predictions, writes model comparison
+metrics, prepares a human-review CSV, and generates a mentor-readable Markdown
+report.
+
+All outputs include this warning:
+
+```text
+Proxy evaluation only. Do not claim real EHR benchmark or clinical performance from these outputs.
+Proxy evaluation only. These results do not demonstrate clinical safety, clinical effectiveness, or real-world healthcare performance. Real EHR evaluation requires credentialed datasets such as MIMIC-IV-Note or MIMIC-IV-BHC under approved governance processes.
+```
+
+Default output directory:
+
+```text
+D:\clin_summ_outputs\
+```
+
+For repository-local smoke runs, pass
+`--output-dir outputs/evaluation/full_pipeline` explicitly.
+
+The runner pins local cache/output locations to D drive and fails if Hugging
+Face cache variables point to C drive:
+
+```powershell
+$env:HF_HOME = "D:\hf_cache"
+$env:HF_HUB_CACHE = "D:\hf_cache\hub"
+$env:HF_DATASETS_CACHE = "D:\hf_cache\datasets"
+$env:TRANSFORMERS_CACHE = "D:\hf_cache\hub"
+$env:CLIN_SUMM_DATA_DIR = "D:\clin_summ_data"
+$env:CLIN_SUMM_MODEL_DIR = "D:\clin_summ_models"
+$env:CLIN_SUMM_OUTPUT_DIR = "D:\clin_summ_outputs"
+```
+
+Expected files:
+
+```text
+evaluation_run_manifest.json
+run_manifest.json
+dataset_profile.json
+quality_metrics.json
+retrieval_metrics.json
+model_manifest.json
+model_comparison.csv
+all_predictions.jsonl
+deterministic_predictions.jsonl
+bart_predictions.jsonl
+pegasus_predictions.jsonl
+human_review_template.csv
+failure_analysis.md
+EVALUATION_REPORT.md
+run.log
+data_governance/dataset_manifest.json
+data_governance/benchmark_manifest.jsonl
+data_governance/warning_manifest.jsonl
+data_governance/rejected_manifest.jsonl
+data_governance/chunking_manifest.json
+```
+
+Dry run without downloads:
+
+```powershell
+python -m scripts.run_full_evaluation_pipeline `
+  --dataset multiclinsum `
+  --input data/processed/multiclinsum/multiclinsum_train_smoke.jsonl `
+  --models deterministic,bart,pegasus `
+  --limit 3 `
+  --output-dir D:\clin_summ_outputs\full_pipeline `
+  --dry-run
+```
+
+Deterministic smoke test:
+
+```powershell
+python -m scripts.run_full_evaluation_pipeline `
+  --dataset multiclinsum `
+  --input data/processed/multiclinsum/multiclinsum_train_smoke.jsonl `
+  --models deterministic `
+  --limit 3 `
+  --output-dir D:\clin_summ_outputs\full_pipeline
+```
+
+BART run, intentionally allowing Hugging Face model loading:
+
+```powershell
+python -m scripts.run_full_evaluation_pipeline `
+  --dataset multiclinsum `
+  --input data/processed/multiclinsum/multiclinsum_train_smoke.jsonl `
+  --models bart `
+  --limit 3 `
+  --output-dir D:\clin_summ_outputs\full_pipeline `
+  --allow-model-downloads `
+  --include-bertscore
+```
+
+Pegasus run, intentionally allowing Hugging Face model loading:
+
+```powershell
+python -m scripts.run_full_evaluation_pipeline `
+  --dataset multiclinsum `
+  --input data/processed/multiclinsum/multiclinsum_train_smoke.jsonl `
+  --models pegasus `
+  --limit 3 `
+  --output-dir D:\clin_summ_outputs\full_pipeline `
+  --allow-model-downloads `
+  --include-bertscore
+```
+
+Full proxy run:
+
+```powershell
+python -m scripts.run_full_evaluation_pipeline `
+  --dataset multiclinsum `
+  --input data/processed/multiclinsum/multiclinsum_train_smoke.jsonl `
+  --models deterministic,bart,pegasus `
+  --limit 3 `
+  --output-dir D:\clin_summ_outputs\full_pipeline
+```
+
+Gemini is optional and disabled unless explicitly enabled with governance
+environment flags:
+
+```powershell
+$env:RUN_GEMINI_EVALUATION = "1"
+$env:RAG_LLM_PROVIDER = "gemini"
+$env:RAG_LLM_EXTERNAL_ENABLED = "true"
+$env:RAG_LLM_ALLOW_PHI_EXTERNAL = "true"
+$env:RAG_GEMINI_API_KEY = "<google-ai-studio-api-key>"
+
+python -m scripts.run_full_evaluation_pipeline `
+  --dataset multiclinsum `
+  --input data/processed/multiclinsum/multiclinsum_train_smoke.jsonl `
+  --models deterministic,gemini `
+  --limit 3 `
+  --output-dir D:\clin_summ_outputs\full_pipeline `
+  --allow-gemini
+```
+
+Read results in:
+
+- `D:\clin_summ_outputs\full_pipeline\EVALUATION_REPORT.md`
+- `D:\clin_summ_outputs\full_pipeline\model_comparison.csv`
+- `D:\clin_summ_outputs\full_pipeline\all_predictions.jsonl`
+- `D:\clin_summ_outputs\full_pipeline\failure_analysis.md`
+- `D:\clin_summ_outputs\full_pipeline\data_governance\quality_report.md`
+- `D:\clin_summ_outputs\full_pipeline\run.log`
+
+BART/Pegasus real generation is blocked by default. Without
+`--allow-model-downloads` or `RUN_REAL_BASELINES=1`, those providers are written
+as skipped rows instead of downloading models unexpectedly.
+
 ## Unified Provider Proxy Evaluation
 
 Use the unified provider evaluation runner when you want one comparison pass
@@ -586,7 +956,10 @@ Supported `model_provider` values:
 - `deterministic`: default safe local workflow for development, tests, and demos
 - `gemini`: governed external Gemini JSON provider
 - `bart`: Hugging Face BART baseline provider
-- `pegasus`: Hugging Face Pegasus baseline provider
+- `pegasus`: generic Hugging Face Pegasus baseline provider
+- `pegasus_pubmed`: Pegasus PubMed checkpoint, preferred Pegasus option for medical/scientific proxy runs
+- `pegasus_cnn_dailymail`: Pegasus CNN/DailyMail auxiliary comparison checkpoint
+- `pegasus_xsum`: optional Pegasus XSum comparison checkpoint
 
 All providers persist through the same internal path: draft summary, sections,
 claims, citations, safety calculation, `model_runs`, audit logs, and the doctor
@@ -683,7 +1056,10 @@ loading:
 python -m pip install -r requirements.txt
 $env:RUN_REAL_BASELINES = "1"
 $env:BART_MODEL_NAME = "facebook/bart-large-cnn"
-$env:PEGASUS_MODEL_NAME = "google/pegasus-xsum"
+$env:PEGASUS_MODEL_NAME = "google/pegasus-pubmed"
+$env:PEGASUS_PUBMED_MODEL_NAME = "google/pegasus-pubmed"
+$env:PEGASUS_CNN_DAILYMAIL_MODEL_NAME = "google/pegasus-cnn_dailymail"
+$env:PEGASUS_XSUM_MODEL_NAME = "google/pegasus-xsum"
 ```
 
 Then request the provider:
@@ -705,6 +1081,20 @@ Then request the provider:
   "summary_type": "patient_snapshot",
   "language": "vi",
   "model_provider": "pegasus",
+  "options": {
+    "require_citations": true,
+    "include_safety_check": true
+  }
+}
+```
+
+Preferred Pegasus PubMed request:
+
+```json
+{
+  "summary_type": "patient_snapshot",
+  "language": "vi",
+  "model_provider": "pegasus_pubmed",
   "options": {
     "require_citations": true,
     "include_safety_check": true
@@ -899,6 +1289,58 @@ button in local development.
 
 The dashboard does not fake data. Generate/review a summary in the Doctor UI
 first, then reload `/admin/dashboard`.
+
+### Benchmark dashboard does not show Pegasus PubMed
+
+Pegasus PubMed is loaded from:
+
+```text
+D:\clin_summ_outputs\medium_benchmark_bart_pegasus\pegasus_pubmed_predictions.jsonl
+```
+
+The backend endpoint merges that prediction JSONL into the dashboard response:
+
+```http
+GET /api/v1/evaluation/benchmark/results
+```
+
+If the UI does not show Pegasus PubMed:
+
+1. Restart the backend so it loads the latest `evaluation_service.py`.
+2. Hard-refresh the browser with `Ctrl + F5`.
+3. Make sure you are opening the intended UI:
+   - React dashboard: `http://127.0.0.1:5173/admin/evaluation/benchmark`
+   - Static evaluation demo: `http://127.0.0.1:8080/evaluation-demo`
+4. Check that the endpoint response has `selected_output_dir` and a
+   `pegasus_pubmed` model row.
+
+PowerShell check:
+
+```powershell
+$headers = @{
+  "X-Tenant-ID" = "sandbox"
+  "X-User-ID" = "clinical-admin-demo"
+  "X-Role-Code" = "clinical_admin"
+}
+
+$r = Invoke-RestMethod `
+  -Uri "http://127.0.0.1:8080/api/v1/evaluation/benchmark/results" `
+  -Headers $headers
+
+$r.selected_output_dir
+$r.models | Where-Object { $_.model_provider -eq "pegasus_pubmed" } |
+  Select-Object model_provider, model_name, completed_count, record_count, rouge1, rouge2, rougeL, stage_name
+```
+
+Expected current local row:
+
+```text
+model_provider: pegasus_pubmed
+model_name: google/pegasus-pubmed
+completed_count / record_count: 200 / 200
+rougeL: 0.2108
+stage_name: stage_pegasus_pegasus_pubmed_limit200
+```
 
 ### Nurse role cannot load dashboard metrics
 

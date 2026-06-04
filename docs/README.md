@@ -20,7 +20,13 @@ This directory is the source of truth for product scope, clinical safety, API/FH
 | `mentor_delivery_week_1/10_HYBRID_INPUT_NORMALIZATION_AND_EVALUATION.md` | Rule-based plus optional Gemini-assisted normalization policy |
 | `mentor_delivery_week_1/11_EVALUATION_SMOKE_TEST_RESULTS.md` | Smoke test commands, outputs, and interpretation |
 
-Some of these addenda may be created or expanded during stabilization. If a file is missing, use the closest preceding mentor delivery document as the current source.
+These addenda are the current data-work entrypoints for dataset selection, normalization, and smoke-test reporting.
+
+## Delivery Week 2
+
+| File | Use it for |
+| --- | --- |
+| `delivery week 2/README.md` | Vietnamese mentor-facing progress report covering the current MVP/prototype, frontend/backend state, dataset governance, provider layer, benchmark results, limitations, KPIs, and next-week plan |
 
 ## Product And Technical Specs
 

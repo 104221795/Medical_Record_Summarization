@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -361,6 +361,78 @@ class AuditLogListResponse(PersistenceModel):
     pagination: PaginationResponse
 
 
+class AuthLoginRequest(PersistenceModel):
+    user_id: str | None = Field(default=None, min_length=2, max_length=128)
+    email: str | None = Field(default=None, min_length=3, max_length=255)
+    password: str = Field(min_length=1, max_length=255)
+    role: Literal["doctor", "admin"] = "doctor"
+    tenant_id: str = Field(default="sandbox", min_length=1, max_length=128)
+
+
+class AuthGoogleLoginRequest(PersistenceModel):
+    credential: str = Field(min_length=20, max_length=8192)
+    role: Literal["doctor", "admin"] = "doctor"
+    tenant_id: str = Field(default="sandbox", min_length=1, max_length=128)
+
+
+class AuthSignupRequest(PersistenceModel):
+    full_name: str = Field(min_length=2, max_length=255)
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=10, max_length=255)
+    confirm_password: str = Field(min_length=10, max_length=255)
+    role: Literal["doctor", "admin"] = "doctor"
+    tenant_id: str = Field(default="sandbox", min_length=1, max_length=128)
+
+    @model_validator(mode="after")
+    def validate_password_match(self) -> "AuthSignupRequest":
+        if self.password != self.confirm_password:
+            raise ValueError("password and confirm_password must match.")
+        if "@" not in self.email or "." not in self.email.rsplit("@", 1)[-1]:
+            raise ValueError("email must be a valid email address.")
+        if not _password_policy_errors(self.password) == []:
+            raise ValueError("password must be at least 10 characters and include uppercase, lowercase, number, and symbol.")
+        return self
+
+
+class AuthSessionResponse(PersistenceModel):
+    authenticated: bool
+    user_id: str
+    full_name: str
+    email: str | None = None
+    role: Literal["doctor", "admin"]
+    role_code: str
+    tenant_id: str
+    token: str
+    message: str
+    google_client_id_configured: bool = False
+
+
+class AuthLogoutResponse(PersistenceModel):
+    authenticated: bool = False
+    message: str
+
+
+class AuthConfigResponse(PersistenceModel):
+    google_client_id_configured: bool
+    google_client_id: str | None = None
+    auth_mode: str
+
+
+def _password_policy_errors(password: str) -> list[str]:
+    errors: list[str] = []
+    if len(password) < 10:
+        errors.append("minimum_length")
+    if not any(char.islower() for char in password):
+        errors.append("lowercase")
+    if not any(char.isupper() for char in password):
+        errors.append("uppercase")
+    if not any(char.isdigit() for char in password):
+        errors.append("number")
+    if not any(not char.isalnum() for char in password):
+        errors.append("symbol")
+    return errors
+
+
 class MetricCountItem(PersistenceModel):
     key: str
     count: int
@@ -551,7 +623,72 @@ class SummaryGenerateOptions(PersistenceModel):
     include_safety_check: bool = True
 
 
-SummaryProviderName = Literal["deterministic", "gemini", "bart", "pegasus"]
+SummaryProviderName = Literal[
+    "deterministic",
+    "gemini",
+    "bart",
+    "pegasus",
+    "pegasus_pubmed",
+    "pegasus_cnn_dailymail",
+    "pegasus_xsum",
+]
+
+
+class ProviderInfo(PersistenceModel):
+    provider_name: str
+    display_name: str
+    model_name: str
+    provider_type: str
+    status: str
+    requires_api_key: bool
+    local_model: bool
+    domain_fit: str
+    description: str
+
+
+class ProviderListResponse(PersistenceModel):
+    providers: list[ProviderInfo]
+
+
+class BenchmarkResultRow(PersistenceModel):
+    model_provider: str
+    model_name: str
+    status: str
+    record_count: int
+    completed_count: int
+    failed_count: int
+    skipped_count: int
+    rouge1: float | None = None
+    rouge2: float | None = None
+    rougeL: float | None = None
+    bertscore_status: str | None = None
+    average_latency_ms: float | None = None
+    stage_name: str | None = None
+    checkpoint: str | None = None
+    provider_type: str | None = None
+    domain_fit: str | None = None
+    total_runtime_seconds: float | None = None
+    failure_counts: dict[str, int] | None = None
+    notes: str | None = None
+    error_message: str | None = None
+
+
+class BenchmarkResultsResponse(PersistenceModel):
+    output_dir: str
+    selected_output_dir: str | None = None
+    discovered_benchmark_folders: list[dict[str, Any]] = Field(default_factory=list)
+    models: list[BenchmarkResultRow]
+    per_record_metric_summary: dict[str, Any] = Field(default_factory=dict)
+    prediction_file_availability: dict[str, Any] = Field(default_factory=dict)
+    failure_analysis_summary: dict[str, Any] = Field(default_factory=dict)
+    artifact_paths: dict[str, str | None] = Field(default_factory=dict)
+    data_freshness_timestamp: str | None = None
+    best_model_by_rougeL: str | None = None
+    report_path: str
+    failure_analysis_path: str
+    report_exists: bool
+    failure_analysis_exists: bool
+    proxy_warning: str
 
 
 class SummaryGenerateRequest(PersistenceModel):

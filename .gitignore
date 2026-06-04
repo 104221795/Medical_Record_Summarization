@@ -10,7 +10,20 @@ models_tuned/
 backend/var/
 var/
 .pytest_cache/
-
+node_modules/
+dist/
+build/
+*.log
+*.zip
+*.tar.gz
+*.egg-info/
+*.egg
+*.cache
+*.bak
+*.tmp
+*.swp
+*.swo
+*.DS_Store
 # Credentialed or raw clinical datasets must stay local.
 data/raw/
 data/raw_*/
@@ -40,3 +53,5 @@ data/processed/mtsamples_clean/*.jsonl
 *.parquet
 *.feather
 *.arrow
+
+data/processed/

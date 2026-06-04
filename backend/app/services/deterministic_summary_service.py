@@ -48,7 +48,10 @@ from .persistence_common import PersistedResourceNotFoundError
 from .safety_service import SafetyResult, SafetyService
 from .summary_providers import (
     BartProvider,
+    PegasusCnnDailyMailProvider,
+    PegasusPubMedProvider,
     PegasusProvider,
+    PegasusXSumProvider,
     ProviderExecutionError,
     ProviderOutput,
     SummaryProvider,
@@ -217,7 +220,15 @@ class DeterministicSummaryService:
             existing.summary_type,
         )
         model_provider = _model_provider_label(existing.model_run)
-        if model_provider not in {"deterministic", "gemini", "bart", "pegasus"}:
+        if model_provider not in {
+            "deterministic",
+            "gemini",
+            "bart",
+            "pegasus",
+            "pegasus_pubmed",
+            "pegasus_cnn_dailymail",
+            "pegasus_xsum",
+        }:
             model_provider = "deterministic"
         generate_request = SummaryGenerateRequest(
             encounter_id=existing.encounter_id,
@@ -314,7 +325,7 @@ class DeterministicSummaryService:
                 regeneration_reason=regeneration_reason,
                 started=started,
             )
-        if generation_provider in {"bart", "pegasus"}:
+        if generation_provider in {"bart", "pegasus", "pegasus_pubmed", "pegasus_cnn_dailymail", "pegasus_xsum"}:
             return self._generate_with_text_provider(
                 generation_provider,
                 patient,
@@ -406,7 +417,7 @@ class DeterministicSummaryService:
         provider = request.model_provider or request.provider or configured
         if provider in {"mock", "local", "deterministic"}:
             return "deterministic"
-        if provider in {"bart", "pegasus"}:
+        if provider in {"bart", "pegasus", "pegasus_pubmed", "pegasus_cnn_dailymail", "pegasus_xsum"}:
             return provider
         if provider == "external":
             raise SummaryGenerationError(
@@ -715,6 +726,12 @@ class DeterministicSummaryService:
             provider = BartProvider()
         elif provider_name == "pegasus":
             provider = PegasusProvider()
+        elif provider_name == "pegasus_pubmed":
+            provider = PegasusPubMedProvider()
+        elif provider_name == "pegasus_cnn_dailymail":
+            provider = PegasusCnnDailyMailProvider()
+        elif provider_name == "pegasus_xsum":
+            provider = PegasusXSumProvider()
         else:
             raise SummaryGenerationError(f"Unsupported summary provider: {provider_name}.")
         self.model_providers[provider_name] = provider

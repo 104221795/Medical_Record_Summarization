@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import os
 import uuid
@@ -21,6 +22,8 @@ from ..models import (
     Summary,
 )
 from ..persistence_schemas import (
+    BenchmarkResultRow,
+    BenchmarkResultsResponse,
     BenchmarkStatusResponse,
     DemoReadinessResponse,
     EvaluationLayerStatus,
@@ -57,6 +60,36 @@ from .safety_service import SafetyService
 BENCHMARK_DATASET_PATH = ROOT_DIR / "data" / "processed" / "ehr_benchmark" / "test.jsonl"
 BENCHMARK_OUTPUT_PATH = ROOT_DIR / "results" / "ehr_benchmark" / "model_comparison.csv"
 BENCHMARK_RUNNER_PATH = ROOT_DIR / "scripts" / "run_baseline_summarization.py"
+MEDIUM_BENCHMARK_OUTPUT_DIR = Path("D:/clin_summ_outputs/medium_benchmark_bart_pegasus")
+MEDIUM_BENCHMARK_COMPARISON_PATH = MEDIUM_BENCHMARK_OUTPUT_DIR / "model_comparison.csv"
+MEDIUM_BENCHMARK_REPORT_PATH = MEDIUM_BENCHMARK_OUTPUT_DIR / "EVALUATION_REPORT.md"
+MEDIUM_BENCHMARK_FAILURE_PATH = MEDIUM_BENCHMARK_OUTPUT_DIR / "failure_analysis.md"
+BENCHMARK_DISCOVERY_DIRS = [
+    Path("D:/clin_summ_outputs/medium_benchmark"),
+    Path("D:/clin_summ_outputs/medium_benchmark_bart_pegasus"),
+    Path("D:/clin_summ_outputs/performance_benchmark"),
+]
+PREDICTION_FILES = {
+    "deterministic": "deterministic_predictions.jsonl",
+    "bart": "bart_predictions.jsonl",
+    "pegasus": "pegasus_predictions.jsonl",
+    "pegasus_pubmed": "pegasus_pubmed_predictions.jsonl",
+    "pegasus_cnn_dailymail": "pegasus_cnn_dailymail_predictions.jsonl",
+}
+FAILURE_CATEGORIES = [
+    "hallucinated content",
+    "missing diagnosis",
+    "missing medication",
+    "missing timeline",
+    "incomplete summary",
+    "retrieval-related failure",
+    "source data limitation",
+]
+PROXY_EVALUATION_WARNING = (
+    "Proxy evaluation only. These results do not demonstrate clinical safety, clinical effectiveness, "
+    "or real-world healthcare performance. Real EHR evaluation requires credentialed datasets such as "
+    "MIMIC-IV-Note or MIMIC-IV-BHC under approved governance processes."
+)
 REQUIRED_BENCHMARK_KEYS = {
     "note_id",
     "patient_id",
@@ -242,6 +275,46 @@ class EvaluationService:
             model_comparison_output_exists=output_exists,
         )
 
+    def benchmark_results(self) -> BenchmarkResultsResponse:
+        selected_dir, discovered = _select_benchmark_output_dir(BENCHMARK_DISCOVERY_DIRS)
+        comparison_path = selected_dir / "model_comparison.csv"
+        report_path = selected_dir / "EVALUATION_REPORT.md"
+        failure_path = selected_dir / "failure_analysis.md"
+        manifest_path = selected_dir / "evaluation_run_manifest.json"
+        per_record_path = selected_dir / "per_record_metrics.csv"
+        rows = _read_model_comparison(comparison_path)
+        rows = _merge_prediction_rows(selected_dir, rows)
+        rows = _enrich_rows(selected_dir, rows, manifest_path, per_record_path)
+        completed = [row for row in rows if row.rougeL is not None and row.completed_count > 0]
+        best = max(completed, key=lambda row: row.rougeL or 0.0).model_provider if completed else None
+        prediction_files = _prediction_file_availability(selected_dir)
+        per_record_summary = _per_record_metric_summary(per_record_path)
+        failure_summary = _failure_analysis_summary(failure_path, per_record_path)
+        return BenchmarkResultsResponse(
+            output_dir=str(selected_dir),
+            selected_output_dir=str(selected_dir),
+            discovered_benchmark_folders=discovered,
+            models=rows,
+            per_record_metric_summary=per_record_summary,
+            prediction_file_availability=prediction_files,
+            failure_analysis_summary=failure_summary,
+            artifact_paths={
+                "model_comparison": str(comparison_path) if comparison_path.exists() else None,
+                "per_record_metrics": str(per_record_path) if per_record_path.exists() else None,
+                "evaluation_run_manifest": str(manifest_path) if manifest_path.exists() else None,
+                "run_log": str(selected_dir / "run.log") if (selected_dir / "run.log").exists() else None,
+                "evaluation_report": str(report_path) if report_path.exists() else None,
+                "failure_analysis": str(failure_path) if failure_path.exists() else None,
+            },
+            data_freshness_timestamp=_freshness_timestamp(selected_dir),
+            best_model_by_rougeL=best,
+            report_path=str(report_path),
+            failure_analysis_path=str(failure_path),
+            report_exists=report_path.exists(),
+            failure_analysis_exists=failure_path.exists(),
+            proxy_warning=PROXY_EVALUATION_WARNING,
+        )
+
     def create_human_evaluation(
         self,
         payload: HumanEvaluationCreateRequest,
@@ -295,7 +368,9 @@ class EvaluationService:
         )
 
     def provider_readiness(self) -> list[EvaluationProviderStatus]:
-        latest = self.repository.latest_model_run(["local", "deterministic", "bart", "pegasus", "gemini"])
+        latest = self.repository.latest_model_run(
+            ["local", "deterministic", "bart", "pegasus", "pegasus_pubmed", "pegasus_cnn_dailymail", "gemini"]
+        )
         deterministic = latest.get("local") or latest.get("deterministic")
         bart_enabled = _real_baselines_enabled()
         pegasus_enabled = _real_baselines_enabled()
@@ -326,8 +401,24 @@ class EvaluationService:
                 "pegasus",
                 configured=True,
                 enabled=pegasus_enabled,
-                model_name=os.environ.get("PEGASUS_MODEL_NAME") or "google/pegasus-xsum",
+                model_name=os.environ.get("PEGASUS_MODEL_NAME") or "google/pegasus-pubmed",
                 latest=latest.get("pegasus"),
+                message="Real Hugging Face execution requires RUN_REAL_BASELINES=1.",
+            ),
+            _provider_status(
+                "pegasus_pubmed",
+                configured=True,
+                enabled=pegasus_enabled,
+                model_name=os.environ.get("PEGASUS_PUBMED_MODEL_NAME") or "google/pegasus-pubmed",
+                latest=latest.get("pegasus_pubmed"),
+                message="Real Hugging Face execution requires RUN_REAL_BASELINES=1.",
+            ),
+            _provider_status(
+                "pegasus_cnn_dailymail",
+                configured=True,
+                enabled=pegasus_enabled,
+                model_name=os.environ.get("PEGASUS_CNN_DAILYMAIL_MODEL_NAME") or "google/pegasus-cnn_dailymail",
+                latest=latest.get("pegasus_cnn_dailymail"),
                 message="Real Hugging Face execution requires RUN_REAL_BASELINES=1.",
             ),
             _provider_status(
@@ -606,3 +697,361 @@ def _provider_label(provider: str | None) -> str | None:
     if provider == "local":
         return "deterministic"
     return provider
+
+
+def _read_model_comparison(path: Path) -> list[BenchmarkResultRow]:
+    if not path.exists():
+        return []
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        return [_benchmark_row(row) for row in reader]
+
+
+def _select_benchmark_output_dir(candidate_dirs: list[Path]) -> tuple[Path, list[dict[str, Any]]]:
+    discovered = [_folder_info(path) for path in candidate_dirs]
+    existing = [item for item in discovered if item["exists"]]
+    if not existing:
+        return MEDIUM_BENCHMARK_OUTPUT_DIR, discovered
+    ranked = sorted(existing, key=lambda item: (item["has_pegasus_pubmed_200"], item["last_modified"] or ""), reverse=True)
+    selected = Path(ranked[0]["path"])
+    for item in discovered:
+        item["selected"] = item["path"] == str(selected)
+    return selected, discovered
+
+
+def _folder_info(path: Path) -> dict[str, Any]:
+    files = list(path.glob("*")) if path.exists() else []
+    last_modified = max((file.stat().st_mtime for file in files if file.is_file()), default=0.0)
+    pubmed_path = path / PREDICTION_FILES["pegasus_pubmed"]
+    pubmed_count = _jsonl_count(pubmed_path)
+    return {
+        "path": str(path),
+        "exists": path.exists(),
+        "selected": False,
+        "has_model_comparison": (path / "model_comparison.csv").exists(),
+        "has_per_record_metrics": (path / "per_record_metrics.csv").exists(),
+        "has_manifest": (path / "evaluation_run_manifest.json").exists(),
+        "has_pegasus_pubmed_predictions": pubmed_path.exists(),
+        "pegasus_pubmed_record_count": pubmed_count,
+        "has_pegasus_pubmed_200": pubmed_count >= 200,
+        "last_modified": _iso_mtime(last_modified) if last_modified else None,
+    }
+
+
+def _merge_prediction_rows(output_dir: Path, rows: list[BenchmarkResultRow]) -> list[BenchmarkResultRow]:
+    by_provider = {row.model_provider: row for row in rows}
+    for provider, filename in PREDICTION_FILES.items():
+        if provider in by_provider:
+            continue
+        prediction_path = output_dir / filename
+        if not prediction_path.exists():
+            continue
+        row = _prediction_row(provider, prediction_path)
+        if row:
+            by_provider[provider] = row
+    ordered = ["deterministic", "bart", "pegasus", "pegasus_pubmed", "pegasus_cnn_dailymail"]
+    return [by_provider[key] for key in ordered if key in by_provider] + [
+        row for key, row in by_provider.items() if key not in ordered and key != "gemini"
+    ] + ([by_provider["gemini"]] if "gemini" in by_provider else [])
+
+
+def _prediction_row(provider: str, path: Path) -> BenchmarkResultRow | None:
+    rows = _read_prediction_jsonl(path)
+    if not rows:
+        return None
+    completed = [row for row in rows if row.get("status") == "completed"]
+    first = rows[0]
+    record_count = len(rows)
+    completed_count = len(completed)
+    failed_count = sum(1 for row in rows if row.get("status") not in {"completed", "skipped"})
+    skipped_count = sum(1 for row in rows if row.get("status") == "skipped")
+    model_name = str(first.get("model_name") or _default_model_name(provider))
+    stage_name = str(first.get("stage") or "")
+    return BenchmarkResultRow(
+        model_provider=provider,
+        model_name=model_name,
+        status="completed" if completed_count == record_count else "partial",
+        record_count=record_count,
+        completed_count=completed_count,
+        failed_count=failed_count,
+        skipped_count=skipped_count,
+        rouge1=_mean([row.get("rouge1") for row in completed]),
+        rouge2=_mean([row.get("rouge2") for row in completed]),
+        rougeL=_mean([row.get("rougeL") for row in completed]),
+        bertscore_status="not_requested",
+        average_latency_ms=_mean([row.get("latency_ms") for row in completed]),
+        stage_name=stage_name or None,
+        checkpoint=model_name,
+        provider_type="api" if provider == "gemini" else "local",
+        domain_fit=_domain_fit(provider),
+        failure_counts=_failure_counts_from_prediction_rows(rows),
+        notes="Proxy benchmark, not clinical validation.",
+    )
+
+
+def _enrich_rows(
+    output_dir: Path,
+    rows: list[BenchmarkResultRow],
+    manifest_path: Path,
+    per_record_path: Path,
+) -> list[BenchmarkResultRow]:
+    stages = _manifest_stages(manifest_path)
+    per_record_failures = _per_record_failures_by_provider(per_record_path)
+    for row in rows:
+        row.checkpoint = row.checkpoint or row.model_name
+        row.provider_type = row.provider_type or ("api" if row.model_provider == "gemini" else "local")
+        row.domain_fit = row.domain_fit or _domain_fit(row.model_provider)
+        stage = stages.get(row.model_provider)
+        if stage:
+            row.stage_name = row.stage_name or stage.get("name")
+            row.total_runtime_seconds = _float_value_any(stage.get("runtime_seconds"))
+            if not row.notes and stage.get("notes"):
+                row.notes = str(stage.get("notes"))
+        if not row.failure_counts:
+            row.failure_counts = per_record_failures.get(row.model_provider)
+    return rows
+
+
+def _manifest_stages(path: Path) -> dict[str, dict[str, Any]]:
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    result: dict[str, dict[str, Any]] = {}
+    for stage in data.get("stages", []):
+        provider = stage.get("model_provider")
+        if not provider:
+            continue
+        current = result.get(provider)
+        if current is None or int(stage.get("records") or 0) >= int(current.get("records") or 0):
+            result[str(provider)] = stage
+    return result
+
+
+def _read_prediction_jsonl(path: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                if line.strip():
+                    rows.append(json.loads(line))
+    except (OSError, json.JSONDecodeError):
+        return []
+    return rows
+
+
+def _prediction_file_availability(output_dir: Path) -> dict[str, Any]:
+    availability: dict[str, Any] = {}
+    for provider, filename in PREDICTION_FILES.items():
+        path = output_dir / filename
+        availability[filename] = {
+            "provider": provider,
+            "exists": path.exists(),
+            "record_count": _jsonl_count(path),
+            "path": str(path),
+            "last_modified": _iso_mtime(path.stat().st_mtime) if path.exists() else None,
+        }
+    return availability
+
+
+def _per_record_metric_summary(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {"status": "not_available"}
+    failure_counts = Counter()
+    providers = Counter()
+    rows = 0
+    try:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            for row in csv.DictReader(handle):
+                rows += 1
+                providers[row.get("model_provider") or "unknown"] += 1
+                for category in _split_failure_categories(row.get("failure_categories")):
+                    failure_counts[category] += 1
+    except OSError:
+        return {"status": "not_available"}
+    return {
+        "status": "available",
+        "row_count": rows,
+        "providers": dict(providers),
+        "failure_counts": dict(failure_counts),
+        "bertscore": "not_available_in_current_run",
+    }
+
+
+def _failure_analysis_summary(failure_path: Path, per_record_path: Path) -> dict[str, Any]:
+    counts = _failure_counts_from_markdown(failure_path)
+    source = "failure_analysis.md" if counts else "per_record_metrics.csv"
+    if not counts:
+        counts = _aggregate_failure_counts(per_record_path)
+    return {
+        "status": "available" if counts else "not_available",
+        "source": source if counts else None,
+        "counts": counts or {category: "Not available in current run" for category in FAILURE_CATEGORIES},
+    }
+
+
+def _failure_counts_from_markdown(path: Path) -> dict[str, int]:
+    if not path.exists():
+        return {}
+    counts: dict[str, int] = {}
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return counts
+    for line in lines:
+        stripped = line.strip()
+        if not stripped.startswith("- ") or ": `" not in stripped:
+            continue
+        key, value = stripped[2:].split(": `", 1)
+        try:
+            counts[key.strip()] = int(value.strip("` "))
+        except ValueError:
+            continue
+    return counts
+
+
+def _aggregate_failure_counts(path: Path) -> dict[str, int]:
+    if not path.exists():
+        return {}
+    counts = Counter()
+    try:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            for row in csv.DictReader(handle):
+                for category in _split_failure_categories(row.get("failure_categories")):
+                    counts[category] += 1
+    except OSError:
+        return {}
+    return dict(counts)
+
+
+def _per_record_failures_by_provider(path: Path) -> dict[str, dict[str, int]]:
+    if not path.exists():
+        return {}
+    counts: dict[str, Counter] = {}
+    try:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            for row in csv.DictReader(handle):
+                provider = row.get("model_provider") or "unknown"
+                counts.setdefault(provider, Counter())
+                for category in _split_failure_categories(row.get("failure_categories")):
+                    counts[provider][category] += 1
+    except OSError:
+        return {}
+    return {provider: dict(counter) for provider, counter in counts.items()}
+
+
+def _failure_counts_from_prediction_rows(rows: list[dict[str, Any]]) -> dict[str, int] | None:
+    counts = Counter()
+    for row in rows:
+        for category in _split_failure_categories(row.get("failure_categories")):
+            counts[category] += 1
+    return dict(counts) if counts else None
+
+
+def _split_failure_categories(value: Any) -> list[str]:
+    if not value:
+        return []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return [item.strip() for item in str(value).split(";") if item.strip()]
+
+
+def _freshness_timestamp(output_dir: Path) -> str | None:
+    files = [file for file in output_dir.glob("*") if file.is_file()]
+    last_modified = max((file.stat().st_mtime for file in files), default=0.0)
+    return _iso_mtime(last_modified) if last_modified else None
+
+
+def _jsonl_count(path: Path) -> int:
+    if not path.exists():
+        return 0
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            return sum(1 for line in handle if line.strip())
+    except OSError:
+        return 0
+
+
+def _mean(values: list[Any]) -> float | None:
+    numbers = [_float_value_any(value) for value in values]
+    clean = [value for value in numbers if value is not None]
+    return round(sum(clean) / len(clean), 4) if clean else None
+
+
+def _float_value_any(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _iso_mtime(value: float) -> str:
+    from datetime import UTC, datetime
+
+    return datetime.fromtimestamp(value, tz=UTC).isoformat()
+
+
+def _default_model_name(provider: str) -> str:
+    return {
+        "deterministic": "deterministic_sentence_baseline",
+        "bart": "facebook/bart-large-cnn",
+        "pegasus": "google/pegasus-xsum",
+        "pegasus_pubmed": "google/pegasus-pubmed",
+        "pegasus_cnn_dailymail": "google/pegasus-cnn_dailymail",
+        "gemini": "gemini configured provider",
+    }.get(provider, provider)
+
+
+def _domain_fit(provider: str) -> str:
+    return {
+        "deterministic": "Fast extractive baseline",
+        "bart": "General summarization baseline",
+        "pegasus": "General Pegasus baseline",
+        "pegasus_pubmed": "Medical/scientific",
+        "pegasus_cnn_dailymail": "General news summarization baseline",
+        "gemini": "External API LLM; not official unless fully benchmarked",
+    }.get(provider, "Not available in current run")
+
+
+def _benchmark_row(row: dict[str, str]) -> BenchmarkResultRow:
+    return BenchmarkResultRow(
+        model_provider=row.get("model_provider", ""),
+        model_name=row.get("model_name", ""),
+        status=row.get("status", ""),
+        record_count=_int_value(row.get("record_count")),
+        completed_count=_int_value(row.get("completed_count")),
+        failed_count=_int_value(row.get("failed_count")),
+        skipped_count=_int_value(row.get("skipped_count")),
+        rouge1=_float_value(row.get("rouge1")),
+        rouge2=_float_value(row.get("rouge2")),
+        rougeL=_float_value(row.get("rougeL")),
+        bertscore_status=row.get("bertscore_status") or None,
+        average_latency_ms=_float_value(row.get("average_latency_ms")),
+        stage_name=row.get("stage_name") or row.get("stage") or None,
+        checkpoint=row.get("checkpoint") or row.get("model_name") or None,
+        provider_type=row.get("provider_type") or None,
+        domain_fit=row.get("domain_fit") or None,
+        total_runtime_seconds=_float_value(row.get("total_runtime_seconds")),
+        notes=row.get("notes") or None,
+        error_message=row.get("error_message") or None,
+    )
+
+
+def _int_value(value: str | None) -> int:
+    try:
+        return int(float(value or 0))
+    except ValueError:
+        return 0
+
+
+def _float_value(value: str | None) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
