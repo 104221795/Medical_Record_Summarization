@@ -9,6 +9,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from backend.app.evaluation.clinical_metrics import (
+    PER_RECORD_CLINICAL_FIELDS,
+    aggregate_clinical_metrics,
+    compute_clinical_record_metrics,
+    empty_clinical_record_metrics,
+    serialize_failure_categories,
+)
 from backend.app.evaluation.semantic_metrics import compute_pairwise_metrics
 from evaluation.data_governance.layers import (
     HONESTY_WARNING,
@@ -121,6 +128,7 @@ def run_full_evaluation_pipeline(config: PipelineConfig) -> dict[str, Any]:
         _log(log_path, f"Provider {provider.name} finished with status: {metrics['status']}")
 
     _write_jsonl(output_dir / "all_predictions.jsonl", all_rows)
+    _write_per_record_failure_jsonl(output_dir / "per_record_failure_analysis.jsonl", all_rows)
     _write_comparison_csv(output_dir / "model_comparison.csv", comparison_rows)
     _write_per_record_metrics_csv(output_dir / "per_record_metrics.csv", all_rows)
     quality_by_note = {
@@ -129,6 +137,7 @@ def run_full_evaluation_pipeline(config: PipelineConfig) -> dict[str, Any]:
     }
     write_human_review_template(all_rows, output_dir)
     write_failure_analysis(all_rows, output_dir=output_dir, quality_by_note=quality_by_note)
+    _append_clinical_failure_analysis(output_dir / "failure_analysis.md", all_rows)
     manifest = _manifest(config, readiness, comparison_rows, governance=governance, cache_paths=cache_paths)
     _write_json(output_dir / "evaluation_run_manifest.json", manifest)
     _write_json(output_dir / "run_manifest.json", manifest)
@@ -325,7 +334,7 @@ def _completed_row(
         [output.reference_summary],
         include_bertscore=False,
     )
-    return {
+    row = {
         **_base_row(record, provider, config=config),
         "status": "completed",
         "error_message": None,
@@ -336,6 +345,8 @@ def _completed_row(
         "rougeL": pair_metrics.get("rougeL"),
         "dry_run": False,
     }
+    row.update(compute_clinical_record_metrics(row))
+    return row
 
 
 def _failed_row(
@@ -345,7 +356,7 @@ def _failed_row(
     error_message: str,
     config: PipelineConfig,
 ) -> dict[str, Any]:
-    return {
+    row = {
         **_base_row(record, provider, config=config),
         "status": "failed",
         "error_message": error_message,
@@ -356,6 +367,8 @@ def _failed_row(
         "rougeL": None,
         "dry_run": False,
     }
+    row.update(empty_clinical_record_metrics(["retrieval-related failure"]))
+    return row
 
 
 def _skipped_row(
@@ -365,7 +378,7 @@ def _skipped_row(
     reason: str,
     config: PipelineConfig,
 ) -> dict[str, Any]:
-    return {
+    row = {
         **_base_row(record, provider, config=config),
         "status": "skipped",
         "error_message": reason,
@@ -376,6 +389,8 @@ def _skipped_row(
         "rougeL": None,
         "dry_run": False,
     }
+    row.update(empty_clinical_record_metrics(["provider skipped"]))
+    return row
 
 
 def _dry_run_row(record: dict[str, str], provider: ProviderPlan, *, config: PipelineConfig) -> dict[str, Any]:
@@ -385,7 +400,7 @@ def _dry_run_row(record: dict[str, str], provider: ProviderPlan, *, config: Pipe
     else:
         status = "ready"
         message = "Dry run only. Dataset and provider configuration were checked; no generation was executed."
-    return {
+    row = {
         **_base_row(record, provider, config=config),
         "status": status,
         "error_message": message,
@@ -396,6 +411,8 @@ def _dry_run_row(record: dict[str, str], provider: ProviderPlan, *, config: Pipe
         "rougeL": None,
         "dry_run": True,
     }
+    row.update(empty_clinical_record_metrics(["dry run"]))
+    return row
 
 
 def _comparison_row(provider: ProviderPlan, rows: list[dict[str, Any]], *, config: PipelineConfig) -> dict[str, Any]:
@@ -410,6 +427,7 @@ def _comparison_row(provider: ProviderPlan, rows: list[dict[str, Any]], *, confi
         if completed
         else {}
     )
+    clinical_metrics = aggregate_clinical_metrics(rows)
     status = _aggregate_status(completed=completed, failed=failed, skipped=skipped, ready=ready)
     return {
         "model_provider": provider.name,
@@ -435,8 +453,20 @@ def _comparison_row(provider: ProviderPlan, rows: list[dict[str, Any]], *, confi
         "bertscore_recall": metrics.get("bertscore_recall"),
         "bertscore_f1": metrics.get("bertscore_f1"),
         "bertscore_status": metrics.get("bertscore_status", "not_requested" if not config.include_bertscore else "not_available"),
+        "bertscore_model_type": metrics.get("bertscore_model_type"),
         "bertscore_message": metrics.get("bertscore_message", ""),
         "average_latency_ms": _mean([row["latency_ms"] for row in completed]),
+        "latency_p50_ms": clinical_metrics.get("latency_p50_ms"),
+        "latency_p95_ms": clinical_metrics.get("latency_p95_ms"),
+        "citation_coverage": clinical_metrics.get("citation_coverage"),
+        "unsupported_claim_rate": clinical_metrics.get("unsupported_claim_rate"),
+        "factuality_proxy_score": clinical_metrics.get("factuality_proxy_score"),
+        "missing_diagnosis_rate": clinical_metrics.get("missing_diagnosis_rate"),
+        "missing_medication_rate": clinical_metrics.get("missing_medication_rate"),
+        "timeline_completeness": clinical_metrics.get("timeline_completeness"),
+        "hallucinated_clinical_entity_count": clinical_metrics.get("hallucinated_clinical_entity_count"),
+        "critical_info_omission_rate": clinical_metrics.get("critical_info_omission_rate"),
+        "failure_counts": clinical_metrics.get("failure_counts"),
         "average_input_length": _mean([len(row["source_note"].split()) for row in rows]),
         "average_output_length": _mean([len(row["generated_summary"].split()) for row in completed]),
         "proxy_warning": PROXY_WARNING,
@@ -625,6 +655,30 @@ def _write_markdown_report(
     lines.extend(
         [
             "",
+            "## Clinical Proxy Metrics",
+            "",
+            "| Model | Citation coverage | Unsupported claim rate | Faithfulness proxy | Missing diagnosis | Missing medication | Timeline completeness | Critical omission | Latency p50 | Latency p95 |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    for row in comparison_rows:
+        lines.append(
+            "| {model} | {citation} | {unsupported} | {faithfulness} | {diagnosis} | {medication} | {timeline} | {omission} | {p50} | {p95} |".format(
+                model=row["model_provider"],
+                citation=_display(row.get("citation_coverage")),
+                unsupported=_display(row.get("unsupported_claim_rate")),
+                faithfulness=_display(row.get("factuality_proxy_score")),
+                diagnosis=_display(row.get("missing_diagnosis_rate")),
+                medication=_display(row.get("missing_medication_rate")),
+                timeline=_display(row.get("timeline_completeness")),
+                omission=_display(row.get("critical_info_omission_rate")),
+                p50=_display(row.get("latency_p50_ms")),
+                p95=_display(row.get("latency_p95_ms")),
+            )
+        )
+    lines.extend(
+        [
+            "",
             "## Provider Notes",
             "",
         ]
@@ -652,6 +706,7 @@ def _write_markdown_report(
             "- `all_predictions.jsonl`",
             "- `<model>_predictions.jsonl`",
             "- `human_review_template.csv`",
+            "- `per_record_failure_analysis.jsonl`",
             "- `failure_analysis.md`",
             "- `EVALUATION_REPORT.md`",
             "- `run.log`",
@@ -696,8 +751,20 @@ def _write_comparison_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "bertscore_recall",
         "bertscore_f1",
         "bertscore_status",
+        "bertscore_model_type",
         "bertscore_message",
         "average_latency_ms",
+        "latency_p50_ms",
+        "latency_p95_ms",
+        "citation_coverage",
+        "unsupported_claim_rate",
+        "factuality_proxy_score",
+        "missing_diagnosis_rate",
+        "missing_medication_rate",
+        "timeline_completeness",
+        "hallucinated_clinical_entity_count",
+        "critical_info_omission_rate",
+        "failure_counts",
         "average_input_length",
         "average_output_length",
         "proxy_warning",
@@ -706,7 +773,10 @@ def _write_comparison_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
-        writer.writerows(rows)
+        for row in rows:
+            payload = dict(row)
+            payload["failure_counts"] = json.dumps(payload.get("failure_counts") or {}, ensure_ascii=False)
+            writer.writerow({key: payload.get(key) for key in fieldnames})
 
 
 def _write_per_record_metrics_csv(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -721,6 +791,7 @@ def _write_per_record_metrics_csv(path: Path, rows: list[dict[str, Any]]) -> Non
         "rouge2",
         "rougeL",
         "latency_ms",
+        *PER_RECORD_CLINICAL_FIELDS,
         "input_token_count",
         "output_token_count",
         "reference_token_count",
@@ -742,12 +813,82 @@ def _write_per_record_metrics_csv(path: Path, rows: list[dict[str, Any]]) -> Non
                     "rouge2": row.get("rouge2"),
                     "rougeL": row.get("rougeL"),
                     "latency_ms": row.get("latency_ms"),
+                    "citation_coverage": row.get("citation_coverage"),
+                    "citation_count": row.get("citation_count"),
+                    "unsupported_claim_rate": row.get("unsupported_claim_rate"),
+                    "factuality_proxy_score": row.get("factuality_proxy_score"),
+                    "missing_diagnosis_rate": row.get("missing_diagnosis_rate"),
+                    "missing_medication_rate": row.get("missing_medication_rate"),
+                    "timeline_completeness": row.get("timeline_completeness"),
+                    "hallucinated_clinical_entity_count": row.get("hallucinated_clinical_entity_count"),
+                    "critical_info_omission_rate": row.get("critical_info_omission_rate"),
+                    "failure_categories": serialize_failure_categories(row.get("failure_categories")),
                     "input_token_count": len(str(row.get("source_note", "")).split()),
                     "output_token_count": len(str(row.get("generated_summary", "")).split()),
                     "reference_token_count": len(str(row.get("reference_summary", "")).split()),
                     "error_message": row.get("error_message"),
                 }
             )
+
+
+def _write_per_record_failure_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
+    with path.open("w", encoding="utf-8") as handle:
+        for row in rows:
+            payload = {
+                "note_id": row.get("note_id", ""),
+                "patient_id": row.get("patient_id", ""),
+                "encounter_id": row.get("encounter_id", ""),
+                "dataset": row.get("dataset", ""),
+                "model_provider": row.get("model_provider", ""),
+                "model_name": row.get("model_name", ""),
+                "status": row.get("status", ""),
+                "input_note": row.get("source_note", ""),
+                "generated_summary": row.get("generated_summary", ""),
+                "reference_summary": row.get("reference_summary", ""),
+                "retrieved_evidence": row.get("retrieved_evidence") or row.get("evidence") or "",
+                "citations": row.get("citations") or [],
+                "rouge1": row.get("rouge1"),
+                "rouge2": row.get("rouge2"),
+                "rougeL": row.get("rougeL"),
+                "latency_ms": row.get("latency_ms"),
+                "clinical_metrics": {
+                    field: row.get(field)
+                    for field in PER_RECORD_CLINICAL_FIELDS
+                    if field != "failure_categories"
+                },
+                "failure_labels": row.get("failure_categories") or [],
+                "error_message": row.get("error_message"),
+            }
+            handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+
+def _append_clinical_failure_analysis(path: Path, rows: list[dict[str, Any]]) -> None:
+    by_model: dict[str, dict[str, int]] = {}
+    for row in rows:
+        provider = row.get("model_provider", "unknown")
+        by_model.setdefault(provider, {})
+        for category in row.get("failure_categories") or []:
+            by_model[provider][category] = by_model[provider].get(category, 0) + 1
+    lines = [
+        "",
+        "## Clinical Proxy Failure Counts By Model",
+        "",
+        "| Model | Failure label | Count |",
+        "| --- | --- | ---: |",
+    ]
+    for provider, counts in sorted(by_model.items()):
+        for category, count in sorted(counts.items(), key=lambda item: (-item[1], item[0])):
+            lines.append(f"| `{provider}` | {category} | {count} |")
+    lines.extend(
+        [
+            "",
+            "## Per-Record Dashboard Artifact",
+            "",
+            "- `per_record_failure_analysis.jsonl` contains input note, generated summary, reference summary, retrieved evidence/citation placeholders, clinical proxy metrics, and failure labels for side-by-side UI inspection.",
+        ]
+    )
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write("\n".join(lines) + "\n")
 
 
 def _log(log_path: Path, message: str) -> None:

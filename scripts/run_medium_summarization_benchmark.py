@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import copy
 import io
 import json
 import logging
@@ -16,6 +17,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from backend.app.evaluation.clinical_metrics import (
+    PER_RECORD_CLINICAL_FIELDS,
+    aggregate_clinical_metrics,
+    compute_clinical_record_metrics,
+    empty_clinical_record_metrics,
+    serialize_failure_categories,
+)
 from backend.app.evaluation.semantic_metrics import compute_pairwise_metrics
 from evaluation.data_governance.layers import HONESTY_WARNING, configure_d_drive_environment
 from src.data.dataset_loader import load_jsonl_dataset
@@ -41,6 +49,7 @@ ACCEPTED_STATIC_POSITION_KEYS = {
     "model.encoder.embed_positions.weight",
     "model.decoder.embed_positions.weight",
 }
+INCLUDE_BERTSCORE = os.environ.get("RAG_INCLUDE_BERTSCORE", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 @dataclass(frozen=True)
@@ -75,6 +84,7 @@ class PegasusLoadDiagnostic:
 
 
 def main() -> None:
+    configure_clean_hf_console()
     started = time.perf_counter()
     cache_paths = configure_d_drive_environment()
     verify_embedding_config()
@@ -87,6 +97,7 @@ def main() -> None:
     log(log_path, f"Input: {INPUT_PATH}")
     log(log_path, f"Output: {OUTPUT_DIR}")
     log(log_path, f"Embedding: {EMBEDDING_PROVIDER}/{EMBEDDING_MODEL}")
+    log(log_path, f"BERTScore enabled: {INCLUDE_BERTSCORE}")
     log(log_path, f"Cache paths: {cache_paths}")
 
     records_200 = load_jsonl_dataset(INPUT_PATH, dataset="multiclinsum", split="train", require_reference=True, max_records=200)
@@ -155,6 +166,7 @@ def main() -> None:
     stage_results.append(cnn_stage_200)
 
     write_jsonl(OUTPUT_DIR / "all_predictions.jsonl", all_predictions)
+    write_per_record_failure_jsonl(OUTPUT_DIR / "per_record_failure_analysis.jsonl", all_predictions)
     comparison_rows = comparison_rows_for(det_rows, bart_rows_200, pubmed_rows_200, cnn_rows_200)
     write_comparison_csv(OUTPUT_DIR / "model_comparison.csv", comparison_rows)
     write_per_record_metrics(OUTPUT_DIR / "per_record_metrics.csv", all_predictions)
@@ -174,6 +186,11 @@ def main() -> None:
     log(log_path, f"Completed benchmark in {runtime_seconds} seconds.")
     log(log_path, HONESTY_WARNING)
     print(f"Medium benchmark outputs written to {OUTPUT_DIR}")
+
+
+def configure_clean_hf_console() -> None:
+    os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+    os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 
 def verify_embedding_config() -> None:
@@ -740,14 +757,27 @@ def generate_seq2seq_summary(
         max_length=max_input_tokens,
     )
     encoded = {key: value.to(torch_device) for key, value in encoded.items()}
+    generation_config = seq2seq_generation_config(
+        model,
+        max_new_tokens=max_new_tokens,
+        num_beams=num_beams,
+        no_repeat_ngram_size=no_repeat_ngram_size,
+    )
+    generate_kwargs = (
+        {"generation_config": generation_config}
+        if generation_config is not None
+        else {
+            "max_new_tokens": max_new_tokens,
+            "num_beams": num_beams,
+            "no_repeat_ngram_size": no_repeat_ngram_size,
+            "do_sample": False,
+            "early_stopping": True,
+        }
+    )
     with torch.inference_mode():
         output_ids = model.generate(
             **encoded,
-            max_new_tokens=max_new_tokens,
-            num_beams=num_beams,
-            no_repeat_ngram_size=no_repeat_ngram_size,
-            do_sample=False,
-            early_stopping=True,
+            **generate_kwargs,
         )
     return tokenizer.decode(output_ids[0], skip_special_tokens=True).strip()
 
@@ -773,16 +803,49 @@ def generate_seq2seq_summaries(
         max_length=max_input_tokens,
     )
     encoded = {key: value.to(torch_device) for key, value in encoded.items()}
+    generation_config = seq2seq_generation_config(
+        model,
+        max_new_tokens=max_new_tokens,
+        num_beams=num_beams,
+        no_repeat_ngram_size=no_repeat_ngram_size,
+    )
+    generate_kwargs = (
+        {"generation_config": generation_config}
+        if generation_config is not None
+        else {
+            "max_new_tokens": max_new_tokens,
+            "num_beams": num_beams,
+            "no_repeat_ngram_size": no_repeat_ngram_size,
+            "do_sample": False,
+            "early_stopping": True,
+        }
+    )
     with torch.inference_mode():
         output_ids = model.generate(
             **encoded,
-            max_new_tokens=max_new_tokens,
-            num_beams=num_beams,
-            no_repeat_ngram_size=no_repeat_ngram_size,
-            do_sample=False,
-            early_stopping=True,
+            **generate_kwargs,
         )
     return [text.strip() for text in tokenizer.batch_decode(output_ids, skip_special_tokens=True)]
+
+
+def seq2seq_generation_config(
+    model: Any,
+    *,
+    max_new_tokens: int,
+    num_beams: int,
+    no_repeat_ngram_size: int,
+) -> Any:
+    generation_config = copy.deepcopy(getattr(model, "generation_config", None))
+    if generation_config is None:
+        return None
+    if hasattr(generation_config, "max_length"):
+        generation_config.max_length = None
+    generation_config.max_new_tokens = max_new_tokens
+    generation_config.num_beams = num_beams
+    generation_config.no_repeat_ngram_size = no_repeat_ngram_size
+    generation_config.do_sample = False
+    generation_config.early_stopping = True
+    return generation_config
 
 
 def completed_row(
@@ -795,7 +858,7 @@ def completed_row(
     model_provider: str = "deterministic",
 ) -> dict[str, Any]:
     metrics = compute_pairwise_metrics([generated_summary], [record["reference_summary"]], include_bertscore=False)
-    return {
+    row = {
         "evaluation_type": "medium_controlled_proxy_evaluation",
         "proxy_evaluation": True,
         "proxy_warning": HONESTY_WARNING,
@@ -818,6 +881,8 @@ def completed_row(
         "rouge2": metrics["rouge2"],
         "rougeL": metrics["rougeL"],
     }
+    row.update(compute_clinical_record_metrics(row))
+    return row
 
 
 def failed_row(
@@ -828,7 +893,7 @@ def failed_row(
     *,
     model_provider: str,
 ) -> dict[str, Any]:
-    return {
+    row = {
         "evaluation_type": "medium_controlled_proxy_evaluation",
         "proxy_evaluation": True,
         "proxy_warning": HONESTY_WARNING,
@@ -851,6 +916,8 @@ def failed_row(
         "rouge2": None,
         "rougeL": None,
     }
+    row.update(empty_clinical_record_metrics(["retrieval-related failure"]))
+    return row
 
 
 def comparison_rows_for(
@@ -873,8 +940,9 @@ def comparison_row(model_provider: str, model_name: str, rows: list[dict[str, An
     metrics = compute_pairwise_metrics(
         [row["generated_summary"] for row in completed],
         [row["reference_summary"] for row in completed],
-        include_bertscore=False,
+        include_bertscore=INCLUDE_BERTSCORE,
     ) if completed else {"rouge1": None, "rouge2": None, "rougeL": None}
+    clinical_metrics = aggregate_clinical_metrics(rows)
     return {
         "model_provider": model_provider,
         "model_name": model_name,
@@ -886,8 +954,24 @@ def comparison_row(model_provider: str, model_name: str, rows: list[dict[str, An
         "rouge1": metrics.get("rouge1"),
         "rouge2": metrics.get("rouge2"),
         "rougeL": metrics.get("rougeL"),
-        "bertscore_status": "not_requested",
+        "bertscore_precision": metrics.get("bertscore_precision"),
+        "bertscore_recall": metrics.get("bertscore_recall"),
+        "bertscore_f1": metrics.get("bertscore_f1"),
+        "bertscore_status": metrics.get("bertscore_status", "not_requested" if not INCLUDE_BERTSCORE else "not_available"),
+        "bertscore_model_type": metrics.get("bertscore_model_type"),
+        "bertscore_message": metrics.get("bertscore_message", ""),
         "average_latency_ms": mean_or_none([row["latency_ms"] for row in completed]),
+        "latency_p50_ms": clinical_metrics.get("latency_p50_ms"),
+        "latency_p95_ms": clinical_metrics.get("latency_p95_ms"),
+        "citation_coverage": clinical_metrics.get("citation_coverage"),
+        "unsupported_claim_rate": clinical_metrics.get("unsupported_claim_rate"),
+        "factuality_proxy_score": clinical_metrics.get("factuality_proxy_score"),
+        "missing_diagnosis_rate": clinical_metrics.get("missing_diagnosis_rate"),
+        "missing_medication_rate": clinical_metrics.get("missing_medication_rate"),
+        "timeline_completeness": clinical_metrics.get("timeline_completeness"),
+        "hallucinated_clinical_entity_count": clinical_metrics.get("hallucinated_clinical_entity_count"),
+        "critical_info_omission_rate": clinical_metrics.get("critical_info_omission_rate"),
+        "failure_counts": clinical_metrics.get("failure_counts"),
         "notes": HONESTY_WARNING,
         "error_message": "; ".join(sorted({str(row.get("error_message")) for row in failed if row.get("error_message")})) or None,
     }
@@ -905,15 +989,34 @@ def write_comparison_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "rouge1",
         "rouge2",
         "rougeL",
+        "bertscore_precision",
+        "bertscore_recall",
+        "bertscore_f1",
         "bertscore_status",
+        "bertscore_model_type",
+        "bertscore_message",
         "average_latency_ms",
+        "latency_p50_ms",
+        "latency_p95_ms",
+        "citation_coverage",
+        "unsupported_claim_rate",
+        "factuality_proxy_score",
+        "missing_diagnosis_rate",
+        "missing_medication_rate",
+        "timeline_completeness",
+        "hallucinated_clinical_entity_count",
+        "critical_info_omission_rate",
+        "failure_counts",
         "notes",
         "error_message",
     ]
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writeheader()
-        writer.writerows(rows)
+        for row in rows:
+            payload = dict(row)
+            payload["failure_counts"] = json.dumps(payload.get("failure_counts") or {}, ensure_ascii=False)
+            writer.writerow({field: payload.get(field) for field in fields})
 
 
 def write_per_record_metrics(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -927,7 +1030,7 @@ def write_per_record_metrics(path: Path, rows: list[dict[str, Any]]) -> None:
         "rouge2",
         "rougeL",
         "latency_ms",
-        "failure_categories",
+        *PER_RECORD_CLINICAL_FIELDS,
         "error_message",
     ]
     with path.open("w", encoding="utf-8", newline="") as handle:
@@ -945,10 +1048,51 @@ def write_per_record_metrics(path: Path, rows: list[dict[str, Any]]) -> None:
                     "rouge2": row.get("rouge2"),
                     "rougeL": row.get("rougeL"),
                     "latency_ms": row.get("latency_ms"),
-                    "failure_categories": "; ".join(classify_failure(row)),
+                    "citation_coverage": row.get("citation_coverage"),
+                    "citation_count": row.get("citation_count"),
+                    "unsupported_claim_rate": row.get("unsupported_claim_rate"),
+                    "factuality_proxy_score": row.get("factuality_proxy_score"),
+                    "missing_diagnosis_rate": row.get("missing_diagnosis_rate"),
+                    "missing_medication_rate": row.get("missing_medication_rate"),
+                    "timeline_completeness": row.get("timeline_completeness"),
+                    "hallucinated_clinical_entity_count": row.get("hallucinated_clinical_entity_count"),
+                    "critical_info_omission_rate": row.get("critical_info_omission_rate"),
+                    "failure_categories": serialize_failure_categories(row.get("failure_categories") or classify_failure(row)),
                     "error_message": row.get("error_message"),
                 }
             )
+
+
+def write_per_record_failure_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
+    with path.open("w", encoding="utf-8") as handle:
+        for row in rows:
+            payload = {
+                "note_id": row.get("note_id", ""),
+                "patient_id": row.get("patient_id", ""),
+                "encounter_id": row.get("encounter_id", ""),
+                "dataset": row.get("dataset", ""),
+                "model_provider": row.get("model_provider", ""),
+                "model_name": row.get("model_name", ""),
+                "stage": row.get("stage", ""),
+                "status": row.get("status", ""),
+                "input_note": row.get("source_note", ""),
+                "generated_summary": row.get("generated_summary", ""),
+                "reference_summary": row.get("reference_summary", ""),
+                "retrieved_evidence": row.get("retrieved_evidence") or row.get("evidence") or "",
+                "citations": row.get("citations") or [],
+                "rouge1": row.get("rouge1"),
+                "rouge2": row.get("rouge2"),
+                "rougeL": row.get("rougeL"),
+                "latency_ms": row.get("latency_ms"),
+                "clinical_metrics": {
+                    field: row.get(field)
+                    for field in PER_RECORD_CLINICAL_FIELDS
+                    if field != "failure_categories"
+                },
+                "failure_labels": row.get("failure_categories") or classify_failure(row),
+                "error_message": row.get("error_message"),
+            }
+            handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
 
 
 def failure_rows_for(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -959,13 +1103,18 @@ def failure_rows_for(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "note_id": row.get("note_id", ""),
                 "model_provider": row.get("model_provider", ""),
                 "rougeL": row.get("rougeL"),
-                "categories": classify_failure(row),
+                "categories": row.get("failure_categories") or classify_failure(row),
             }
         )
     return sorted(failures, key=lambda item: float(item["rougeL"] or -1))
 
 
 def classify_failure(row: dict[str, Any]) -> list[str]:
+    if row.get("failure_categories"):
+        value = row.get("failure_categories")
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        return [item.strip() for item in str(value).split(";") if item.strip()]
     if row.get("status") != "completed":
         return ["retrieval-related failure"]
     generated = str(row.get("generated_summary") or "")
@@ -1012,6 +1161,7 @@ def tokens(text: str) -> list[str]:
 
 def write_failure_analysis(path: Path, failures: list[dict[str, Any]]) -> None:
     counts = Counter(category for row in failures for category in row["categories"])
+    by_model = Counter((row["model_provider"], category) for row in failures for category in row["categories"])
     lines = [
         "# Failure Analysis",
         "",
@@ -1022,6 +1172,17 @@ def write_failure_analysis(path: Path, failures: list[dict[str, Any]]) -> None:
     ]
     for category, count in counts.most_common():
         lines.append(f"- {category}: `{count}`")
+    lines.extend(
+        [
+            "",
+            "## Failure Counts By Model",
+            "",
+            "| Model | Failure label | Count |",
+            "| --- | --- | ---: |",
+        ]
+    )
+    for (provider, category), count in sorted(by_model.items(), key=lambda item: (item[0][0], -item[1], item[0][1])):
+        lines.append(f"| `{provider}` | {category} | {count} |")
     lines.extend(
         [
             "",
@@ -1136,6 +1297,7 @@ def build_run_manifest(
         "cache_paths": cache_paths,
         "retrieval_embedding_provider": os.environ.get("RAG_EMBEDDING_PROVIDER"),
         "retrieval_embedding_model": os.environ.get("RAG_SENTENCE_TRANSFORMERS_MODEL"),
+        "include_bertscore": INCLUDE_BERTSCORE,
         "dataset_manifest": dataset_manifest,
         "stages": [stage.__dict__ | {"output_path": str(stage.output_path) if stage.output_path else None} for stage in stage_results],
         "pegasus_load_diagnostics": [diagnostic_to_dict(diagnostic) for diagnostic in pegasus_diagnostics],
@@ -1178,6 +1340,7 @@ def write_report(path: Path, manifest: dict[str, Any], comparison_rows: list[dic
         "- Models skipped: `none`",
         f"- Best model by ROUGE-L: `{best}`",
         f"- Runtime seconds: `{manifest['runtime_seconds']}`",
+        f"- BERTScore enabled: `{manifest.get('include_bertscore', False)}`",
         "",
         "## Cache Verification",
         "",
@@ -1190,12 +1353,25 @@ def write_report(path: Path, manifest: dict[str, Any], comparison_rows: list[dic
         "",
         "## ROUGE Results",
         "",
-        "| Model | Status | Records | ROUGE-1 | ROUGE-2 | ROUGE-L | Avg latency ms | Notes |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |",
+        "| Model | Status | Records | ROUGE-1 | ROUGE-2 | ROUGE-L | BERTScore F1 | BERTScore status | Avg latency ms | Notes |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | --- |",
     ]
     for row in comparison_rows:
         lines.append(
-            f"| `{row['model_provider']}` | `{row['status']}` | {row['completed_count']} | {row['rouge1']} | {row['rouge2']} | {row['rougeL']} | {row['average_latency_ms']} | {row['notes']} |"
+            f"| `{row['model_provider']}` | `{row['status']}` | {row['completed_count']} | {row['rouge1']} | {row['rouge2']} | {row['rougeL']} | {row.get('bertscore_f1')} | `{row.get('bertscore_status')}` | {row['average_latency_ms']} | {row['notes']} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Clinical Proxy Metrics",
+            "",
+            "| Model | Citation coverage | Unsupported claim rate | Faithfulness proxy | Missing diagnosis | Missing medication | Timeline completeness | Critical omission | Latency p50 | Latency p95 |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    for row in comparison_rows:
+        lines.append(
+            f"| `{row['model_provider']}` | {row.get('citation_coverage')} | {row.get('unsupported_claim_rate')} | {row.get('factuality_proxy_score')} | {row.get('missing_diagnosis_rate')} | {row.get('missing_medication_rate')} | {row.get('timeline_completeness')} | {row.get('critical_info_omission_rate')} | {row.get('latency_p50_ms')} | {row.get('latency_p95_ms')} |"
         )
     lines.extend(
         [

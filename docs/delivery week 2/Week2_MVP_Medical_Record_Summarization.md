@@ -9,8 +9,8 @@
 
 | Hạng mục | Link |
 | --- | --- |
-| GitHub repository | `[Dán GitHub link vào đây]` |
-| YouTube demo | `[Dán YouTube demo link vào đây]` |
+| GitHub repository | `[https://github.com/104221795/Medical_Record_Summarization]` |
+| YouTube demo | `[https://www.youtube.com/watch?v=JiXq3XdmH9E]` |
 | Local React demo | `http://127.0.0.1:5173` |
 | Local API docs | `http://127.0.0.1:8080/docs` |
 | Local benchmark dashboard | `http://127.0.0.1:5173/admin/evaluation/benchmark` |

@@ -20,6 +20,7 @@ from .routers.encounters import router as encounter_router
 from .routers.evaluation import router as evaluation_router
 from .routers.fhir import router as fhir_router
 from .routers.ingestion import router as ingestion_router
+from .routers.jobs import router as jobs_router
 from .routers.metrics import router as metrics_router
 from .routers.multimodal import router as multimodal_router
 from .routers.patients import router as patient_router
@@ -91,6 +92,7 @@ def create_app(
     app.include_router(metrics_router, prefix=configured_settings.api_prefix)
     app.include_router(summary_router, prefix=configured_settings.api_prefix)
     app.include_router(provider_router, prefix=configured_settings.api_prefix)
+    app.include_router(jobs_router, prefix=configured_settings.api_prefix)
     app.include_router(claim_router, prefix=configured_settings.api_prefix)
     app.include_router(citation_router, prefix=configured_settings.api_prefix)
     app.include_router(demo_router, prefix=configured_settings.api_prefix)

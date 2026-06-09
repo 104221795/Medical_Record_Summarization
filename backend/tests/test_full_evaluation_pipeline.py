@@ -68,17 +68,27 @@ def test_full_pipeline_deterministic_model_completes(tmp_path: Path) -> None:
     assert predictions[0]["status"] == "completed"
     assert predictions[0]["generated_summary"]
     assert predictions[0]["proxy_evaluation"] is True
+    assert "factuality_proxy_score" in predictions[0]
+    assert "failure_categories" in predictions[0]
 
     comparison = result["comparison_rows"][0]
     assert comparison["model_provider"] == "deterministic"
     assert comparison["status"] == "completed"
     assert comparison["completed_count"] == 1
     assert comparison["rouge1"] is not None
+    assert "citation_coverage" in comparison
+    assert "latency_p95_ms" in comparison
 
     with (output_dir / "model_comparison.csv").open("r", encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
     assert rows[0]["model_provider"] == "deterministic"
     assert rows[0]["status"] == "completed"
+    assert "factuality_proxy_score" in rows[0]
+
+    failure_examples = _read_jsonl(output_dir / "per_record_failure_analysis.jsonl")
+    assert failure_examples[0]["input_note"]
+    assert failure_examples[0]["generated_summary"]
+    assert failure_examples[0]["reference_summary"]
 
 
 def test_full_pipeline_blocks_bart_and_pegasus_unless_downloads_allowed(tmp_path: Path) -> None:
@@ -200,6 +210,7 @@ def _assert_common_outputs(output_dir: Path) -> None:
     assert (output_dir / "model_manifest.json").exists()
     assert (output_dir / "model_comparison.csv").exists()
     assert (output_dir / "all_predictions.jsonl").exists()
+    assert (output_dir / "per_record_failure_analysis.jsonl").exists()
     assert (output_dir / "human_review_template.csv").exists()
     assert (output_dir / "failure_analysis.md").exists()
     assert (output_dir / "EVALUATION_REPORT.md").exists()

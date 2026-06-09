@@ -1,8 +1,8 @@
 import logoUrl from "../../icons_pic/logo.png";
-import imageOne from "../../icons_pic/1.jpg";
+import imageOne from "../../icons_pic/6.jpg";
 import imageTwo from "../../icons_pic/2.jpg";
 import imageThree from "../../icons_pic/3.jpg";
-import imageFour from "../../icons_pic/4.png";
+import imageFour from "../../icons_pic/5.jpg";
 
 export const brandAssets = {
   logo: logoUrl,

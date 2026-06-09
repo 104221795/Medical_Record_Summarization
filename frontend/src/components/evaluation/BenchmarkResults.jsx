@@ -1,7 +1,5 @@
 import Badge from "../common/Badge.jsx";
 import Card from "../common/Card.jsx";
-import ErrorState from "../common/ErrorState.jsx";
-import LoadingState from "../common/LoadingState.jsx";
 import MetricCard from "../common/MetricCard.jsx";
 import PageHeader from "../common/PageHeader.jsx";
 import {
@@ -14,22 +12,33 @@ import {
   providerLabel,
   RecordsEvaluatedChart,
 } from "./BenchmarkVisuals.jsx";
+import BenchmarkFlowTabs from "./BenchmarkFlowTabs.jsx";
 import ModelComparisonTable from "./ModelComparisonTable.jsx";
-import { useEvaluationResults } from "../../hooks/useEvaluationResults.js";
+import { ClinicalMetricPanel, PerRecordFailureDashboard, UseCaseRecommendationPanel } from "./ClinicalEvaluationPanels.jsx";
 
 export default function BenchmarkResults() {
-  const { data, loading, error, reload } = useEvaluationResults();
-  if (loading) return <LoadingState label="Loading benchmark artifacts..." />;
-  if (error) return <ErrorState error={error} />;
+  return (
+    <BenchmarkFlowTabs loadingLabel="Loading benchmark artifacts...">
+      {({ data, reload, flowMeta }) => <BenchmarkResultsContent data={data} reload={reload} flowMeta={flowMeta} />}
+    </BenchmarkFlowTabs>
+  );
+}
+
+function BenchmarkResultsContent({ data, reload, flowMeta }) {
   const rows = data?.models || [];
   const pubmed = rows.find((row) => row.model_provider?.includes("pegasus_pubmed"));
   const pubmedFile = data?.prediction_file_availability?.["pegasus_pubmed_predictions.jsonl"];
+  const bestBertScore = rows.reduce(
+    (bestRow, row) => (Number(row.bertscore_f1 || 0) > Number(bestRow?.bertscore_f1 || 0) ? row : bestRow),
+    null,
+  );
+  const bertscoreStatus = rows.find((row) => row.bertscore_status)?.bertscore_status || "not requested";
   return (
     <div className="stack benchmark-results-page admin-analytics-page">
       <PageHeader
         eyebrow="Experiment artifacts"
-        title="Benchmark Results"
-        description="Inspect run artifacts, CSV outputs, report locations, and measured model comparison rows."
+        title={`Benchmark Results - ${flowMeta.title}`}
+        description={flowMeta.description}
         actions={<button className="btn secondary" onClick={reload}>Refresh</button>}
       />
       <div className="metric-grid">
@@ -37,6 +46,11 @@ export default function BenchmarkResults() {
         <MetricCard label="Report" value={data?.report_exists ? "available" : "missing"} detail={data?.report_path || "not available"} />
         <MetricCard label="Pegasus PubMed" value={pubmed ? `${pubmed.completed_count}/${pubmed.record_count}` : "missing"} detail={pubmed?.model_name || "prediction row not found"} />
         <MetricCard label="PubMed ROUGE-L" value={formatScore(pubmed?.rougeL)} detail={pubmed?.stage_name || "stage not available"} />
+        <MetricCard
+          label="Best BERTScore F1"
+          value={formatScore(bestBertScore?.bertscore_f1)}
+          detail={bestBertScore?.bertscore_f1 ? providerLabel(bestBertScore.model_provider) : `BERTScore ${bertscoreStatus}`}
+        />
       </div>
       <Card title="Pegasus PubMed 200-Record Run" actions={<Badge tone={pubmed?.status?.includes("completed") ? "success" : "warning"}>{pubmed?.status || "not found"}</Badge>}>
         <p>
@@ -53,10 +67,13 @@ export default function BenchmarkResults() {
         <MetricComparisonChart rows={rows} title="Benchmark ROUGE Comparison" />
         <RecordsEvaluatedChart rows={rows} />
       </div>
+      <ClinicalMetricPanel rows={rows} summary={data?.clinical_metric_summary} />
+      <UseCaseRecommendationPanel rows={rows} />
       <div className="grid-two">
         <FailurePatternChart summary={data?.failure_analysis_summary} />
         <PredictionAvailabilityPanel availability={data?.prediction_file_availability} />
       </div>
+      <PerRecordFailureDashboard examples={data?.per_record_failure_examples} />
       <div className="grid-two">
         <BenchmarkFolderPanel folders={data?.discovered_benchmark_folders} />
         <ArtifactPathPanel paths={data?.artifact_paths} />

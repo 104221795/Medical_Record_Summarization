@@ -55,16 +55,27 @@ from .deterministic_summary_service import DeterministicSummaryService
 from .metrics_service import MetricsService
 from .review_service import ReviewService
 from .safety_service import SafetyService
+from ..evaluation.clinical_metrics import (
+    aggregate_clinical_metrics,
+    compute_clinical_record_metrics,
+    serialize_failure_categories,
+)
 
 
 BENCHMARK_DATASET_PATH = ROOT_DIR / "data" / "processed" / "ehr_benchmark" / "test.jsonl"
 BENCHMARK_OUTPUT_PATH = ROOT_DIR / "results" / "ehr_benchmark" / "model_comparison.csv"
 BENCHMARK_RUNNER_PATH = ROOT_DIR / "scripts" / "run_baseline_summarization.py"
 MEDIUM_BENCHMARK_OUTPUT_DIR = Path("D:/clin_summ_outputs/medium_benchmark_bart_pegasus")
+SUMMARIZATION_ONLY_OUTPUT_DIR = Path("D:/clin_summ_outputs/summarization_only_benchmark")
+CLINICAL_CONTEXT_OUTPUT_DIR = Path("D:/clin_summ_outputs/clinical_context_benchmark")
+RAG_GROUNDED_OUTPUT_DIR = Path("D:/clin_summ_outputs/rag_grounded_benchmark")
 MEDIUM_BENCHMARK_COMPARISON_PATH = MEDIUM_BENCHMARK_OUTPUT_DIR / "model_comparison.csv"
 MEDIUM_BENCHMARK_REPORT_PATH = MEDIUM_BENCHMARK_OUTPUT_DIR / "EVALUATION_REPORT.md"
 MEDIUM_BENCHMARK_FAILURE_PATH = MEDIUM_BENCHMARK_OUTPUT_DIR / "failure_analysis.md"
 BENCHMARK_DISCOVERY_DIRS = [
+    Path("D:/clin_summ_outputs/rag_grounded_benchmark"),
+    Path("D:/clin_summ_outputs/clinical_context_benchmark"),
+    Path("D:/clin_summ_outputs/summarization_only_benchmark"),
     Path("D:/clin_summ_outputs/medium_benchmark"),
     Path("D:/clin_summ_outputs/medium_benchmark_bart_pegasus"),
     Path("D:/clin_summ_outputs/performance_benchmark"),
@@ -84,6 +95,28 @@ FAILURE_CATEGORIES = [
     "incomplete summary",
     "retrieval-related failure",
     "source data limitation",
+]
+CLINICAL_ROW_FIELDS = [
+    "citation_coverage",
+    "unsupported_claim_rate",
+    "factuality_proxy_score",
+    "missing_diagnosis_rate",
+    "missing_medication_rate",
+    "timeline_completeness",
+    "hallucinated_clinical_entity_count",
+    "critical_info_omission_rate",
+    "latency_p50_ms",
+    "latency_p95_ms",
+]
+PER_RECORD_CLINICAL_FIELDS = [
+    "citation_coverage",
+    "unsupported_claim_rate",
+    "factuality_proxy_score",
+    "missing_diagnosis_rate",
+    "missing_medication_rate",
+    "timeline_completeness",
+    "hallucinated_clinical_entity_count",
+    "critical_info_omission_rate",
 ]
 PROXY_EVALUATION_WARNING = (
     "Proxy evaluation only. These results do not demonstrate clinical safety, clinical effectiveness, "
@@ -275,12 +308,12 @@ class EvaluationService:
             model_comparison_output_exists=output_exists,
         )
 
-    def benchmark_results(self) -> BenchmarkResultsResponse:
-        selected_dir, discovered = _select_benchmark_output_dir(BENCHMARK_DISCOVERY_DIRS)
+    def benchmark_results(self, benchmark_type: str | None = None) -> BenchmarkResultsResponse:
+        selected_dir, discovered = _select_benchmark_output_dir(BENCHMARK_DISCOVERY_DIRS, benchmark_type)
         comparison_path = selected_dir / "model_comparison.csv"
         report_path = selected_dir / "EVALUATION_REPORT.md"
         failure_path = selected_dir / "failure_analysis.md"
-        manifest_path = selected_dir / "evaluation_run_manifest.json"
+        manifest_path = _benchmark_manifest_path(selected_dir)
         per_record_path = selected_dir / "per_record_metrics.csv"
         rows = _read_model_comparison(comparison_path)
         rows = _merge_prediction_rows(selected_dir, rows)
@@ -289,22 +322,72 @@ class EvaluationService:
         best = max(completed, key=lambda row: row.rougeL or 0.0).model_provider if completed else None
         prediction_files = _prediction_file_availability(selected_dir)
         per_record_summary = _per_record_metric_summary(per_record_path)
+        clinical_summary = _clinical_metric_summary(per_record_path, selected_dir)
+        failure_examples = _per_record_failure_examples(selected_dir, limit=20)
         failure_summary = _failure_analysis_summary(failure_path, per_record_path)
         return BenchmarkResultsResponse(
             output_dir=str(selected_dir),
             selected_output_dir=str(selected_dir),
+            benchmark_type=_benchmark_type(selected_dir),
             discovered_benchmark_folders=discovered,
             models=rows,
             per_record_metric_summary=per_record_summary,
+            clinical_metric_summary=clinical_summary,
+            per_record_failure_examples=failure_examples,
             prediction_file_availability=prediction_files,
             failure_analysis_summary=failure_summary,
             artifact_paths={
                 "model_comparison": str(comparison_path) if comparison_path.exists() else None,
                 "per_record_metrics": str(per_record_path) if per_record_path.exists() else None,
                 "evaluation_run_manifest": str(manifest_path) if manifest_path.exists() else None,
+                "rag_benchmark_manifest": str(selected_dir / "rag_benchmark_manifest.json")
+                if (selected_dir / "rag_benchmark_manifest.json").exists()
+                else None,
+                "summarization_only_manifest": str(selected_dir / "summarization_only_manifest.json")
+                if (selected_dir / "summarization_only_manifest.json").exists()
+                else None,
+                "clinical_context_manifest": str(selected_dir / "clinical_context_manifest.json")
+                if (selected_dir / "clinical_context_manifest.json").exists()
+                else None,
+                "clinical_context_records": str(selected_dir / "clinical_context_records.jsonl")
+                if (selected_dir / "clinical_context_records.jsonl").exists()
+                else None,
+                "retrieval_metrics": str(selected_dir / "retrieval_metrics.csv")
+                if (selected_dir / "retrieval_metrics.csv").exists()
+                else None,
+                "retrieved_evidence": str(selected_dir / "retrieved_evidence.jsonl")
+                if (selected_dir / "retrieved_evidence.jsonl").exists()
+                else None,
                 "run_log": str(selected_dir / "run.log") if (selected_dir / "run.log").exists() else None,
                 "evaluation_report": str(report_path) if report_path.exists() else None,
                 "failure_analysis": str(failure_path) if failure_path.exists() else None,
+                "per_record_failure_analysis": str(selected_dir / "per_record_failure_analysis.jsonl")
+                if (selected_dir / "per_record_failure_analysis.jsonl").exists()
+                else None,
+                "reproducibility_manifest": str(selected_dir / "reproducibility_manifest.json")
+                if (selected_dir / "reproducibility_manifest.json").exists()
+                else None,
+                "pre_rag_readiness_report": str(selected_dir / "PRE_RAG_READINESS_REPORT.md")
+                if (selected_dir / "PRE_RAG_READINESS_REPORT.md").exists()
+                else None,
+                "dataset_diversity_report": str(selected_dir / "dataset_diversity_report.md")
+                if (selected_dir / "dataset_diversity_report.md").exists()
+                else None,
+                "citation_grounding_report": str(selected_dir / "citation_grounding_report.md")
+                if (selected_dir / "citation_grounding_report.md").exists()
+                else None,
+                "dataset_strata_manifest": str(selected_dir / "dataset_strata_manifest.json")
+                if (selected_dir / "dataset_strata_manifest.json").exists()
+                else None,
+                "human_review_rubric": str(selected_dir / "human_review_rubric.csv")
+                if (selected_dir / "human_review_rubric.csv").exists()
+                else None,
+                "background_jobs_readiness": str(selected_dir / "background_jobs_readiness_report.md")
+                if (selected_dir / "background_jobs_readiness_report.md").exists()
+                else None,
+                "production_tech_gap": str(selected_dir / "production_tech_gap_report.md")
+                if (selected_dir / "production_tech_gap_report.md").exists()
+                else None,
             },
             data_freshness_timestamp=_freshness_timestamp(selected_dir),
             best_model_by_rougeL=best,
@@ -707,16 +790,50 @@ def _read_model_comparison(path: Path) -> list[BenchmarkResultRow]:
         return [_benchmark_row(row) for row in reader]
 
 
-def _select_benchmark_output_dir(candidate_dirs: list[Path]) -> tuple[Path, list[dict[str, Any]]]:
+def _select_benchmark_output_dir(
+    candidate_dirs: list[Path],
+    benchmark_type: str | None = None,
+) -> tuple[Path, list[dict[str, Any]]]:
     discovered = [_folder_info(path) for path in candidate_dirs]
     existing = [item for item in discovered if item["exists"]]
+    if benchmark_type:
+        existing = [item for item in existing if item["benchmark_type"] == benchmark_type]
     if not existing:
-        return MEDIUM_BENCHMARK_OUTPUT_DIR, discovered
-    ranked = sorted(existing, key=lambda item: (item["has_pegasus_pubmed_200"], item["last_modified"] or ""), reverse=True)
+        fallback_by_type = {
+            "rag_grounded": RAG_GROUNDED_OUTPUT_DIR,
+            "clinical_context": CLINICAL_CONTEXT_OUTPUT_DIR,
+            "summarization_only": MEDIUM_BENCHMARK_OUTPUT_DIR,
+        }
+        selected = fallback_by_type.get(benchmark_type or "", MEDIUM_BENCHMARK_OUTPUT_DIR)
+        for item in discovered:
+            item["selected"] = item["path"] == str(selected)
+        return selected, discovered
+    ranked = sorted(existing, key=lambda item: (item["has_model_comparison"], item["last_modified"] or ""), reverse=True)
     selected = Path(ranked[0]["path"])
     for item in discovered:
         item["selected"] = item["path"] == str(selected)
     return selected, discovered
+
+
+def _benchmark_manifest_path(path: Path) -> Path:
+    for filename in (
+        "rag_benchmark_manifest.json",
+        "clinical_context_manifest.json",
+        "summarization_only_manifest.json",
+        "evaluation_run_manifest.json",
+    ):
+        candidate = path / filename
+        if candidate.exists():
+            return candidate
+    return path / "evaluation_run_manifest.json"
+
+
+def _benchmark_type(path: Path) -> str:
+    if (path / "rag_benchmark_manifest.json").exists() or (path / "retrieval_metrics.csv").exists():
+        return "rag_grounded"
+    if (path / "clinical_context_manifest.json").exists() or (path / "clinical_context_records.jsonl").exists():
+        return "clinical_context"
+    return "summarization_only"
 
 
 def _folder_info(path: Path) -> dict[str, Any]:
@@ -724,13 +841,18 @@ def _folder_info(path: Path) -> dict[str, Any]:
     last_modified = max((file.stat().st_mtime for file in files if file.is_file()), default=0.0)
     pubmed_path = path / PREDICTION_FILES["pegasus_pubmed"]
     pubmed_count = _jsonl_count(pubmed_path)
+    manifest_path = _benchmark_manifest_path(path)
     return {
         "path": str(path),
         "exists": path.exists(),
         "selected": False,
         "has_model_comparison": (path / "model_comparison.csv").exists(),
         "has_per_record_metrics": (path / "per_record_metrics.csv").exists(),
-        "has_manifest": (path / "evaluation_run_manifest.json").exists(),
+        "has_manifest": manifest_path.exists(),
+        "has_rag_manifest": (path / "rag_benchmark_manifest.json").exists(),
+        "has_clinical_context_manifest": (path / "clinical_context_manifest.json").exists(),
+        "has_summarization_only_manifest": (path / "summarization_only_manifest.json").exists(),
+        "benchmark_type": _benchmark_type(path),
         "has_pegasus_pubmed_predictions": pubmed_path.exists(),
         "pegasus_pubmed_record_count": pubmed_count,
         "has_pegasus_pubmed_200": pubmed_count >= 200,
@@ -756,7 +878,7 @@ def _merge_prediction_rows(output_dir: Path, rows: list[BenchmarkResultRow]) -> 
 
 
 def _prediction_row(provider: str, path: Path) -> BenchmarkResultRow | None:
-    rows = _read_prediction_jsonl(path)
+    rows = [_ensure_clinical_metrics(row) for row in _read_prediction_jsonl(path)]
     if not rows:
         return None
     completed = [row for row in rows if row.get("status") == "completed"]
@@ -767,6 +889,7 @@ def _prediction_row(provider: str, path: Path) -> BenchmarkResultRow | None:
     skipped_count = sum(1 for row in rows if row.get("status") == "skipped")
     model_name = str(first.get("model_name") or _default_model_name(provider))
     stage_name = str(first.get("stage") or "")
+    clinical_metrics = aggregate_clinical_metrics(rows)
     return BenchmarkResultRow(
         model_provider=provider,
         model_name=model_name,
@@ -779,7 +902,18 @@ def _prediction_row(provider: str, path: Path) -> BenchmarkResultRow | None:
         rouge2=_mean([row.get("rouge2") for row in completed]),
         rougeL=_mean([row.get("rougeL") for row in completed]),
         bertscore_status="not_requested",
+        bertscore_model_type=None,
         average_latency_ms=_mean([row.get("latency_ms") for row in completed]),
+        latency_p50_ms=clinical_metrics.get("latency_p50_ms"),
+        latency_p95_ms=clinical_metrics.get("latency_p95_ms"),
+        citation_coverage=clinical_metrics.get("citation_coverage"),
+        unsupported_claim_rate=clinical_metrics.get("unsupported_claim_rate"),
+        factuality_proxy_score=clinical_metrics.get("factuality_proxy_score"),
+        missing_diagnosis_rate=clinical_metrics.get("missing_diagnosis_rate"),
+        missing_medication_rate=clinical_metrics.get("missing_medication_rate"),
+        timeline_completeness=clinical_metrics.get("timeline_completeness"),
+        hallucinated_clinical_entity_count=clinical_metrics.get("hallucinated_clinical_entity_count"),
+        critical_info_omission_rate=clinical_metrics.get("critical_info_omission_rate"),
         stage_name=stage_name or None,
         checkpoint=model_name,
         provider_type="api" if provider == "gemini" else "local",
@@ -797,6 +931,8 @@ def _enrich_rows(
 ) -> list[BenchmarkResultRow]:
     stages = _manifest_stages(manifest_path)
     per_record_failures = _per_record_failures_by_provider(per_record_path)
+    per_record_clinical = _per_record_clinical_by_provider(per_record_path)
+    prediction_clinical = _prediction_clinical_by_provider(output_dir)
     for row in rows:
         row.checkpoint = row.checkpoint or row.model_name
         row.provider_type = row.provider_type or ("api" if row.model_provider == "gemini" else "local")
@@ -809,6 +945,10 @@ def _enrich_rows(
                 row.notes = str(stage.get("notes"))
         if not row.failure_counts:
             row.failure_counts = per_record_failures.get(row.model_provider)
+        clinical = per_record_clinical.get(row.model_provider) or prediction_clinical.get(row.model_provider, {})
+        for field in CLINICAL_ROW_FIELDS:
+            if getattr(row, field, None) is None and field in clinical:
+                setattr(row, field, clinical[field])
     return rows
 
 
@@ -861,12 +1001,15 @@ def _per_record_metric_summary(path: Path) -> dict[str, Any]:
         return {"status": "not_available"}
     failure_counts = Counter()
     providers = Counter()
+    provider_metrics: dict[str, list[dict[str, Any]]] = {}
     rows = 0
     try:
         with path.open("r", encoding="utf-8", newline="") as handle:
             for row in csv.DictReader(handle):
                 rows += 1
-                providers[row.get("model_provider") or "unknown"] += 1
+                provider = row.get("model_provider") or "unknown"
+                providers[provider] += 1
+                provider_metrics.setdefault(provider, []).append(row)
                 for category in _split_failure_categories(row.get("failure_categories")):
                     failure_counts[category] += 1
     except OSError:
@@ -876,7 +1019,50 @@ def _per_record_metric_summary(path: Path) -> dict[str, Any]:
         "row_count": rows,
         "providers": dict(providers),
         "failure_counts": dict(failure_counts),
+        "clinical_metrics_by_provider": {
+            provider: _aggregate_csv_clinical(rows)
+            for provider, rows in provider_metrics.items()
+        },
         "bertscore": "not_available_in_current_run",
+    }
+
+
+def _clinical_metric_summary(per_record_path: Path, output_dir: Path) -> dict[str, Any]:
+    if per_record_path.exists():
+        provider_rows: dict[str, list[dict[str, Any]]] = {}
+        try:
+            with per_record_path.open("r", encoding="utf-8", newline="") as handle:
+                for row in csv.DictReader(handle):
+                    provider_rows.setdefault(row.get("model_provider") or "unknown", []).append(row)
+        except OSError:
+            provider_rows = {}
+        if provider_rows:
+            by_provider = {
+                provider: _aggregate_csv_clinical(rows)
+                for provider, rows in provider_rows.items()
+            }
+            if _has_any_clinical_metric(by_provider):
+                return {
+                    "status": "available",
+                    "source": "per_record_metrics.csv",
+                    "by_provider": by_provider,
+                }
+
+    prediction_rows = []
+    for filename in PREDICTION_FILES.values():
+        prediction_rows.extend(_ensure_clinical_metrics(row) for row in _read_prediction_jsonl(output_dir / filename))
+    if not prediction_rows:
+        return {"status": "not_available"}
+    by_provider: dict[str, list[dict[str, Any]]] = {}
+    for row in prediction_rows:
+        by_provider.setdefault(row.get("model_provider") or "unknown", []).append(row)
+    return {
+        "status": "available",
+        "source": "prediction_jsonl",
+        "by_provider": {
+            provider: aggregate_clinical_metrics(rows)
+            for provider, rows in by_provider.items()
+        },
     }
 
 
@@ -942,12 +1128,173 @@ def _per_record_failures_by_provider(path: Path) -> dict[str, dict[str, int]]:
     return {provider: dict(counter) for provider, counter in counts.items()}
 
 
+def _per_record_clinical_by_provider(path: Path) -> dict[str, dict[str, float | None]]:
+    if not path.exists():
+        return {}
+    rows_by_provider: dict[str, list[dict[str, Any]]] = {}
+    try:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            for row in csv.DictReader(handle):
+                rows_by_provider.setdefault(row.get("model_provider") or "unknown", []).append(row)
+    except OSError:
+        return {}
+    return {
+        provider: _aggregate_csv_clinical(rows)
+        for provider, rows in rows_by_provider.items()
+    }
+
+
+def _prediction_clinical_by_provider(output_dir: Path) -> dict[str, dict[str, Any]]:
+    by_provider: dict[str, list[dict[str, Any]]] = {}
+    for provider, filename in PREDICTION_FILES.items():
+        rows = [_ensure_clinical_metrics(row) for row in _read_prediction_jsonl(output_dir / filename)]
+        if rows:
+            by_provider[provider] = rows
+    return {
+        provider: aggregate_clinical_metrics(rows)
+        for provider, rows in by_provider.items()
+    }
+
+
+def _has_any_clinical_metric(by_provider: dict[str, dict[str, Any]]) -> bool:
+    for metrics in by_provider.values():
+        for field in PER_RECORD_CLINICAL_FIELDS:
+            if metrics.get(field) is not None:
+                return True
+    return False
+
+
+def _aggregate_csv_clinical(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "citation_coverage": _mean([row.get("citation_coverage") for row in rows]),
+        "unsupported_claim_rate": _mean([row.get("unsupported_claim_rate") for row in rows]),
+        "factuality_proxy_score": _mean([row.get("factuality_proxy_score") for row in rows]),
+        "missing_diagnosis_rate": _mean([row.get("missing_diagnosis_rate") for row in rows]),
+        "missing_medication_rate": _mean([row.get("missing_medication_rate") for row in rows]),
+        "timeline_completeness": _mean([row.get("timeline_completeness") for row in rows]),
+        "hallucinated_clinical_entity_count": _mean([row.get("hallucinated_clinical_entity_count") for row in rows]),
+        "critical_info_omission_rate": _mean([row.get("critical_info_omission_rate") for row in rows]),
+        "latency_p50_ms": _percentile([_float_value_any(row.get("latency_ms")) for row in rows], 50),
+        "latency_p95_ms": _percentile([_float_value_any(row.get("latency_ms")) for row in rows], 95),
+    }
+
+
 def _failure_counts_from_prediction_rows(rows: list[dict[str, Any]]) -> dict[str, int] | None:
     counts = Counter()
     for row in rows:
         for category in _split_failure_categories(row.get("failure_categories")):
             counts[category] += 1
     return dict(counts) if counts else None
+
+
+def _per_record_failure_examples(output_dir: Path, *, limit: int) -> list[dict[str, Any]]:
+    explicit_path = output_dir / "per_record_failure_analysis.jsonl"
+    if explicit_path.exists():
+        rows = _read_failure_jsonl(explicit_path)
+    else:
+        rows = []
+        for filename in PREDICTION_FILES.values():
+            rows.extend(_failure_payload_from_prediction(row) for row in _read_prediction_jsonl(output_dir / filename))
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        note_id = str(row.get("note_id") or "")
+        if not note_id:
+            continue
+        current = grouped.setdefault(
+            note_id,
+            {
+                "note_id": note_id,
+                "patient_id": row.get("patient_id") or "",
+                "encounter_id": row.get("encounter_id") or "",
+                "dataset": row.get("dataset") or "",
+                "input_note": row.get("input_note") or row.get("source_note") or "",
+                "reference_summary": row.get("reference_summary") or "",
+                "retrieved_evidence": row.get("retrieved_evidence") or "",
+                "citations": row.get("citations") or [],
+                "failure_labels": set(),
+                "model_outputs": [],
+                "severity": 0.0,
+            },
+        )
+        labels = _split_failure_categories(row.get("failure_labels") or row.get("failure_categories"))
+        current["failure_labels"].update(labels)
+        rouge_l = _float_value_any(row.get("rougeL"))
+        current["severity"] += len(labels) + (1.0 - rouge_l if rouge_l is not None else 1.0)
+        current["model_outputs"].append(
+            {
+                "model_provider": row.get("model_provider") or "",
+                "model_name": row.get("model_name") or "",
+                "status": row.get("status") or "",
+                "generated_summary": row.get("generated_summary") or "",
+                "rouge1": row.get("rouge1"),
+                "rouge2": row.get("rouge2"),
+                "rougeL": row.get("rougeL"),
+                "latency_ms": row.get("latency_ms"),
+                "clinical_metrics": row.get("clinical_metrics") or {
+                    field: row.get(field)
+                    for field in PER_RECORD_CLINICAL_FIELDS
+                },
+                "failure_labels": labels,
+                "error_message": row.get("error_message"),
+            }
+        )
+    examples = []
+    for item in grouped.values():
+        item["failure_labels"] = sorted(item["failure_labels"])
+        item["model_outputs"] = sorted(item["model_outputs"], key=lambda row: row.get("model_provider") or "")
+        examples.append(item)
+    return sorted(examples, key=lambda item: item["severity"], reverse=True)[:limit]
+
+
+def _failure_payload_from_prediction(row: dict[str, Any]) -> dict[str, Any]:
+    enriched = _ensure_clinical_metrics(row)
+    return {
+        "note_id": enriched.get("note_id", ""),
+        "patient_id": enriched.get("patient_id", ""),
+        "encounter_id": enriched.get("encounter_id", ""),
+        "dataset": enriched.get("dataset", ""),
+        "model_provider": enriched.get("model_provider", ""),
+        "model_name": enriched.get("model_name", ""),
+        "status": enriched.get("status", ""),
+        "input_note": enriched.get("source_note", ""),
+        "generated_summary": enriched.get("generated_summary", ""),
+        "reference_summary": enriched.get("reference_summary", ""),
+        "retrieved_evidence": enriched.get("retrieved_evidence") or enriched.get("evidence") or "",
+        "citations": enriched.get("citations") or [],
+        "rouge1": enriched.get("rouge1"),
+        "rouge2": enriched.get("rouge2"),
+        "rougeL": enriched.get("rougeL"),
+        "latency_ms": enriched.get("latency_ms"),
+        "clinical_metrics": {
+            field: enriched.get(field)
+            for field in PER_RECORD_CLINICAL_FIELDS
+        },
+        "failure_labels": enriched.get("failure_categories") or [],
+        "error_message": enriched.get("error_message"),
+    }
+
+
+def _read_failure_jsonl(path: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                if line.strip():
+                    rows.append(json.loads(line))
+    except (OSError, json.JSONDecodeError):
+        return []
+    return rows
+
+
+def _ensure_clinical_metrics(row: dict[str, Any]) -> dict[str, Any]:
+    if all(row.get(field) not in {None, ""} for field in ("factuality_proxy_score", "critical_info_omission_rate")):
+        if "failure_categories" not in row and "failure_labels" in row:
+            row["failure_categories"] = row["failure_labels"]
+        return row
+    enriched = dict(row)
+    enriched.update(compute_clinical_record_metrics(enriched))
+    enriched["failure_categories"] = serialize_failure_categories(enriched.get("failure_categories"))
+    return enriched
 
 
 def _split_failure_categories(value: Any) -> list[str]:
@@ -978,6 +1325,19 @@ def _mean(values: list[Any]) -> float | None:
     numbers = [_float_value_any(value) for value in values]
     clean = [value for value in numbers if value is not None]
     return round(sum(clean) / len(clean), 4) if clean else None
+
+
+def _percentile(values: list[Any], percentile: int) -> float | None:
+    clean = sorted(value for value in values if value is not None)
+    if not clean:
+        return None
+    if len(clean) == 1:
+        return round(float(clean[0]), 4)
+    rank = (len(clean) - 1) * (percentile / 100)
+    lower = int(rank)
+    upper = min(lower + 1, len(clean) - 1)
+    weight = rank - lower
+    return round((clean[lower] * (1 - weight)) + (clean[upper] * weight), 4)
 
 
 def _float_value_any(value: Any) -> float | None:
@@ -1029,13 +1389,28 @@ def _benchmark_row(row: dict[str, str]) -> BenchmarkResultRow:
         rouge1=_float_value(row.get("rouge1")),
         rouge2=_float_value(row.get("rouge2")),
         rougeL=_float_value(row.get("rougeL")),
+        bertscore_precision=_float_value(row.get("bertscore_precision")),
+        bertscore_recall=_float_value(row.get("bertscore_recall")),
+        bertscore_f1=_float_value(row.get("bertscore_f1")),
         bertscore_status=row.get("bertscore_status") or None,
+        bertscore_model_type=row.get("bertscore_model_type") or None,
         average_latency_ms=_float_value(row.get("average_latency_ms")),
+        latency_p50_ms=_float_value(row.get("latency_p50_ms")),
+        latency_p95_ms=_float_value(row.get("latency_p95_ms")),
+        citation_coverage=_float_value(row.get("citation_coverage")),
+        unsupported_claim_rate=_float_value(row.get("unsupported_claim_rate")),
+        factuality_proxy_score=_float_value(row.get("factuality_proxy_score")),
+        missing_diagnosis_rate=_float_value(row.get("missing_diagnosis_rate")),
+        missing_medication_rate=_float_value(row.get("missing_medication_rate")),
+        timeline_completeness=_float_value(row.get("timeline_completeness")),
+        hallucinated_clinical_entity_count=_float_value(row.get("hallucinated_clinical_entity_count")),
+        critical_info_omission_rate=_float_value(row.get("critical_info_omission_rate")),
         stage_name=row.get("stage_name") or row.get("stage") or None,
         checkpoint=row.get("checkpoint") or row.get("model_name") or None,
         provider_type=row.get("provider_type") or None,
         domain_fit=row.get("domain_fit") or None,
         total_runtime_seconds=_float_value(row.get("total_runtime_seconds")),
+        failure_counts=_json_dict(row.get("failure_counts")),
         notes=row.get("notes") or None,
         error_message=row.get("error_message") or None,
     )
@@ -1055,3 +1430,21 @@ def _float_value(value: str | None) -> float | None:
         return float(value)
     except ValueError:
         return None
+
+
+def _json_dict(value: str | None) -> dict[str, int] | None:
+    if not value:
+        return None
+    try:
+        parsed = json.loads(value)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    result: dict[str, int] = {}
+    for key, count in parsed.items():
+        try:
+            result[str(key)] = int(count)
+        except (TypeError, ValueError):
+            continue
+    return result

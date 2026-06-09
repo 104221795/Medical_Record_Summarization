@@ -661,8 +661,22 @@ class BenchmarkResultRow(PersistenceModel):
     rouge1: float | None = None
     rouge2: float | None = None
     rougeL: float | None = None
+    bertscore_precision: float | None = None
+    bertscore_recall: float | None = None
+    bertscore_f1: float | None = None
     bertscore_status: str | None = None
+    bertscore_model_type: str | None = None
     average_latency_ms: float | None = None
+    latency_p50_ms: float | None = None
+    latency_p95_ms: float | None = None
+    citation_coverage: float | None = None
+    unsupported_claim_rate: float | None = None
+    factuality_proxy_score: float | None = None
+    missing_diagnosis_rate: float | None = None
+    missing_medication_rate: float | None = None
+    timeline_completeness: float | None = None
+    hallucinated_clinical_entity_count: float | None = None
+    critical_info_omission_rate: float | None = None
     stage_name: str | None = None
     checkpoint: str | None = None
     provider_type: str | None = None
@@ -676,9 +690,12 @@ class BenchmarkResultRow(PersistenceModel):
 class BenchmarkResultsResponse(PersistenceModel):
     output_dir: str
     selected_output_dir: str | None = None
+    benchmark_type: str | None = None
     discovered_benchmark_folders: list[dict[str, Any]] = Field(default_factory=list)
     models: list[BenchmarkResultRow]
     per_record_metric_summary: dict[str, Any] = Field(default_factory=dict)
+    clinical_metric_summary: dict[str, Any] = Field(default_factory=dict)
+    per_record_failure_examples: list[dict[str, Any]] = Field(default_factory=list)
     prediction_file_availability: dict[str, Any] = Field(default_factory=dict)
     failure_analysis_summary: dict[str, Any] = Field(default_factory=dict)
     artifact_paths: dict[str, str | None] = Field(default_factory=dict)
@@ -689,6 +706,38 @@ class BenchmarkResultsResponse(PersistenceModel):
     report_exists: bool
     failure_analysis_exists: bool
     proxy_warning: str
+
+
+class ModelJobCreateRequest(PersistenceModel):
+    job_type: Literal["summarization_generation", "model_warmup"] = "model_warmup"
+    model_provider: str = Field(default="bart", min_length=1, max_length=100)
+    model_name: str = Field(default="facebook/bart-large-cnn", min_length=1, max_length=255)
+    timeout_seconds: int = Field(default=900, ge=1, le=24 * 60 * 60)
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class ModelJobResponse(PersistenceModel):
+    job_id: str
+    job_type: str
+    model_provider: str
+    model_name: str
+    status: Literal["queued", "running", "completed", "failed", "cancelled", "timed_out"]
+    progress: float = Field(ge=0.0, le=1.0)
+    created_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    timeout_seconds: int
+    result: dict[str, Any] | None = None
+    error_message: str | None = None
+
+
+class ModelJobListResponse(PersistenceModel):
+    jobs: list[ModelJobResponse]
+
+
+class ModelReadinessResponse(PersistenceModel):
+    cache_paths: dict[str, str | None]
+    models: list[dict[str, Any]]
 
 
 class SummaryGenerateRequest(PersistenceModel):
@@ -895,6 +944,9 @@ class SummaryReviewActionResponse(PersistenceModel):
     rejection_reason: str | None = None
     edit_distance_score: Decimal | None = None
     citation_revalidation_required: bool = False
+    final_locked: bool = False
+    reviewer_signature: str | None = None
+    audit_trail_ready: bool = True
 
 
 class SummaryReviewResponse(PersistenceModel):
@@ -910,6 +962,8 @@ class SummaryReviewResponse(PersistenceModel):
     edited_summary_text: str | None
     edit_distance_score: Decimal | None
     reviewed_at: datetime
+    reviewer_signature: str | None = None
+    audit_trail_ready: bool = True
 
 
 class SummaryReviewListResponse(PersistenceModel):

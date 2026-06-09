@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     qdrant_path: Path | None = None
     qdrant_collection: str = "clinical_record_chunks"
 
-    embedding_provider: Literal["hashing", "fastembed", "sentence_transformers"] = "hashing"
+    embedding_provider: Literal["hashing", "fastembed", "sentence_transformers"] = "sentence_transformers"
     embedding_dimension: int = 384
     fastembed_model: str = "intfloat/multilingual-e5-large"
     sentence_transformers_model: str = "sentence-transformers/all-MiniLM-L6-v2"
@@ -95,7 +95,12 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def enforce_production_safety(self) -> "Settings":
         if self.environment == "production" and self.embedding_provider == "hashing":
-            raise ValueError("Hashing embeddings are development-only; configure fastembed in production.")
+            raise ValueError(
+                "Hashing embeddings are development-only; configure "
+                "RAG_EMBEDDING_PROVIDER=sentence_transformers with "
+                "RAG_SENTENCE_TRANSFORMERS_MODEL=sentence-transformers/all-MiniLM-L6-v2 "
+                "or another approved production embedding backend."
+            )
         if self.environment == "production" and not self.qdrant_url:
             raise ValueError("Production requires RAG_QDRANT_URL for a shared Qdrant server.")
         if self.ort_execution_provider != "CPUExecutionProvider" and self.embedding_provider != "fastembed":

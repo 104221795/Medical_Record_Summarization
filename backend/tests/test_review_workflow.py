@@ -45,7 +45,12 @@ def test_start_review_from_draft_summary(
         assert summary is not None and summary.status == SummaryStatus.UNDER_REVIEW
         assert (
             session.scalar(
-                select(func.count()).select_from(AuditLog).where(AuditLog.action == "start_review")
+                select(func.count())
+                .select_from(AuditLog)
+                .where(
+                    AuditLog.action == "start_review",
+                    AuditLog.resource_id == summary.summary_id,
+                )
             )
             == 1
         )
@@ -122,10 +127,27 @@ def test_approve_summary_and_lock_from_normal_editing(
         assert summary.approved_by is not None
         assert (
             session.scalar(
-                select(func.count()).select_from(AuditLog).where(AuditLog.action == "approve_summary")
+                select(func.count())
+                .select_from(AuditLog)
+                .where(
+                    AuditLog.action == "approve_summary",
+                    AuditLog.resource_id == summary.summary_id,
+                )
             )
             == 1
         )
+        audit = session.scalar(
+            select(AuditLog).where(
+                AuditLog.action == "approve_summary",
+                AuditLog.resource_id == summary.summary_id,
+            )
+        )
+        assert audit is not None
+        assert audit.metadata_json["summary_id"] == generated["summary_id"]
+        assert audit.metadata_json["encounter_id"] == generated["encounter_id"]
+        assert audit.metadata_json["provider"] == "deterministic"
+        assert audit.metadata_json["model_provider"] == "deterministic"
+        assert audit.metadata_json["model_name"] == "deterministic_summary_service"
 
 
 def test_reject_summary_with_valid_reason(
@@ -155,7 +177,12 @@ def test_reject_summary_with_valid_reason(
         assert summary.rejection_reason == "wrong_citation"
         assert (
             session.scalar(
-                select(func.count()).select_from(AuditLog).where(AuditLog.action == "reject_summary")
+                select(func.count())
+                .select_from(AuditLog)
+                .where(
+                    AuditLog.action == "reject_summary",
+                    AuditLog.resource_id == summary.summary_id,
+                )
             )
             == 1
         )
@@ -246,7 +273,21 @@ def test_review_history_returns_actions_in_order_and_audits_view(
             session.scalar(
                 select(func.count())
                 .select_from(AuditLog)
-                .where(AuditLog.action == "view_review_history")
+                .where(
+                    AuditLog.action == "view_review_history",
+                    AuditLog.resource_id == uuid.UUID(summary_id),
+                )
             )
             == 1
         )
+        audit = session.scalar(
+            select(AuditLog).where(
+                AuditLog.action == "view_review_history",
+                AuditLog.resource_id == uuid.UUID(summary_id),
+            )
+        )
+        assert audit is not None
+        assert audit.metadata_json["summary_id"] == summary_id
+        assert audit.metadata_json["provider"] == "deterministic"
+        assert audit.metadata_json["model_name"] == "deterministic_summary_service"
+        assert audit.metadata_json["status"] == "approved"

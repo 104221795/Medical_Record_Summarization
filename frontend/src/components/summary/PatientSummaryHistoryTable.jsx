@@ -21,7 +21,7 @@ export default function PatientSummaryHistoryTable({ rows = [] }) {
         { key: "patient", label: "Patient", render: (row) => row.patient_id || "not available" },
         { key: "encounter", label: "Encounter", render: (row) => row.encounter || "not available" },
         { key: "summary", label: "Summary ID", render: (row) => row.summary_id },
-        { key: "provider", label: "Provider", render: (row) => row.provider || "not available" },
+        { key: "provider", label: "Provider", render: (row) => <ProviderCell row={row} /> },
         { key: "status", label: "Status", render: (row) => <Badge tone={statusTone(row.status)}>{row.status}</Badge> },
         { key: "generated", label: "Generated", render: (row) => formatDateTime(row.generated_at) },
         { key: "reviewed", label: "Reviewed", render: (row) => formatDateTime(row.reviewed_at) },
@@ -39,5 +39,16 @@ export default function PatientSummaryHistoryTable({ rows = [] }) {
         },
       ]}
     />
+  );
+}
+
+function ProviderCell({ row }) {
+  if (!row.provider && !row.model_name) return "not available";
+  if (!row.model_name || row.model_name === row.provider) return row.provider || row.model_name;
+  return (
+    <div className="provider-table-cell">
+      <strong>{row.provider || "not available"}</strong>
+      <span>{row.model_name}</span>
+    </div>
   );
 }

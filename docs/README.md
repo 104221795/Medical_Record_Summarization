@@ -27,6 +27,7 @@ These addenda are the current data-work entrypoints for dataset selection, norma
 | File | Use it for |
 | --- | --- |
 | `delivery week 2/README.md` | Vietnamese mentor-facing progress report covering the current MVP/prototype, frontend/backend state, dataset governance, provider layer, benchmark results, limitations, KPIs, and next-week plan |
+| `delivery week 2/DEMO_VIDEO_SCRIPT.md` | Detailed Vietnamese video recording script with timeline, screen actions, narration, demo flow, and submission checklist |
 
 ## Product And Technical Specs
 

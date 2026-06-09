@@ -1929,6 +1929,159 @@ tbody tr:last-child td {
   grid-template-columns: 1fr;
 }
 
+.clinical-eval-grid {
+  align-items: stretch;
+}
+
+.clinical-leader,
+.clinical-provider-strip,
+.clinical-safety-card,
+.failure-example-detail,
+.model-output-card,
+.text-panel {
+  min-width: 0;
+}
+
+.clinical-leader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.clinical-leader div,
+.clinical-metric-list,
+.clinical-safety-grid,
+.failure-example-detail {
+  display: grid;
+  gap: 12px;
+}
+
+.clinical-provider-strip {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.7fr) minmax(0, 1.5fr);
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.clinical-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.clinical-metric-grid div,
+.mini-metrics span,
+.clinical-safety-card span {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.clinical-metric-grid span,
+.mini-metrics span,
+.clinical-safety-card span,
+.failure-example-button span {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.clinical-safety-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff, #f7fbfc);
+}
+
+.failure-dashboard {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.failure-example-list {
+  display: grid;
+  gap: 8px;
+  max-height: 680px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.failure-example-button {
+  display: grid;
+  width: 100%;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.failure-example-button:hover,
+.failure-example-button.active {
+  border-color: var(--primary);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.record-context-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.text-panel,
+.model-output-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.text-panel p,
+.text-sample {
+  max-height: 220px;
+  margin: 0;
+  overflow: auto;
+  color: var(--text);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.model-output-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.mini-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
 @media (max-width: 1180px) {
   .review-workspace {
     grid-template-columns: minmax(0, 1fr);
@@ -1964,6 +2117,9 @@ tbody tr:last-child td {
 
   .workspace-grid,
   .grid-two,
+  .failure-dashboard,
+  .clinical-provider-strip,
+  .record-context-grid,
   .form-grid,
   .golden-step-grid,
   .public-section,
@@ -2089,5 +2245,89 @@ tbody tr:last-child td {
 
   table {
     min-width: 960px;
+  }
+}
+
+.benchmark-flow-shell {
+  gap: 18px;
+}
+
+.benchmark-flow-card .card-body {
+  display: grid;
+  gap: 14px;
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f5f9fb;
+}
+
+.tabs button {
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 850;
+  line-height: 1.2;
+  padding: 10px 12px;
+  transition: background .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.tabs button:hover {
+  background: #fff;
+  border-color: #cde2ea;
+  color: var(--primary-strong);
+}
+
+.tabs button.active {
+  background: #fff;
+  border-color: #9ed3dd;
+  box-shadow: 0 8px 20px rgba(17, 94, 103, .1);
+  color: var(--primary);
+}
+
+.benchmark-flow-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(220px, .9fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.benchmark-flow-summary span {
+  display: block;
+  color: var(--text);
+  font-weight: 900;
+  margin-bottom: 4px;
+}
+
+.benchmark-flow-summary p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.benchmark-flow-summary code {
+  justify-self: end;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+@media (max-width: 640px) {
+  .tabs,
+  .benchmark-flow-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .benchmark-flow-summary code {
+    justify-self: stretch;
   }
 }

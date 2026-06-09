@@ -34,8 +34,6 @@ MUTABLE_REVIEW_STATUSES = {
     SummaryStatus.DRAFT,
     SummaryStatus.UNDER_REVIEW,
     SummaryStatus.EDITED,
-    SummaryStatus.APPROVED,
-    SummaryStatus.REJECTED,
 }
 START_REVIEW_STATUSES = {SummaryStatus.DRAFT, SummaryStatus.EDITED}
 LOCKED_STATUSES = {
@@ -73,11 +71,7 @@ class ReviewService:
             raise ReviewTransitionError(
                 f"Cannot start review for a summary in {previous.value} status."
             )
-        if previous not in START_REVIEW_STATUSES and previous not in {
-            SummaryStatus.UNDER_REVIEW,
-            SummaryStatus.APPROVED,
-            SummaryStatus.REJECTED,
-        }:
+        if previous not in START_REVIEW_STATUSES and previous != SummaryStatus.UNDER_REVIEW:
             raise ReviewTransitionError(
                 f"Cannot start review from {previous.value} status."
             )
@@ -382,6 +376,7 @@ class ReviewService:
                 "tenant_id": tenant_id,
                 "actor_external_id": actor_external_id,
                 "auth_mode": "mock_header_rbac",
+                **_summary_audit_metadata(summary),
                 **metadata,
             },
         )
@@ -409,6 +404,9 @@ class ReviewService:
             rejection_reason=summary.rejection_reason,
             edit_distance_score=edit_distance_score,
             citation_revalidation_required=citation_revalidation_required,
+            final_locked=summary.status == SummaryStatus.APPROVED,
+            reviewer_signature=_reviewer_signature(review.reviewer_id, review.reviewed_at),
+            audit_trail_ready=True,
         )
 
 
@@ -426,12 +424,18 @@ def _review_response(review: SummaryReview) -> SummaryReviewResponse:
         edited_summary_text=review.edited_summary_text,
         edit_distance_score=review.edit_distance_score,
         reviewed_at=review.reviewed_at,
+        reviewer_signature=_reviewer_signature(review.reviewer_id, review.reviewed_at),
+        audit_trail_ready=True,
     )
 
 
 def _edit_distance_ratio(original: str, edited: str) -> Decimal:
     ratio = SequenceMatcher(None, original or "", edited or "").ratio()
     return Decimal(str(round(1 - ratio, 4)))
+
+
+def _reviewer_signature(reviewer_id: uuid.UUID, reviewed_at: datetime) -> str:
+    return f"reviewer:{reviewer_id}|signed_at:{reviewed_at.isoformat(timespec='seconds')}"
 
 
 def _critical_unsupported_claims(summary: Summary) -> list:
@@ -441,3 +445,25 @@ def _critical_unsupported_claims(summary: Summary) -> list:
         if claim.clinical_risk_level == "critical"
         and claim.support_status != ClaimSupportStatus.SUPPORTED
     ]
+
+
+def _summary_audit_metadata(summary: Summary) -> dict[str, object | None]:
+    provider = _model_provider_label(summary.model_run)
+    metadata = {
+        "summary_id": str(summary.summary_id),
+        "encounter_id": str(summary.encounter_id) if summary.encounter_id else None,
+        "summary_type": summary.summary_type,
+        "summary_status": summary.status.value if summary.status else None,
+        "provider": provider,
+        "model_provider": provider,
+        "model_name": summary.model_run.model_name if summary.model_run else None,
+        "latency_ms": summary.model_run.latency_ms if summary.model_run else None,
+    }
+    return {key: value for key, value in metadata.items() if value is not None}
+
+
+def _model_provider_label(model_run: object | None) -> str | None:
+    provider = getattr(model_run, "provider", None)
+    if provider == "local":
+        return "deterministic"
+    return provider

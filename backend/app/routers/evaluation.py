@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from ..dependencies import RequestContext, get_evaluation_service, get_request_context
 from ..persistence_schemas import (
@@ -61,8 +61,12 @@ def benchmark_status(
 def benchmark_results(
     _context: Annotated[RequestContext, Depends(get_request_context)],
     service: Annotated[EvaluationService, Depends(get_evaluation_service)],
+    benchmark_type: Annotated[
+        str | None,
+        Query(pattern="^(summarization_only|clinical_context|rag_grounded)$"),
+    ] = None,
 ) -> BenchmarkResultsResponse:
-    return service.benchmark_results()
+    return service.benchmark_results(benchmark_type=benchmark_type)
 
 
 @router.post(

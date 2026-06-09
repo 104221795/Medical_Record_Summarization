@@ -1,6 +1,4 @@
 import Card from "../common/Card.jsx";
-import ErrorState from "../common/ErrorState.jsx";
-import LoadingState from "../common/LoadingState.jsx";
 import MetricCard from "../common/MetricCard.jsx";
 import PageHeader from "../common/PageHeader.jsx";
 import {
@@ -13,16 +11,27 @@ import {
   providerLabel,
   RecordsEvaluatedChart,
 } from "./BenchmarkVisuals.jsx";
+import BenchmarkFlowTabs from "./BenchmarkFlowTabs.jsx";
 import ModelComparisonTable from "./ModelComparisonTable.jsx";
-import { useEvaluationResults } from "../../hooks/useEvaluationResults.js";
+import { ClinicalMetricPanel, PerRecordFailureDashboard, UseCaseRecommendationPanel } from "./ClinicalEvaluationPanels.jsx";
 
 export default function EvaluationDashboard() {
-  const { data, loading, error, reload } = useEvaluationResults();
-  if (loading) return <LoadingState label="Loading model quality overview..." />;
-  if (error) return <ErrorState error={error} />;
+  return (
+    <BenchmarkFlowTabs loadingLabel="Loading model quality overview...">
+      {({ data, reload, flowMeta }) => <EvaluationDashboardContent data={data} reload={reload} flowMeta={flowMeta} />}
+    </BenchmarkFlowTabs>
+  );
+}
+
+function EvaluationDashboardContent({ data, reload, flowMeta }) {
   const rows = data?.models || [];
   const officialRows = measuredRows(rows);
   const best = bestByRougeL(officialRows);
+  const bestBertScore = officialRows.reduce(
+    (bestRow, row) => (Number(row.bertscore_f1 || 0) > Number(bestRow?.bertscore_f1 || 0) ? row : bestRow),
+    null,
+  );
+  const bertscoreStatus = officialRows.find((row) => row.bertscore_status)?.bertscore_status || "not requested";
   const pegasusPubMed = rows.find((row) => row.model_provider?.includes("pegasus_pubmed"));
   const gemini = rows.find((row) => row.model_provider === "gemini");
   const pubmedFile = data?.prediction_file_availability?.["pegasus_pubmed_predictions.jsonl"];
@@ -31,13 +40,18 @@ export default function EvaluationDashboard() {
     <div className="stack admin-analytics-page evaluation-overview-page">
       <PageHeader
         eyebrow="Operational model quality"
-        title="Evaluation Overview"
-        description="Monitor official proxy benchmark quality, provider fit, and latest measured model performance."
+        title={`Evaluation Overview - ${flowMeta.title}`}
+        description={flowMeta.description}
         actions={<button className="btn secondary" onClick={reload}>Refresh</button>}
       />
       <div className="metric-grid">
         <MetricCard label="Best official model" value={best ? providerLabel(best.model_provider) : data?.best_model_by_rougeL || "not available"} detail="By ROUGE-L" />
         <MetricCard label="Best ROUGE-L" value={formatScore(best?.rougeL)} />
+        <MetricCard
+          label="Best BERTScore F1"
+          value={formatScore(bestBertScore?.bertscore_f1)}
+          detail={bestBertScore?.bertscore_f1 ? providerLabel(bestBertScore.model_provider) : `BERTScore ${bertscoreStatus}`}
+        />
         <MetricCard label="Pegasus PubMed" value={pegasusPubMed ? `${pegasusPubMed.completed_count}/${pegasusPubMed.record_count}` : "not available"} detail={pegasusPubMed?.status || "benchmark row missing"} />
         <MetricCard label="Official models" value={officialRows.length} detail="Measured rows only" />
       </div>
@@ -45,6 +59,8 @@ export default function EvaluationDashboard() {
         <MetricComparisonChart rows={officialRows} title="Official ROUGE Leaderboard" />
         <RecordsEvaluatedChart rows={officialRows} />
       </div>
+      <ClinicalMetricPanel rows={officialRows} summary={data?.clinical_metric_summary} />
+      <UseCaseRecommendationPanel rows={officialRows} />
       <div className="grid-two">
         <Card title="Provider Domain Fit">
           <div className="status-grid">
@@ -70,6 +86,7 @@ export default function EvaluationDashboard() {
         <FailurePatternChart summary={data?.failure_analysis_summary} />
         <PredictionAvailabilityPanel availability={data?.prediction_file_availability} />
       </div>
+      <PerRecordFailureDashboard examples={data?.per_record_failure_examples} />
       <ModelComparisonTable rows={rows} bestModel={best?.model_provider || data?.best_model_by_rougeL} />
       <Card title="Proxy Evaluation Notice">
         <p className="warning-line">{data?.proxy_warning}</p>

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import os
 from pathlib import Path
 from typing import Any
@@ -74,16 +75,49 @@ def generate_seq2seq_summary(
         max_length=model_safe_input_tokens(tokenizer, model, max_input_tokens),
     )
     encoded = {key: value.to(torch_device) for key, value in encoded.items()}
+    generation_config = seq2seq_generation_config(
+        model,
+        max_new_tokens=max_new_tokens,
+        num_beams=num_beams,
+        no_repeat_ngram_size=no_repeat_ngram_size,
+    )
+    generate_kwargs = (
+        {"generation_config": generation_config}
+        if generation_config is not None
+        else {
+            "max_new_tokens": max_new_tokens,
+            "num_beams": num_beams,
+            "no_repeat_ngram_size": no_repeat_ngram_size,
+            "do_sample": False,
+            "early_stopping": True,
+        }
+    )
     with torch.inference_mode():
         output_ids = model.generate(
             **encoded,
-            max_new_tokens=max_new_tokens,
-            num_beams=num_beams,
-            no_repeat_ngram_size=no_repeat_ngram_size,
-            do_sample=False,
-            early_stopping=True,
+            **generate_kwargs,
         )
     return tokenizer.decode(output_ids[0], skip_special_tokens=True).strip()
+
+
+def seq2seq_generation_config(
+    model: Any,
+    *,
+    max_new_tokens: int,
+    num_beams: int,
+    no_repeat_ngram_size: int,
+) -> Any:
+    generation_config = copy.deepcopy(getattr(model, "generation_config", None))
+    if generation_config is None:
+        return None
+    if hasattr(generation_config, "max_length"):
+        generation_config.max_length = None
+    generation_config.max_new_tokens = max_new_tokens
+    generation_config.num_beams = num_beams
+    generation_config.no_repeat_ngram_size = no_repeat_ngram_size
+    generation_config.do_sample = False
+    generation_config.early_stopping = True
+    return generation_config
 
 
 def model_safe_input_tokens(tokenizer: Any, model: Any, requested_max: int = 1024) -> int:

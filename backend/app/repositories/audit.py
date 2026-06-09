@@ -1,10 +1,11 @@
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..models import AuditLog, User
+from ..models import AuditLog, ModelRun, Summary, User
 
 
 class AuditRepository:
@@ -54,6 +55,48 @@ class AuditRepository:
         )
         return {user_id: full_name for user_id, full_name in rows}
 
+    def summary_contexts(self, summary_ids: set[uuid.UUID]) -> dict[uuid.UUID, dict[str, Any]]:
+        if not summary_ids:
+            return {}
+        rows = self.session.execute(
+            select(
+                Summary.summary_id,
+                Summary.patient_id,
+                Summary.encounter_id,
+                Summary.status,
+                Summary.summary_type,
+                ModelRun.provider,
+                ModelRun.model_name,
+                ModelRun.latency_ms,
+            )
+            .outerjoin(ModelRun, Summary.model_run_id == ModelRun.model_run_id)
+            .where(Summary.summary_id.in_(summary_ids))
+        )
+        contexts: dict[uuid.UUID, dict[str, Any]] = {}
+        for (
+            summary_id,
+            patient_id,
+            encounter_id,
+            status,
+            summary_type,
+            provider,
+            model_name,
+            latency_ms,
+        ) in rows:
+            provider_label = _model_provider_label(provider)
+            contexts[summary_id] = {
+                "summary_id": str(summary_id),
+                "patient_id": str(patient_id) if patient_id else None,
+                "encounter_id": str(encounter_id) if encounter_id else None,
+                "summary_type": summary_type,
+                "status": status.value if hasattr(status, "value") else status,
+                "provider": provider_label,
+                "model_provider": provider_label,
+                "model_name": model_name,
+                "latency_ms": latency_ms,
+            }
+        return contexts
+
     @staticmethod
     def _predicates(
         patient_id: uuid.UUID | None,
@@ -80,3 +123,9 @@ class AuditRepository:
         if to_date:
             predicates.append(AuditLog.timestamp <= to_date)
         return predicates
+
+
+def _model_provider_label(provider: str | None) -> str | None:
+    if provider == "local":
+        return "deterministic"
+    return provider

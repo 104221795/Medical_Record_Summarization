@@ -26,7 +26,22 @@ export default function ModelComparisonTable({ rows = [], bestModel }) {
         { key: "rouge1", label: "ROUGE-1", render: (row) => formatScore(row.rouge1) },
         { key: "rouge2", label: "ROUGE-2", render: (row) => formatScore(row.rouge2) },
         { key: "rougeL", label: "ROUGE-L", render: (row) => formatScore(row.rougeL) },
+        {
+          key: "bertscore_f1",
+          label: "BERTScore",
+          render: (row) => (
+            <div className="provider-table-cell">
+              <strong>{formatScore(row.bertscore_f1)}</strong>
+              <span>{row.bertscore_status || "not requested"}</span>
+              {row.bertscore_model_type && <span>{row.bertscore_model_type}</span>}
+            </div>
+          ),
+        },
+        { key: "factuality_proxy_score", label: "Faithfulness", render: (row) => formatScore(row.factuality_proxy_score) },
+        { key: "citation_coverage", label: "Citation", render: (row) => formatScore(row.citation_coverage) },
+        { key: "unsupported_claim_rate", label: "Unsupported", render: (row) => formatScore(row.unsupported_claim_rate) },
         { key: "average_latency_ms", label: "Avg latency", render: (row) => formatLatency(row.average_latency_ms) },
+        { key: "latency_p95_ms", label: "p95 latency", render: (row) => formatLatency(row.latency_p95_ms) },
         { key: "total_runtime_seconds", label: "Runtime", render: (row) => row.total_runtime_seconds ? `${Number(row.total_runtime_seconds).toFixed(1)} s` : "n/a" },
       ]}
     />

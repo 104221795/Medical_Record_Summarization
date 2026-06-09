@@ -84,11 +84,25 @@ class AuditService:
             from_date=from_date,
             to_date=to_date,
         )
+        summary_contexts = self.repository.summary_contexts(
+            {
+                event.resource_id
+                for event in events
+                if event.resource_type == "summary" and event.resource_id is not None
+            }
+        )
         display_names = self.repository.user_display_names(
             {event.user_id for event in events if event.user_id}
         )
         return AuditLogListResponse(
-            items=[self._response(item, display_names.get(item.user_id)) for item in events],
+            items=[
+                self._response(
+                    item,
+                    display_names.get(item.user_id),
+                    summary_context=summary_contexts.get(item.resource_id),
+                )
+                for item in events
+            ],
             pagination=pagination(page, page_size, total),
         )
 
@@ -104,7 +118,16 @@ class AuditService:
             raise PersistedResourceNotFoundError("Audit log was not found.")
         self._require_detail_permission(event, role_code, actor_external_id)
         display_names = self.repository.user_display_names({event.user_id} if event.user_id else set())
-        return self._response(event, display_names.get(event.user_id))
+        summary_contexts = self.repository.summary_contexts(
+            {event.resource_id}
+            if event.resource_type == "summary" and event.resource_id is not None
+            else set()
+        )
+        return self._response(
+            event,
+            display_names.get(event.user_id),
+            summary_context=summary_contexts.get(event.resource_id),
+        )
 
     @staticmethod
     def _require_list_permission(role_code: str | None, *, has_filter: bool) -> None:
@@ -128,8 +151,23 @@ class AuditService:
         raise AuditPermissionError("This role cannot view this audit log.")
 
     @staticmethod
-    def _response(event: AuditLog, user_display_name: str | None = None) -> AuditLogResponse:
-        metadata = _safe_metadata(event.metadata_json)
+    def _response(
+        event: AuditLog,
+        user_display_name: str | None = None,
+        *,
+        summary_context: dict[str, Any] | None = None,
+    ) -> AuditLogResponse:
+        metadata = {
+            key: value
+            for key, value in (_safe_metadata(event.metadata_json) or {}).items()
+            if value is not None
+        }
+        if summary_context:
+            metadata = {
+                key: value
+                for key, value in {**summary_context, **metadata}.items()
+                if value is not None
+            }
         return AuditLogResponse(
             audit_id=event.audit_id,
             user_id=event.user_id,

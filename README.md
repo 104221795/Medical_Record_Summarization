@@ -695,8 +695,23 @@ You may override them:
 ```
 
 Automatic metrics currently include ROUGE-1, ROUGE-2, and ROUGE-L. BERTScore is
-optional via `--include-bertscore` and is skipped if the optional package is not
-installed.
+optional via `--include-bertscore` and is skipped if the optional package,
+evaluator checkpoint, or local cache is not available. BERTScore is an evaluator
+metric, not a summarization provider: it loads a separate transformer model to
+compare generated summaries with reference summaries semantically. The evaluator
+model can be controlled with `RAG_BERTSCORE_MODEL_TYPE`, and Hugging Face cache
+paths should point to `D:\hf_cache`.
+
+Default retrieval embedding is now:
+
+```text
+RAG_EMBEDDING_PROVIDER=sentence_transformers
+RAG_SENTENCE_TRANSFORMERS_MODEL=sentence-transformers/all-MiniLM-L6-v2
+RAG_SENTENCE_TRANSFORMERS_LOCAL_FILES_ONLY=true
+```
+
+After changing embedding backends, rebuild/reingest the retrieval index before
+trusting retrieval or downstream summarization benchmark results.
 
 Generated baseline files under `results/` are ignored by git.
 

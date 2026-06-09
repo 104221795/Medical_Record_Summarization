@@ -219,6 +219,7 @@ export function BenchmarkFolderPanel({ folders = [] }) {
             </div>
             <div className="folder-facts">
               <span>model_comparison: {folder.has_model_comparison ? "yes" : "no"}</span>
+              <span>type: {folder.benchmark_type || "unknown"}</span>
               <span>per_record: {folder.has_per_record_metrics ? "yes" : "no"}</span>
               <span>PubMed rows: {formatInteger(folder.pegasus_pubmed_record_count)}</span>
               <span>Freshness: {folder.last_modified || "not available"}</span>

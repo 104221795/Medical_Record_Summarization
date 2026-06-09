@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from scripts.run_baseline_summarization import compute_rouge_scores
@@ -50,7 +51,17 @@ def compute_bertscore_metrics(predictions: list[str], references: list[str]) -> 
             "bertscore_message": "BERTScore skipped: optional package 'bert-score' is not installed.",
         }
     try:
-        precision, recall, f1 = score(predictions, references, lang="en", verbose=False)
+        score_kwargs: dict[str, Any] = {"lang": "en", "verbose": False}
+        model_type = os.environ.get("RAG_BERTSCORE_MODEL_TYPE", "").strip()
+        device = os.environ.get("RAG_BERTSCORE_DEVICE", "").strip()
+        batch_size = os.environ.get("RAG_BERTSCORE_BATCH_SIZE", "").strip()
+        if model_type:
+            score_kwargs["model_type"] = model_type
+        if device:
+            score_kwargs["device"] = device
+        if batch_size:
+            score_kwargs["batch_size"] = int(batch_size)
+        precision, recall, f1 = score(predictions, references, **score_kwargs)
     except Exception as exc:
         return {
             "bertscore_precision": None,
@@ -64,6 +75,7 @@ def compute_bertscore_metrics(predictions: list[str], references: list[str]) -> 
         "bertscore_recall": round(float(recall.mean().item()), 4),
         "bertscore_f1": round(float(f1.mean().item()), 4),
         "bertscore_status": "computed",
+        "bertscore_model_type": os.environ.get("RAG_BERTSCORE_MODEL_TYPE", "").strip() or "bert-score-default-en",
         "bertscore_message": "BERTScore computed successfully.",
     }
 

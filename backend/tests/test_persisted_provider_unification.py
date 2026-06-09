@@ -141,6 +141,24 @@ def test_bart_and_pegasus_generate_persisted_draft_with_citations_and_safety(
             assert source_response.status_code == 200
             assert source_response.json()["patient_id"] == patient_id
 
+            audit_response = client.get(
+                "/api/v1/audit/logs",
+                headers=HEADERS,
+                params={
+                    "resource_type": "summary",
+                    "resource_id": generated["summary_id"],
+                    "page": 1,
+                    "page_size": 10,
+                },
+            )
+            assert audit_response.status_code == 200, audit_response.text
+            audit_rows = audit_response.json()["items"]
+            audit_row = next(row for row in audit_rows if row["action"] == "generate_summary")
+            assert audit_row["action_metadata"]["provider"] == provider_name
+            assert audit_row["action_metadata"]["model_provider"] == provider_name
+            assert audit_row["action_metadata"]["model_name"] == f"mock-{provider_name}"
+            assert audit_row["action_metadata"]["encounter_id"] == generated["encounter_id"]
+
         with session_factory() as session:
             summary = session.get(Summary, uuid.UUID(generated["summary_id"]))
             assert summary is not None
@@ -152,10 +170,16 @@ def test_bart_and_pegasus_generate_persisted_draft_with_citations_and_safety(
             assert model_run.model_name == f"mock-{provider_name}"
             assert model_run.prompt_template_id == f"{provider_name}_text_normalizer"
             audit = session.scalar(
-                select(AuditLog).where(AuditLog.action == "generate_summary")
+                select(AuditLog).where(
+                    AuditLog.action == "generate_summary",
+                    AuditLog.resource_id == summary.summary_id,
+                )
             )
             assert audit is not None
             assert audit.metadata_json["provider"] == provider_name
+            assert audit.metadata_json["model_provider"] == provider_name
+            assert audit.metadata_json["model_name"] == f"mock-{provider_name}"
+            assert audit.metadata_json["encounter_id"] == generated["encounter_id"]
     finally:
         engine.dispose()
 

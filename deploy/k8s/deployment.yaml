@@ -10,9 +10,10 @@ metadata:
   namespace: clinical-ai
 data:
   RAG_ENVIRONMENT: "production"
-  RAG_EMBEDDING_PROVIDER: "fastembed"
-  RAG_FASTEMBED_MODEL: "intfloat/multilingual-e5-large"
-  RAG_ORT_EXECUTION_PROVIDER: "OpenVINOExecutionProvider"
+  RAG_EMBEDDING_PROVIDER: "sentence_transformers"
+  RAG_SENTENCE_TRANSFORMERS_MODEL: "sentence-transformers/all-MiniLM-L6-v2"
+  RAG_SENTENCE_TRANSFORMERS_LOCAL_FILES_ONLY: "true"
+  RAG_ORT_EXECUTION_PROVIDER: "CPUExecutionProvider"
   RAG_ORT_INTRA_OP_THREADS: "2"
   RAG_GENERATOR_PROVIDER: "extractive"
   RAG_QDRANT_URL: "http://qdrant.clinical-ai.svc.cluster.local:6333"

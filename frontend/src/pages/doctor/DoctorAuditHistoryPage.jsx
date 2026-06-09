@@ -7,6 +7,15 @@ import Badge from "../../components/common/Badge.jsx";
 import { auditApi } from "../../services/auditApi.js";
 import { useApi } from "../../hooks/useApi.js";
 import { actionLabel, formatDateTime, statusTone } from "../../utils/clinicalDisplay.js";
+import {
+  auditActor,
+  auditEncounterId,
+  auditModelName,
+  auditPatientId,
+  auditProvider,
+  auditStatus,
+  auditSummaryId,
+} from "../../utils/historyDisplay.js";
 
 export default function DoctorAuditHistoryPage() {
   const { data, loading, error, reload } = useApi(() => auditApi.logs({ page: 1, page_size: 50 }), []);
@@ -27,15 +36,30 @@ export default function DoctorAuditHistoryPage() {
           empty="No audit data available yet. Generate and review a summary to populate the audit trail."
           columns={[
             { key: "timestamp", label: "Timestamp", render: (row) => formatDateTime(row.timestamp) },
-            { key: "patient", label: "Patient", render: (row) => row.patient_id || "not available" },
-            { key: "summary", label: "Summary ID", render: (row) => row.resource_type === "summary" ? row.resource_id : "not available" },
+            { key: "patient", label: "Patient", render: (row) => auditPatientId(row) },
+            { key: "encounter", label: "Encounter", render: (row) => auditEncounterId(row, row.resource_type === "summary" ? "all encounters" : "not applicable") },
+            { key: "summary", label: "Summary ID", render: (row) => auditSummaryId(row, row.resource_type === "summary" ? "not available" : "not applicable") },
             { key: "action", label: "Action", render: (row) => actionLabel(row.action) },
-            { key: "provider", label: "Provider", render: (row) => row.action_metadata?.provider || row.metadata?.provider || row.action_metadata?.model_name || "not available" },
-            { key: "status", label: "Status", render: (row) => <Badge tone={statusTone(row.action_metadata?.status || row.metadata?.status)}>{row.action_metadata?.status || row.metadata?.status || "recorded"}</Badge> },
-            { key: "user", label: "User", render: (row) => row.user_display_name || row.user_id || "not available" },
+            { key: "provider", label: "Provider", render: (row) => <ProviderCell row={row} /> },
+            { key: "status", label: "Status", render: (row) => <Badge tone={statusTone(auditStatus(row))}>{auditStatus(row)}</Badge> },
+            { key: "user", label: "User", render: (row) => auditActor(row) },
           ]}
         />
       </Card>
+    </div>
+  );
+}
+
+function ProviderCell({ row }) {
+  const provider = auditProvider(row);
+  const modelName = auditModelName(row);
+  if (!modelName || modelName === provider || provider === "not applicable") {
+    return provider;
+  }
+  return (
+    <div className="provider-table-cell">
+      <strong>{provider}</strong>
+      <span>{modelName}</span>
     </div>
   );
 }
