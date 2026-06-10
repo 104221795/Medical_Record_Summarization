@@ -1,3 +1,4 @@
+import { LogOut, UserRound } from "lucide-react";
 import { useRole } from "../../hooks/useRole.js";
 import Button from "../common/Button.jsx";
 import { authApi } from "../../services/authApi.js";
@@ -12,11 +13,13 @@ export default function Topbar() {
       </div>
       <div className="topbar-actions">
         <div className="profile-chip">
+          <UserRound aria-hidden="true" className="ui-icon profile-icon" size={18} strokeWidth={2.2} />
           <strong>{session.fullName || session.userId}</strong>
           <span>{role === "admin" ? "Admin" : "Doctor"}</span>
         </div>
         <Button
           variant="secondary"
+          icon={LogOut}
           onClick={async () => {
             try {
               await authApi.logout();

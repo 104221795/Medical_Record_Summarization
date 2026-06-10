@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { ArrowRight, ClipboardCheck, Database, FileText, ShieldCheck, Sparkles } from "lucide-react";
 import Button from "../../components/common/Button.jsx";
 import PublicNav from "../../components/navigation/PublicNav.jsx";
 import { brandAssets } from "../../assets/branding.js";
@@ -7,8 +8,14 @@ export default function HomePage() {
   return (
     <main className="public-page">
       <PublicNav />
-      <section className="public-hero">
-        <div>
+      <section
+        className="public-hero hero-diagonal"
+        style={{
+          "--hero-image": `url(${brandAssets.images[0]})`,
+          "--triangle-image": `url(${brandAssets.images[1]})`,
+        }}
+      >
+        <div className="public-hero-copy">
           <p className="eyebrow">Evidence-grounded clinical summarization</p>
           <h1>Medical Record Summarization</h1>
           <p>
@@ -16,9 +23,22 @@ export default function HomePage() {
             dataset governance, and controlled proxy evaluation.
           </p>
           <div className="public-actions">
-            <Link to="/login"><Button>Open Workspace</Button></Link>
-            <Link to="/about"><Button variant="secondary">About</Button></Link>
+            <Link to="/login"><Button icon={ArrowRight} iconPosition="right">Open Workspace</Button></Link>
+            <Link to="/about"><Button variant="secondary" icon={Sparkles}>About</Button></Link>
           </div>
+        </div>
+        <div className="hero-container-triangle">
+          <div className="hero-triangle-content">
+            <FileText aria-hidden="true" size={22} />
+            <span>Evidence Flow</span>
+            <strong>Source to cited draft</strong>
+            <small>retrieve, verify, review</small>
+          </div>
+        </div>
+        <div className="hero-container-chips">
+          <div><ClipboardCheck aria-hidden="true" size={18} /><span>Doctor review</span></div>
+          <div><ShieldCheck aria-hidden="true" size={18} /><span>Safety checks</span></div>
+          <div><Database aria-hidden="true" size={18} /><span>Governed data</span></div>
         </div>
       </section>
       <section className="public-section">

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from ..dependencies import RequestContext, get_evaluation_service, get_request_context
 from ..persistence_schemas import (
+    BenchmarkFlowComparisonResponse,
     BenchmarkResultsResponse,
     BenchmarkStatusResponse,
     EvaluationStatusResponse,
@@ -63,10 +64,20 @@ def benchmark_results(
     service: Annotated[EvaluationService, Depends(get_evaluation_service)],
     benchmark_type: Annotated[
         str | None,
-        Query(pattern="^(summarization_only|clinical_context|rag_grounded)$"),
+        Query(pattern="^(summarization_only|clinical_context|rag_grounded|rag_best_models)$"),
     ] = None,
 ) -> BenchmarkResultsResponse:
     return service.benchmark_results(benchmark_type=benchmark_type)
+
+
+@router.get("/benchmark/flow-comparison", response_model=BenchmarkFlowComparisonResponse)
+def benchmark_flow_comparison(
+    _context: Annotated[RequestContext, Depends(get_request_context)],
+    service: Annotated[EvaluationService, Depends(get_evaluation_service)],
+    limit: Annotated[int, Query(ge=1, le=50)] = 12,
+    provider: Annotated[str | None, Query(max_length=80)] = None,
+) -> BenchmarkFlowComparisonResponse:
+    return service.benchmark_flow_comparison(limit=limit, provider=provider)
 
 
 @router.post(

@@ -1,96 +1,145 @@
+import { Link } from "react-router-dom";
+import { Activity, ClipboardCheck, FileCheck2, ShieldCheck, Stethoscope } from "lucide-react";
+
+import Badge from "../common/Badge.jsx";
 import Card from "../common/Card.jsx";
+import ErrorState from "../common/ErrorState.jsx";
+import LoadingState from "../common/LoadingState.jsx";
 import MetricCard from "../common/MetricCard.jsx";
 import PageHeader from "../common/PageHeader.jsx";
-import {
-  bestByRougeL,
-  FailurePatternChart,
-  formatScore,
-  measuredRows,
-  MetricComparisonChart,
-  PredictionAvailabilityPanel,
-  providerLabel,
-  RecordsEvaluatedChart,
-} from "./BenchmarkVisuals.jsx";
-import BenchmarkFlowTabs from "./BenchmarkFlowTabs.jsx";
-import ModelComparisonTable from "./ModelComparisonTable.jsx";
-import { ClinicalMetricPanel, PerRecordFailureDashboard, UseCaseRecommendationPanel } from "./ClinicalEvaluationPanels.jsx";
+import { useApi } from "../../hooks/useApi.js";
+import { evaluationApi } from "../../services/evaluationApi.js";
+import { formatScore, ProviderReadinessChart, statusTone } from "./BenchmarkVisuals.jsx";
 
 export default function EvaluationDashboard() {
+  const { data, error, loading, reload } = useApi(async () => {
+    const [status, benchmarkStatus, humanSummary, latestBenchmark] = await Promise.all([
+      evaluationApi.status(),
+      evaluationApi.benchmarkStatus(),
+      evaluationApi.humanSummary(),
+      evaluationApi.benchmarkResults(),
+    ]);
+    return { status, benchmarkStatus, humanSummary, latestBenchmark };
+  }, []);
+
+  if (loading) return <LoadingState label="Loading evaluation readiness..." />;
+  if (error) return <ErrorState error={error} />;
+
+  const readiness = data?.status || {};
+  const human = data?.humanSummary || {};
+  const benchmark = data?.benchmarkStatus || {};
+  const latest = data?.latestBenchmark || {};
+  const readyProviders = (readiness.provider_readiness || []).filter((provider) => provider.enabled).length;
+  const totalProviders = (readiness.provider_readiness || []).length;
+
   return (
-    <BenchmarkFlowTabs loadingLabel="Loading model quality overview...">
-      {({ data, reload, flowMeta }) => <EvaluationDashboardContent data={data} reload={reload} flowMeta={flowMeta} />}
-    </BenchmarkFlowTabs>
+    <div className="stack admin-analytics-page evaluation-control-page">
+      <PageHeader
+        eyebrow="Evaluation control center"
+        title="Evaluation Readiness"
+        description="System readiness, provider health, clinical safety gates, human review coverage, and benchmark governance. Model output comparison lives in Benchmark Results."
+        actions={(
+          <div className="page-header-actions">
+            <button className="btn secondary" onClick={reload} type="button">Refresh</button>
+            <Link to="/admin/evaluation/benchmark"><button className="btn" type="button">Open Benchmark Results</button></Link>
+          </div>
+        )}
+      />
+
+      <div className="metric-grid">
+        <MetricCard label="Providers ready" value={`${readyProviders}/${totalProviders || 0}`} detail="Configured generation backends" />
+        <MetricCard label="Citation readiness" value={readiness.citation_readiness || "unknown"} detail="Evidence-grounded claim checks" />
+        <MetricCard label="Safety readiness" value={readiness.safety_readiness || "unknown"} detail="Unsupported and conflicting claim gates" />
+        <MetricCard label="Human reviews" value={human.total_evaluations ?? 0} detail="Doctor rubric submissions" />
+        <MetricCard label="Benchmark dataset" value={benchmark.status || "unknown"} detail={benchmark.dataset_path || "dataset path unavailable"} />
+      </div>
+
+      <div className="evaluation-distinction-grid">
+        <Card title="What This Page Is For" actions={<Badge tone="info">readiness</Badge>}>
+          <div className="evaluation-purpose-list">
+            <PurposeItem icon={Activity} title="Operational readiness" text="Provider health, cache/config state, and whether core evaluation layers are runnable." />
+            <PurposeItem icon={ShieldCheck} title="Clinical safety gates" text="Citation validation, unsupported-claim surfacing, auditability, and human approval workflow." />
+            <PurposeItem icon={ClipboardCheck} title="Human review coverage" text="Rubric scores and reviewer feedback are tracked separately from automated benchmark metrics." />
+          </div>
+        </Card>
+        <Card title="What Benchmark Results Is For" actions={<Badge tone="success">artifacts</Badge>}>
+          <div className="evaluation-purpose-list">
+            <PurposeItem icon={FileCheck2} title="Model comparison" text="ROUGE, BERTScore, clinical proxy metrics, prediction files, and model comparison CSVs." />
+            <PurposeItem icon={Stethoscope} title="Three-flow comparison" text="Raw vs clinical context vs RAG-grounded outputs on the same record and same model." />
+            <PurposeItem icon={Activity} title="Per-record failures" text="Generated summary, reference summary, retrieved evidence, citations, and failure labels side by side." />
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid-two">
+        <ProviderReadinessChart providers={readiness.provider_readiness} />
+        <Card title="Evaluation Layer Status">
+          <div className="evaluation-layer-list">
+            {(readiness.evaluation_layers || []).map((layer) => (
+              <div className="evaluation-layer-row" key={layer.layer}>
+                <div>
+                  <strong>{humanize(layer.layer)}</strong>
+                  <p>{layer.message}</p>
+                  {layer.expected_path ? <code>{layer.expected_path}</code> : null}
+                </div>
+                <Badge tone={statusTone(layer.status)}>{layer.status}</Badge>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid-two">
+        <Card title="Human Review Snapshot">
+          <div className="human-review-score-grid">
+            <ReviewScore label="Factual correctness" value={human.average_factual_correctness_score} />
+            <ReviewScore label="Completeness" value={human.average_completeness_score} />
+            <ReviewScore label="Conciseness" value={human.average_conciseness_score} />
+            <ReviewScore label="Readability" value={human.average_readability_score} />
+            <ReviewScore label="Citation usefulness" value={human.average_citation_usefulness_score} />
+          </div>
+          <div className="review-risk-list">
+            {(human.hallucination_risk_distribution || []).length ? human.hallucination_risk_distribution.map((item) => (
+              <span key={item.key}><strong>{item.key}</strong>{item.count}</span>
+            )) : <p className="muted">No human hallucination-risk ratings have been submitted yet.</p>}
+          </div>
+        </Card>
+
+        <Card title="Benchmark Governance Snapshot">
+          <div className="metric-list">
+            <div><span>Runner</span><strong>{benchmark.benchmark_runner_exists ? "available" : "missing"}</strong></div>
+            <div><span>Model comparison output</span><strong>{benchmark.model_comparison_output_exists ? "available" : "missing"}</strong></div>
+            <div><span>Latest selected output</span><strong>{latest.selected_output_dir || latest.output_dir || "not available"}</strong></div>
+            <div><span>Latest report</span><strong>{latest.report_exists ? "available" : "missing"}</strong></div>
+          </div>
+          <p className="warning-line">{latest.proxy_warning || "Proxy evaluation only. Real clinical validation remains pending governed EHR access."}</p>
+        </Card>
+      </div>
+    </div>
   );
 }
 
-function EvaluationDashboardContent({ data, reload, flowMeta }) {
-  const rows = data?.models || [];
-  const officialRows = measuredRows(rows);
-  const best = bestByRougeL(officialRows);
-  const bestBertScore = officialRows.reduce(
-    (bestRow, row) => (Number(row.bertscore_f1 || 0) > Number(bestRow?.bertscore_f1 || 0) ? row : bestRow),
-    null,
-  );
-  const bertscoreStatus = officialRows.find((row) => row.bertscore_status)?.bertscore_status || "not requested";
-  const pegasusPubMed = rows.find((row) => row.model_provider?.includes("pegasus_pubmed"));
-  const gemini = rows.find((row) => row.model_provider === "gemini");
-  const pubmedFile = data?.prediction_file_availability?.["pegasus_pubmed_predictions.jsonl"];
-
+function PurposeItem({ icon: Icon, title, text }) {
   return (
-    <div className="stack admin-analytics-page evaluation-overview-page">
-      <PageHeader
-        eyebrow="Operational model quality"
-        title={`Evaluation Overview - ${flowMeta.title}`}
-        description={flowMeta.description}
-        actions={<button className="btn secondary" onClick={reload}>Refresh</button>}
-      />
-      <div className="metric-grid">
-        <MetricCard label="Best official model" value={best ? providerLabel(best.model_provider) : data?.best_model_by_rougeL || "not available"} detail="By ROUGE-L" />
-        <MetricCard label="Best ROUGE-L" value={formatScore(best?.rougeL)} />
-        <MetricCard
-          label="Best BERTScore F1"
-          value={formatScore(bestBertScore?.bertscore_f1)}
-          detail={bestBertScore?.bertscore_f1 ? providerLabel(bestBertScore.model_provider) : `BERTScore ${bertscoreStatus}`}
-        />
-        <MetricCard label="Pegasus PubMed" value={pegasusPubMed ? `${pegasusPubMed.completed_count}/${pegasusPubMed.record_count}` : "not available"} detail={pegasusPubMed?.status || "benchmark row missing"} />
-        <MetricCard label="Official models" value={officialRows.length} detail="Measured rows only" />
+    <div>
+      <Icon aria-hidden="true" size={18} />
+      <div>
+        <strong>{title}</strong>
+        <p>{text}</p>
       </div>
-      <div className="grid-two">
-        <MetricComparisonChart rows={officialRows} title="Official ROUGE Leaderboard" />
-        <RecordsEvaluatedChart rows={officialRows} />
-      </div>
-      <ClinicalMetricPanel rows={officialRows} summary={data?.clinical_metric_summary} />
-      <UseCaseRecommendationPanel rows={officialRows} />
-      <div className="grid-two">
-        <Card title="Provider Domain Fit">
-          <div className="status-grid">
-            <div><strong>BART</strong><p>General summarization baseline, useful for controlled comparison.</p></div>
-            <div><strong>Pegasus PubMed</strong><p>Medical/scientific fit. Preferred Pegasus row when completed and cached.</p></div>
-            <div><strong>Deterministic</strong><p>Fast extractive baseline for smoke checks and regression stability.</p></div>
-            <div><strong>Gemini</strong><p>External API provider. Show only as official if measured under governance and token limits.</p></div>
-          </div>
-        </Card>
-        <Card title="Latest Run Summary">
-          <p>Selected output: <code>{data?.selected_output_dir || data?.output_dir || "not available"}</code></p>
-          <p>Freshness: <strong>{data?.data_freshness_timestamp || "not available"}</strong></p>
-          <p>Report: <code>{data?.artifact_paths?.evaluation_report || data?.report_path || "not available"}</code></p>
-          {pubmedFile?.exists ? (
-            <p className="muted">Pegasus PubMed prediction file found with {pubmedFile.record_count} records.</p>
-          ) : (
-            <p className="warning-line">Pegasus PubMed prediction file is missing from the selected benchmark output.</p>
-          )}
-          {gemini ? <p className="warning-line">Gemini status: {gemini.status}. Treat token-limited Gemini rows separately unless completed records are present.</p> : <p className="muted">Gemini has no official measured row in the current benchmark output.</p>}
-        </Card>
-      </div>
-      <div className="grid-two">
-        <FailurePatternChart summary={data?.failure_analysis_summary} />
-        <PredictionAvailabilityPanel availability={data?.prediction_file_availability} />
-      </div>
-      <PerRecordFailureDashboard examples={data?.per_record_failure_examples} />
-      <ModelComparisonTable rows={rows} bestModel={best?.model_provider || data?.best_model_by_rougeL} />
-      <Card title="Proxy Evaluation Notice">
-        <p className="warning-line">{data?.proxy_warning}</p>
-      </Card>
     </div>
   );
+}
+
+function ReviewScore({ label, value }) {
+  return (
+    <div>
+      <span>{label}</span>
+      <strong>{value === null || value === undefined ? "n/a" : formatScore(value)}</strong>
+    </div>
+  );
+}
+
+function humanize(value = "") {
+  return value.replaceAll("_", " ");
 }

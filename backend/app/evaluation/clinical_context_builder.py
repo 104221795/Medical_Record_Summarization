@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Iterable
 
 from backend.app.schemas import EvidenceChunk
 
 
+ABSENCE_WARNING = (
+    "information was not present in retrieved evidence; do not infer that the patient did not have "
+    "this finding, medication, event, assessment, or plan."
+)
 SECTION_QUERIES = {
     "DIAGNOSIS": "diagnosis assessment impression condition disease",
     "MEDICATIONS": "medications treatments drugs dose therapy antibiotics insulin",
@@ -32,6 +36,7 @@ class ClinicalContext:
     evidence: list[EvidenceChunk]
     section_counts: dict[str, int]
     token_count: int
+    critical_fact_counts: dict[str, int] = field(default_factory=dict)
 
 
 def build_clinical_context(
@@ -39,21 +44,41 @@ def build_clinical_context(
     *,
     max_chunks: int = 10,
     max_chars_per_chunk: int = 700,
+    max_facts_per_section: int = 2,
+    max_chars_per_fact: int = 280,
 ) -> ClinicalContext:
     selected = deduplicate_evidence(evidence)[:max_chunks]
     sectioned: dict[str, list[EvidenceChunk]] = {name: [] for name in SECTION_QUERIES}
     for chunk in selected:
         label = classify_evidence_section(chunk)
         sectioned[label].append(chunk)
+    critical_facts = extract_citation_first_facts(
+        selected,
+        max_facts_per_section=max_facts_per_section,
+        max_chars_per_fact=max_chars_per_fact,
+    )
     lines = [
-        "Use only the evidence below. Preserve diagnoses, medications, timeline, assessment, and plan. "
-        "Do not add clinical facts that are not supported by evidence.",
+        "Build the summary from the cited clinical facts first. Use only the evidence below. "
+        "Preserve diagnoses, medications, timeline, assessment, and plan. "
+        "Do not add clinical facts that are not supported by a cited chunk id. "
+        "Important: 'not present in retrieved evidence' means unknown, not absent.",
+        "",
+        "[CITATION_FIRST_CLINICAL_FACTS]",
         "",
     ]
+    for section in SECTION_QUERIES:
+        lines.append(f"[{section}_FACTS]")
+        facts = critical_facts.get(section, [])
+        if not facts:
+            lines.append(f"- {section.lower()} {ABSENCE_WARNING}")
+        for chunk_id, fact in facts:
+            lines.append(f"- ({chunk_id}) {fact}")
+        lines.append("")
+    lines.extend(["[RETRIEVED_EVIDENCE_BY_SECTION]", ""])
     for section, chunks in sectioned.items():
         lines.append(f"[{section}]")
         if not chunks:
-            lines.append("- not available in retrieved evidence")
+            lines.append(f"- {section.lower()} {ABSENCE_WARNING}")
         for chunk in chunks:
             preview = normalize_whitespace(chunk.text)[:max_chars_per_chunk]
             lines.append(f"- ({chunk.chunk_id}) {preview}")
@@ -64,6 +89,7 @@ def build_clinical_context(
         evidence=selected,
         section_counts={section: len(chunks) for section, chunks in sectioned.items()},
         token_count=len(text.split()),
+        critical_fact_counts={section: len(facts) for section, facts in critical_facts.items()},
     )
 
 
@@ -132,6 +158,40 @@ def clinical_salience_score(chunk: EvidenceChunk, section: str | None = None) ->
     return round(selected_hits + (0.15 * total_hits) + length_bonus + heading_bonus, 4)
 
 
+def extract_citation_first_facts(
+    evidence: Iterable[EvidenceChunk],
+    *,
+    max_facts_per_section: int = 2,
+    max_chars_per_fact: int = 280,
+) -> dict[str, list[tuple[str, str]]]:
+    """Extract compact cited facts before raw evidence.
+
+    Seq2seq summarizers often drop low-frequency clinical details when given
+    long chunks. This lightweight pre-pass gives the model a short, cited
+    checklist for each clinical section while still preserving the original
+    evidence below it.
+    """
+
+    chunks = list(evidence)
+    facts: dict[str, list[tuple[str, str]]] = {name: [] for name in SECTION_QUERIES}
+    for section in SECTION_QUERIES:
+        ranked = sorted(chunks, key=lambda chunk: clinical_salience_score(chunk, section), reverse=True)
+        seen: set[str] = set()
+        for chunk in ranked:
+            for sentence in _section_candidate_sentences(chunk, section):
+                fact = normalize_whitespace(sentence)[:max_chars_per_fact].strip(" ,;:-")
+                key = fact.casefold()
+                if len(fact.split()) < 5 or key in seen:
+                    continue
+                facts[section].append((chunk.chunk_id, fact))
+                seen.add(key)
+                if len(facts[section]) >= max_facts_per_section:
+                    break
+            if len(facts[section]) >= max_facts_per_section:
+                break
+    return facts
+
+
 def deduplicate_evidence(evidence: Iterable[EvidenceChunk]) -> list[EvidenceChunk]:
     seen: set[str] = set()
     result: list[EvidenceChunk] = []
@@ -153,3 +213,17 @@ def classify_evidence_section(chunk: EvidenceChunk) -> str:
 
 def normalize_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", text or "").strip()
+
+
+def _section_candidate_sentences(chunk: EvidenceChunk, section: str) -> list[str]:
+    sentences = [
+        normalize_whitespace(sentence)
+        for sentence in re.split(r"(?<=[.!?])\s+|\n+", chunk.text or "")
+        if normalize_whitespace(sentence)
+    ]
+    pattern = SECTION_PATTERNS.get(section)
+    if pattern:
+        matching = [sentence for sentence in sentences if pattern.search(sentence)]
+        if matching:
+            return matching
+    return sentences[:2]

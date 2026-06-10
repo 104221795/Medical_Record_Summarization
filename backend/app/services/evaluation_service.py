@@ -22,6 +22,8 @@ from ..models import (
     Summary,
 )
 from ..persistence_schemas import (
+    BenchmarkFlowComparisonRecord,
+    BenchmarkFlowComparisonResponse,
     BenchmarkResultRow,
     BenchmarkResultsResponse,
     BenchmarkStatusResponse,
@@ -69,10 +71,16 @@ MEDIUM_BENCHMARK_OUTPUT_DIR = Path("D:/clin_summ_outputs/medium_benchmark_bart_p
 SUMMARIZATION_ONLY_OUTPUT_DIR = Path("D:/clin_summ_outputs/summarization_only_benchmark")
 CLINICAL_CONTEXT_OUTPUT_DIR = Path("D:/clin_summ_outputs/clinical_context_benchmark")
 RAG_GROUNDED_OUTPUT_DIR = Path("D:/clin_summ_outputs/rag_grounded_benchmark")
+RAG_BEST_MODELS_OUTPUT_DIR = Path("D:/clin_summ_outputs/rag_best_models_benchmark")
+PREFERRED_RAG_BEST_MODELS_OUTPUT_DIR = Path("D:/clin_summ_outputs/rag_best_models_benchmark_no_gemini_ui")
 MEDIUM_BENCHMARK_COMPARISON_PATH = MEDIUM_BENCHMARK_OUTPUT_DIR / "model_comparison.csv"
 MEDIUM_BENCHMARK_REPORT_PATH = MEDIUM_BENCHMARK_OUTPUT_DIR / "EVALUATION_REPORT.md"
 MEDIUM_BENCHMARK_FAILURE_PATH = MEDIUM_BENCHMARK_OUTPUT_DIR / "failure_analysis.md"
 BENCHMARK_DISCOVERY_DIRS = [
+    Path("D:/clin_summ_outputs/rag_best_models_benchmark_no_gemini_ui"),
+    Path("D:/clin_summ_outputs/rag_best_models_benchmark"),
+    Path("D:/clin_summ_outputs/rag_best_models_ollama_50"),
+    Path("D:/clin_summ_outputs/rag_best_models_ollama_smoke"),
     Path("D:/clin_summ_outputs/rag_grounded_benchmark"),
     Path("D:/clin_summ_outputs/clinical_context_benchmark"),
     Path("D:/clin_summ_outputs/summarization_only_benchmark"),
@@ -86,7 +94,16 @@ PREDICTION_FILES = {
     "pegasus": "pegasus_predictions.jsonl",
     "pegasus_pubmed": "pegasus_pubmed_predictions.jsonl",
     "pegasus_cnn_dailymail": "pegasus_cnn_dailymail_predictions.jsonl",
+    "qwen2.5": "qwen2.5_predictions.jsonl",
+    "llama3.2": "llama3.2_predictions.jsonl",
+    "gemini2.5_flash_lite": "gemini2.5_flash_lite_predictions.jsonl",
 }
+FLOW_COMPARISON_LABELS = {
+    "summarization_only": "Flow 1 Raw Summarization",
+    "clinical_context": "Flow 1.5 Clinical Context",
+    "rag_grounded": "Flow 2 RAG Grounded",
+}
+BENCHMARK_TYPE_LABELS = FLOW_COMPARISON_LABELS | {"rag_best_models": "Flow 2.1 RAG Best Models"}
 FAILURE_CATEGORIES = [
     "hallucinated content",
     "missing diagnosis",
@@ -309,7 +326,31 @@ class EvaluationService:
         )
 
     def benchmark_results(self, benchmark_type: str | None = None) -> BenchmarkResultsResponse:
+        # Prefer an explicit latest pointer for Flow 2.1 if present and valid.
         selected_dir, discovered = _select_benchmark_output_dir(BENCHMARK_DISCOVERY_DIRS, benchmark_type)
+        if benchmark_type == "rag_best_models":
+            pointer = Path("D:/clin_summ_outputs/latest_rag_best_models.json")
+            if pointer.exists():
+                try:
+                    payload = json.loads(pointer.read_text(encoding="utf-8"))
+                    sel = Path(str(payload.get("selected_output_dir") or ""))
+                    if sel.exists() and (sel / "model_comparison.csv").exists():
+                        selected_dir = sel
+                        # ensure discovered includes the selected dir and mark it selected
+                        found = False
+                        for item in discovered:
+                            if item.get("path") == str(selected_dir):
+                                item["selected"] = True
+                                found = True
+                            else:
+                                item["selected"] = False
+                        if not found:
+                            di = _folder_info(selected_dir)
+                            di["selected"] = True
+                            discovered.append(di)
+                except Exception:
+                    # ignore pointer parse errors and fall back to discovery
+                    pass
         comparison_path = selected_dir / "model_comparison.csv"
         report_path = selected_dir / "EVALUATION_REPORT.md"
         failure_path = selected_dir / "failure_analysis.md"
@@ -323,7 +364,7 @@ class EvaluationService:
         prediction_files = _prediction_file_availability(selected_dir)
         per_record_summary = _per_record_metric_summary(per_record_path)
         clinical_summary = _clinical_metric_summary(per_record_path, selected_dir)
-        failure_examples = _per_record_failure_examples(selected_dir, limit=20)
+        failure_examples = _per_record_failure_examples(selected_dir, limit=120)
         failure_summary = _failure_analysis_summary(failure_path, per_record_path)
         return BenchmarkResultsResponse(
             output_dir=str(selected_dir),
@@ -395,6 +436,44 @@ class EvaluationService:
             failure_analysis_path=str(failure_path),
             report_exists=report_path.exists(),
             failure_analysis_exists=failure_path.exists(),
+            proxy_warning=PROXY_EVALUATION_WARNING,
+        )
+
+    def benchmark_flow_comparison(
+        self,
+        *,
+        limit: int = 12,
+        provider: str | None = None,
+    ) -> BenchmarkFlowComparisonResponse:
+        flow_dirs: dict[str, Path] = {}
+        flow_metadata: list[dict[str, str | None]] = []
+        for flow_key, title in FLOW_COMPARISON_LABELS.items():
+            selected_dir, _ = _select_benchmark_output_dir(BENCHMARK_DISCOVERY_DIRS, flow_key)
+            flow_dirs[flow_key] = selected_dir
+            flow_metadata.append(
+                {
+                    "key": flow_key,
+                    "title": title,
+                    "output_dir": str(selected_dir),
+                    "benchmark_type": _benchmark_type(selected_dir) if selected_dir.exists() else flow_key,
+                }
+            )
+
+        indexed = {
+            flow_key: _flow_prediction_index(output_dir, provider_filter=provider)
+            for flow_key, output_dir in flow_dirs.items()
+        }
+        common_keys = set.intersection(*(set(index.keys()) for index in indexed.values()))
+        records = [
+            _flow_comparison_record(note_id, model_provider, indexed)
+            for note_id, model_provider in common_keys
+        ]
+        records = sorted(records, key=_flow_comparison_priority, reverse=True)[:limit]
+        return BenchmarkFlowComparisonResponse(
+            flows=flow_metadata,
+            records=records,
+            limit=limit,
+            provider_filter=provider,
             proxy_warning=PROXY_EVALUATION_WARNING,
         )
 
@@ -794,12 +873,50 @@ def _select_benchmark_output_dir(
     candidate_dirs: list[Path],
     benchmark_type: str | None = None,
 ) -> tuple[Path, list[dict[str, Any]]]:
-    discovered = [_folder_info(path) for path in candidate_dirs]
+    # For rag_best_models, also scan the root output directory for any
+    # folders matching the `rag_best_models*` prefix so new runs are
+    # discovered automatically without manual copying.
+    candidate_paths: list[Path] = list(candidate_dirs)
+    if benchmark_type == "rag_best_models":
+        root_scan = Path("D:/clin_summ_outputs")
+        try:
+            for p in sorted(root_scan.glob("rag_best_models*")):
+                if p not in candidate_paths:
+                    candidate_paths.append(p)
+        except Exception:
+            # ignore scanning errors and fall back to provided candidates
+            pass
+    discovered = [_folder_info(path) for path in candidate_paths]
     existing = [item for item in discovered if item["exists"]]
     if benchmark_type:
         existing = [item for item in existing if item["benchmark_type"] == benchmark_type]
+    # Special handling for Flow 2.1 (rag_best_models): prefer the
+    # pre-defined preferred directory when present and otherwise only
+    # consider folders that include a model_comparison.csv. This ensures
+    # the dashboard loads `data.models` from a valid `model_comparison.csv`.
+    if benchmark_type == "rag_best_models":
+        # If the preferred folder exists and contains a comparison CSV, select it.
+        preferred = next(
+            (item for item in existing if item["path"] == str(PREFERRED_RAG_BEST_MODELS_OUTPUT_DIR) and item.get("has_model_comparison")),
+            None,
+        )
+        if preferred:
+            selected = Path(preferred["path"])
+            for item in discovered:
+                item["selected"] = item["path"] == str(selected)
+            return selected, discovered
+        # Otherwise prefer any existing folder that contains model_comparison.csv,
+        # choosing the most recently modified such folder.
+        candidates = [item for item in existing if item.get("has_model_comparison")]
+        if candidates:
+            ranked = sorted(candidates, key=lambda item: item["last_modified"] or "", reverse=True)
+            selected = Path(ranked[0]["path"])
+            for item in discovered:
+                item["selected"] = item["path"] == str(selected)
+            return selected, discovered
     if not existing:
         fallback_by_type = {
+            "rag_best_models": RAG_BEST_MODELS_OUTPUT_DIR,
             "rag_grounded": RAG_GROUNDED_OUTPUT_DIR,
             "clinical_context": CLINICAL_CONTEXT_OUTPUT_DIR,
             "summarization_only": MEDIUM_BENCHMARK_OUTPUT_DIR,
@@ -829,11 +946,24 @@ def _benchmark_manifest_path(path: Path) -> Path:
 
 
 def _benchmark_type(path: Path) -> str:
+    if path.name.startswith("rag_best_models") or _manifest_pipeline(path) == "rag_best_models_benchmark":
+        return "rag_best_models"
     if (path / "rag_benchmark_manifest.json").exists() or (path / "retrieval_metrics.csv").exists():
         return "rag_grounded"
     if (path / "clinical_context_manifest.json").exists() or (path / "clinical_context_records.jsonl").exists():
         return "clinical_context"
     return "summarization_only"
+
+
+def _manifest_pipeline(path: Path) -> str | None:
+    manifest_path = path / "rag_benchmark_manifest.json"
+    if not manifest_path.exists():
+        return None
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return str(payload.get("pipeline") or "") or None
 
 
 def _folder_info(path: Path) -> dict[str, Any]:
@@ -871,7 +1001,7 @@ def _merge_prediction_rows(output_dir: Path, rows: list[BenchmarkResultRow]) -> 
         row = _prediction_row(provider, prediction_path)
         if row:
             by_provider[provider] = row
-    ordered = ["deterministic", "bart", "pegasus", "pegasus_pubmed", "pegasus_cnn_dailymail"]
+    ordered = ["deterministic", "bart", "pegasus", "qwen2.5", "llama3.2", "gemini2.5_flash_lite", "pegasus_pubmed", "pegasus_cnn_dailymail"]
     return [by_provider[key] for key in ordered if key in by_provider] + [
         row for key, row in by_provider.items() if key not in ordered and key != "gemini"
     ] + ([by_provider["gemini"]] if "gemini" in by_provider else [])
@@ -994,6 +1124,186 @@ def _prediction_file_availability(output_dir: Path) -> dict[str, Any]:
             "last_modified": _iso_mtime(path.stat().st_mtime) if path.exists() else None,
         }
     return availability
+
+
+def _flow_prediction_index(
+    output_dir: Path,
+    *,
+    provider_filter: str | None = None,
+) -> dict[tuple[str, str], dict[str, Any]]:
+    indexed: dict[tuple[str, str], dict[str, Any]] = {}
+    for provider, filename in PREDICTION_FILES.items():
+        if provider_filter and provider != provider_filter:
+            continue
+        for raw_row in _read_prediction_jsonl(output_dir / filename):
+            enriched = _ensure_clinical_metrics(dict(raw_row))
+            note_id = str(enriched.get("note_id") or enriched.get("record_id") or "").strip()
+            if not note_id:
+                continue
+            row_provider = str(enriched.get("model_provider") or provider).strip() or provider
+            indexed[(note_id, row_provider)] = _flow_prediction_payload(
+                enriched,
+                provider=row_provider,
+                fallback_model_name=_default_model_name(provider),
+            )
+    return indexed
+
+
+def _flow_prediction_payload(
+    row: dict[str, Any],
+    *,
+    provider: str,
+    fallback_model_name: str,
+) -> dict[str, Any]:
+    metrics = {
+        field: _float_value_any(row.get(field))
+        for field in PER_RECORD_CLINICAL_FIELDS
+    }
+    return {
+        "note_id": str(row.get("note_id") or ""),
+        "patient_id": str(row.get("patient_id") or "") or None,
+        "encounter_id": str(row.get("encounter_id") or "") or None,
+        "dataset": str(row.get("dataset") or "") or None,
+        "model_provider": provider,
+        "model_name": row.get("model_name") or row.get("checkpoint") or fallback_model_name,
+        "status": row.get("status") or "completed",
+        "input_note": row.get("source_note") or row.get("input_note") or "",
+        "reference_summary": row.get("reference_summary") or "",
+        "generated_summary": row.get("generated_summary") or "",
+        "retrieved_evidence": row.get("retrieved_evidence") or row.get("evidence") or "",
+        "citations": row.get("citations") or [],
+        "failure_labels": _split_failure_categories(row.get("failure_categories") or row.get("failure_labels")),
+        "rouge1": _float_value_any(row.get("rouge1")),
+        "rouge2": _float_value_any(row.get("rouge2")),
+        "rougeL": _float_value_any(row.get("rougeL")),
+        "latency_ms": _float_value_any(row.get("latency_ms")),
+        "clinical_metrics": metrics,
+        "error_message": row.get("error_message"),
+    }
+
+
+def _flow_comparison_record(
+    note_id: str,
+    model_provider: str,
+    indexed: dict[str, dict[tuple[str, str], dict[str, Any]]],
+) -> BenchmarkFlowComparisonRecord:
+    flows = {
+        flow_key: indexed[flow_key][(note_id, model_provider)]
+        for flow_key in FLOW_COMPARISON_LABELS
+    }
+    raw = flows["summarization_only"]
+    rag = flows["rag_grounded"]
+    highlights, verdict, deltas = _flow_comparison_highlights(raw, rag)
+    representative = next((cell for cell in flows.values() if cell.get("input_note")), raw)
+    return BenchmarkFlowComparisonRecord(
+        note_id=note_id,
+        patient_id=representative.get("patient_id"),
+        encounter_id=representative.get("encounter_id"),
+        dataset=representative.get("dataset"),
+        model_provider=model_provider,
+        input_note=representative.get("input_note"),
+        reference_summary=representative.get("reference_summary"),
+        flows=flows,
+        highlights=highlights,
+        verdict=verdict,
+        rag_delta=deltas,
+    )
+
+
+def _flow_comparison_highlights(
+    raw: dict[str, Any],
+    rag: dict[str, Any],
+) -> tuple[list[str], str, dict[str, float | None]]:
+    raw_metrics = raw.get("clinical_metrics") or {}
+    rag_metrics = rag.get("clinical_metrics") or {}
+    deltas = {
+        "missing_diagnosis_rate": _metric_delta(raw_metrics, rag_metrics, "missing_diagnosis_rate", lower_is_better=True),
+        "missing_medication_rate": _metric_delta(raw_metrics, rag_metrics, "missing_medication_rate", lower_is_better=True),
+        "timeline_completeness": _metric_delta(raw_metrics, rag_metrics, "timeline_completeness", lower_is_better=False),
+        "unsupported_claim_rate": _metric_delta(raw_metrics, rag_metrics, "unsupported_claim_rate", lower_is_better=True),
+        "citation_coverage": _metric_delta(raw_metrics, rag_metrics, "citation_coverage", lower_is_better=False),
+    }
+    raw_labels = set(raw.get("failure_labels") or [])
+    rag_labels = set(rag.get("failure_labels") or [])
+    highlights: list[str] = []
+    helped = False
+    worse = False
+
+    for field, label in (
+        ("missing_diagnosis_rate", "RAG reduced missing diagnosis"),
+        ("missing_medication_rate", "RAG reduced missing medication"),
+    ):
+        if _meaningful_positive(deltas[field]) or field.replace("_rate", "").replace("_", " ") in raw_labels - rag_labels:
+            helped = True
+            highlights.append(label)
+
+    if _meaningful_positive(deltas["timeline_completeness"]) or "missing timeline" in raw_labels - rag_labels:
+        helped = True
+        highlights.append("RAG improved timeline completeness")
+
+    if _meaningful_positive(deltas["citation_coverage"]):
+        helped = True
+        highlights.append("RAG improved citation coverage")
+
+    if _meaningful_negative(deltas["unsupported_claim_rate"]):
+        worse = True
+        highlights.append("RAG increased unsupported claim rate")
+
+    if (
+        _meaningful_negative(deltas["missing_diagnosis_rate"])
+        or _meaningful_negative(deltas["missing_medication_rate"])
+        or _meaningful_negative(deltas["timeline_completeness"])
+    ):
+        worse = True
+        highlights.append("RAG worsened a clinical completeness metric")
+
+    if "retrieval-related failure" in rag_labels:
+        worse = True
+        highlights.append("RAG retrieved weak or mismatched evidence")
+
+    if not highlights:
+        highlights.append("No major RAG delta detected")
+
+    if helped and not worse:
+        verdict = "rag_helped"
+    elif worse:
+        verdict = "rag_needs_review"
+    else:
+        verdict = "mixed_or_neutral"
+    return highlights, verdict, deltas
+
+
+def _metric_delta(
+    raw_metrics: dict[str, Any],
+    rag_metrics: dict[str, Any],
+    key: str,
+    *,
+    lower_is_better: bool,
+) -> float | None:
+    raw_value = _float_value_any(raw_metrics.get(key))
+    rag_value = _float_value_any(rag_metrics.get(key))
+    if raw_value is None or rag_value is None:
+        return None
+    return round(raw_value - rag_value, 4) if lower_is_better else round(rag_value - raw_value, 4)
+
+
+def _meaningful_positive(value: float | None) -> bool:
+    return value is not None and value >= 0.05
+
+
+def _meaningful_negative(value: float | None) -> bool:
+    return value is not None and value <= -0.05
+
+
+def _flow_comparison_priority(record: BenchmarkFlowComparisonRecord) -> float:
+    verdict_weight = {
+        "rag_helped": 3.0,
+        "rag_needs_review": 2.5,
+        "mixed_or_neutral": 1.0,
+    }.get(record.verdict, 0.0)
+    delta_weight = sum(abs(value) for value in record.rag_delta.values() if value is not None)
+    label_weight = sum(len(cell.get("failure_labels") or []) for cell in record.flows.values()) * 0.1
+    return verdict_weight + delta_weight + label_weight
 
 
 def _per_record_metric_summary(path: Path) -> dict[str, Any]:
@@ -1191,6 +1501,8 @@ def _per_record_failure_examples(output_dir: Path, *, limit: int) -> list[dict[s
     explicit_path = output_dir / "per_record_failure_analysis.jsonl"
     if explicit_path.exists():
         rows = _read_failure_jsonl(explicit_path)
+        if rows and any(isinstance(row.get("model_outputs"), list) for row in rows):
+            return _normalized_grouped_failure_examples(rows, limit=limit)
     else:
         rows = []
         for filename in PREDICTION_FILES.values():
@@ -1244,6 +1556,104 @@ def _per_record_failure_examples(output_dir: Path, *, limit: int) -> list[dict[s
         item["model_outputs"] = sorted(item["model_outputs"], key=lambda row: row.get("model_provider") or "")
         examples.append(item)
     return sorted(examples, key=lambda item: item["severity"], reverse=True)[:limit]
+
+
+def _normalized_grouped_failure_examples(rows: list[dict[str, Any]], *, limit: int) -> list[dict[str, Any]]:
+    examples: list[dict[str, Any]] = []
+    for row in rows:
+        note_id = str(row.get("note_id") or "").strip()
+        if not note_id:
+            continue
+        model_outputs = [_normalized_model_output(output) for output in row.get("model_outputs") or []]
+        record_labels = set(_split_failure_categories(row.get("failure_labels") or row.get("failure_categories")))
+        for output in model_outputs:
+            record_labels.update(output.get("failure_labels") or [])
+        severity = len(record_labels)
+        for output in model_outputs:
+            rouge_l = _float_value_any(output.get("rougeL"))
+            metrics = output.get("clinical_metrics") or {}
+            severity += 1.0 - rouge_l if rouge_l is not None else 0.5
+            severity += _float_value_any(metrics.get("unsupported_claim_rate")) or 0.0
+            severity += _float_value_any(metrics.get("critical_info_omission_rate")) or 0.0
+        clean_record_labels = _clean_failure_labels(record_labels)
+        examples.append(
+            {
+                "note_id": note_id,
+                "patient_id": row.get("patient_id") or "",
+                "encounter_id": row.get("encounter_id") or "",
+                "dataset": row.get("dataset") or "",
+                "input_note": row.get("input_note") or row.get("source_note") or "",
+                "reference_summary": row.get("reference_summary") or "",
+                "retrieved_evidence": row.get("retrieved_evidence") or "",
+                "citations": row.get("citations") or [],
+                "failure_labels": clean_record_labels,
+                "model_outputs": sorted(model_outputs, key=lambda output: _provider_sort_key(output.get("model_provider"))),
+                "severity": round(severity, 4),
+            }
+        )
+    return sorted(examples, key=lambda item: item["severity"], reverse=True)[:limit]
+
+
+def _normalized_model_output(output: dict[str, Any]) -> dict[str, Any]:
+    metrics = output.get("clinical_metrics") or {
+        field: output.get(field)
+        for field in PER_RECORD_CLINICAL_FIELDS
+    }
+    labels = _split_failure_categories(output.get("failure_labels") or output.get("failure_categories"))
+    if not labels:
+        labels = _failure_labels_from_output_metrics(metrics)
+    return {
+        "model_provider": output.get("model_provider") or "",
+        "model_name": output.get("model_name") or "",
+        "status": output.get("status") or "",
+        "generated_summary": output.get("generated_summary") or "",
+        "rouge1": output.get("rouge1"),
+        "rouge2": output.get("rouge2"),
+        "rougeL": output.get("rougeL"),
+        "latency_ms": output.get("latency_ms"),
+        "clinical_metrics": metrics,
+        "failure_labels": labels,
+        "error_message": output.get("error_message"),
+    }
+
+
+def _failure_labels_from_output_metrics(metrics: dict[str, Any]) -> list[str]:
+    labels: list[str] = []
+    if (_float_value_any(metrics.get("unsupported_claim_rate")) or 0.0) > 0.0:
+        labels.append("hallucinated content")
+    if (_float_value_any(metrics.get("missing_diagnosis_rate")) or 0.0) > 0.0:
+        labels.append("missing diagnosis")
+    if (_float_value_any(metrics.get("missing_medication_rate")) or 0.0) > 0.0:
+        labels.append("missing medication")
+    timeline = _float_value_any(metrics.get("timeline_completeness"))
+    if timeline is not None and timeline < 1.0:
+        labels.append("missing timeline")
+    if (_float_value_any(metrics.get("critical_info_omission_rate")) or 0.0) > 0.0:
+        labels.append("incomplete summary")
+    if not labels:
+        labels.append("no major proxy failure detected")
+    return _clean_failure_labels(labels)
+
+
+def _clean_failure_labels(labels: Any) -> list[str]:
+    clean = sorted(set(_split_failure_categories(labels)))
+    if len(clean) > 1:
+        clean = [label for label in clean if label != "no major proxy failure detected"]
+    return clean
+
+
+def _provider_sort_key(provider: str | None) -> int:
+    order = {
+        "deterministic": 0,
+        "bart": 1,
+        "pegasus": 2,
+        "qwen2.5": 3,
+        "llama3.2": 4,
+        "gemini2.5_flash_lite": 5,
+        "pegasus_pubmed": 6,
+        "pegasus_cnn_dailymail": 7,
+    }
+    return order.get(provider or "", 99)
 
 
 def _failure_payload_from_prediction(row: dict[str, Any]) -> dict[str, Any]:
@@ -1300,7 +1710,7 @@ def _ensure_clinical_metrics(row: dict[str, Any]) -> dict[str, Any]:
 def _split_failure_categories(value: Any) -> list[str]:
     if not value:
         return []
-    if isinstance(value, list):
+    if isinstance(value, (list, set, tuple)):
         return [str(item).strip() for item in value if str(item).strip()]
     return [item.strip() for item in str(value).split(";") if item.strip()]
 
@@ -1359,7 +1769,10 @@ def _default_model_name(provider: str) -> str:
     return {
         "deterministic": "deterministic_sentence_baseline",
         "bart": "facebook/bart-large-cnn",
-        "pegasus": "google/pegasus-xsum",
+        "pegasus": "google/pegasus-cnn_dailymail",
+        "qwen2.5": "ollama/qwen2.5:3b",
+        "llama3.2": "ollama/llama3.2:3b",
+        "gemini2.5_flash_lite": "gemini/gemini-2.5-flash-lite",
         "pegasus_pubmed": "google/pegasus-pubmed",
         "pegasus_cnn_dailymail": "google/pegasus-cnn_dailymail",
         "gemini": "gemini configured provider",
@@ -1371,6 +1784,9 @@ def _domain_fit(provider: str) -> str:
         "deterministic": "Fast extractive baseline",
         "bart": "General summarization baseline",
         "pegasus": "General Pegasus baseline",
+        "qwen2.5": "Local Ollama instruction model",
+        "llama3.2": "Local Ollama instruction model",
+        "gemini2.5_flash_lite": "Cloud Gemini gateway model",
         "pegasus_pubmed": "Medical/scientific",
         "pegasus_cnn_dailymail": "General news summarization baseline",
         "gemini": "External API LLM; not official unless fully benchmarked",

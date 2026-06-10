@@ -15,6 +15,9 @@ const PROVIDER_LABELS = {
   pegasus_cnn_dailymail: "Pegasus CNN",
   pegasus_xsum: "Pegasus XSum",
   gemini: "Gemini",
+  "qwen2.5": "Qwen2.5",
+  "llama3.2": "Llama3.2",
+  "gemini2.5_flash_lite": "Gemini 2.5 Flash Lite",
 };
 
 export function providerLabel(provider) {

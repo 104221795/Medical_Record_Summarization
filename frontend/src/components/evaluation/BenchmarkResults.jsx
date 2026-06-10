@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 import Badge from "../common/Badge.jsx";
 import Card from "../common/Card.jsx";
 import MetricCard from "../common/MetricCard.jsx";
@@ -39,7 +41,12 @@ function BenchmarkResultsContent({ data, reload, flowMeta }) {
         eyebrow="Experiment artifacts"
         title={`Benchmark Results - ${flowMeta.title}`}
         description={flowMeta.description}
-        actions={<button className="btn secondary" onClick={reload}>Refresh</button>}
+        actions={(
+          <div className="page-header-actions">
+            <button className="btn secondary" onClick={reload} type="button">Refresh</button>
+            <Link to="/admin/evaluation/flow-comparison"><button className="btn" type="button">Compare 3 Flows</button></Link>
+          </div>
+        )}
       />
       <div className="metric-grid">
         <MetricCard label="Selected output" value={data?.selected_output_dir ? "available" : "missing"} detail={data?.selected_output_dir || data?.output_dir || "not available"} />

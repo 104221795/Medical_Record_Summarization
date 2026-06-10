@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { ArrowRight, Database, FileCheck2, Home, ShieldCheck, Stethoscope, UserPlus } from "lucide-react";
 import Card from "../../components/common/Card.jsx";
 import Button from "../../components/common/Button.jsx";
 import PublicNav from "../../components/navigation/PublicNav.jsx";
@@ -9,11 +10,25 @@ export default function AboutPage() {
     <main className="public-page about-page">
       <PublicNav />
       <section className="about-hero">
-        <img src={brandAssets.logo} alt="Medical Record Summarization logo" />
-        <div>
+        <div className="about-hero-copy">
+          <img src={brandAssets.logo} alt="Medical Record Summarization logo" />
           <p className="eyebrow">Mission</p>
           <h1>Clinical summaries that stay inspectable, governed, and human-approved.</h1>
           <p>This platform is designed for citation-grounded medical record summarization research and MVP validation. It separates draft generation from clinician approval and keeps proxy evaluation clearly labeled.</p>
+        </div>
+        <div className="about-hero-visual about-medical-visual" style={{ "--thumbnail-image": `url(${brandAssets.aboutHero})` }}>
+          <div className="about-visual-card primary">
+            <span><Stethoscope aria-hidden="true" size={16} /> Clinical Context</span>
+            <strong>Diagnosis, medications, timeline, assessment, and plan</strong>
+          </div>
+          <div className="about-visual-card">
+            <span><FileCheck2 aria-hidden="true" size={16} /> Citation Review</span>
+            <small>Unsupported claims stay visible for clinician review.</small>
+          </div>
+          <div className="about-visual-row">
+            <span><Database aria-hidden="true" size={15} /> Dataset governance</span>
+            <span><ShieldCheck aria-hidden="true" size={15} /> Audit-ready</span>
+          </div>
         </div>
       </section>
       <div className="about-grid">
@@ -39,9 +54,9 @@ export default function AboutPage() {
         <div className="visual-panel" style={{ "--panel-image": `url(${brandAssets.images[3]})` }}><span>Governed benchmark operations</span></div>
       </section>
       <div className="public-actions">
-        <Link to="/login"><Button>Sign In</Button></Link>
-        <Link to="/signup"><Button variant="secondary">Sign Up</Button></Link>
-        <Link to="/"><Button variant="secondary">Home</Button></Link>
+        <Link to="/login"><Button icon={ArrowRight} iconPosition="right">Sign In</Button></Link>
+        <Link to="/signup"><Button variant="secondary" icon={UserPlus}>Sign Up</Button></Link>
+        <Link to="/"><Button variant="secondary" icon={Home}>Home</Button></Link>
       </div>
     </main>
   );

@@ -1,0 +1,17 @@
+@"
+model_list:
+  - model_name: qwen2.5
+    litellm_params:
+      model: ollama/qwen2.5:3b
+      api_base: http://localhost:11434
+
+  - model_name: llama3.2
+    litellm_params:
+      model: ollama/llama3.2:3b
+      api_base: http://localhost:11434
+
+  - model_name: gemini2.5_flash_lite
+    litellm_params:
+      model: gemini/gemini-2.5-flash-lite
+      api_key: os.environ/GEMINI_API_KEY
+"@ | Set-Content -Encoding UTF8 litellm_config.yaml

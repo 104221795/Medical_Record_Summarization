@@ -20,6 +20,8 @@ import AdminDashboardPage from "../pages/admin/AdminDashboardPage.jsx";
 import DatasetGovernancePage from "../pages/admin/DatasetGovernancePage.jsx";
 import EvaluationDashboardPage from "../pages/admin/EvaluationDashboardPage.jsx";
 import BenchmarkResultsPage from "../pages/admin/BenchmarkResultsPage.jsx";
+import FlowComparisonPage from "../pages/admin/FlowComparisonPage.jsx";
+import RagBestModelsPage from "../pages/admin/RagBestModelsPage.jsx";
 import AuditLogPage from "../pages/admin/AuditLogPage.jsx";
 import SettingsPage from "../pages/admin/SettingsPage.jsx";
 
@@ -55,6 +57,8 @@ export default function AppRoutes() {
         <Route path="datasets" element={<DatasetGovernancePage />} />
         <Route path="evaluation" element={<EvaluationDashboardPage />} />
         <Route path="evaluation/benchmark" element={<BenchmarkResultsPage />} />
+        <Route path="evaluation/flow-comparison" element={<FlowComparisonPage />} />
+        <Route path="evaluation/rag-best-models" element={<RagBestModelsPage />} />
         <Route path="audit" element={<AuditLogPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="guide" element={<UserGuidePage />} />

@@ -1,5 +1,6 @@
 ﻿import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { KeyRound, ShieldCheck, Sparkles, UserPlus } from "lucide-react";
 import Button from "../../components/common/Button.jsx";
 import Card from "../../components/common/Card.jsx";
 import PublicNav from "../../components/navigation/PublicNav.jsx";
@@ -60,6 +61,7 @@ export default function SignupPage() {
   return (
     <main className="login-page auth-page">
       <PublicNav />
+      <section className="auth-shell">
       <Card title="Sign Up" className="auth-card">
         <img className="login-logo" src={brandAssets.logo} alt="Medical Record Summarization logo" />
         <p>Create a demo workspace account. Role access is controlled by account permissions.</p>
@@ -68,7 +70,7 @@ export default function SignupPage() {
         {form.email && !emailValid && <p className="error-text">Use a valid email address.</p>}
         <div className="password-header">
           <span>Password *</span>
-          <Button variant="secondary" onClick={autoGeneratePassword}>Auto Generate</Button>
+          <Button variant="secondary" icon={Sparkles} onClick={autoGeneratePassword}>Auto Generate</Button>
         </div>
         <label className="field"><input required type="password" value={form.password} onChange={(event) => update("password", event.target.value)} placeholder="At least 10 chars, A-z, number, symbol" /></label>
         <PasswordMeter strength={strength} checks={checks} />
@@ -84,10 +86,18 @@ export default function SignupPage() {
         <p className="muted">In production, role assignment should be controlled by an administrator or identity provider.</p>
         {error && <p className="warning-line">{error}</p>}
         <div className="public-actions">
-          <Button disabled={loading || !canSubmit} onClick={submit}>{loading ? "Creating..." : "Create Account"}</Button>
-          <Link to="/login"><Button variant="secondary">Sign In</Button></Link>
+          <Button icon={UserPlus} disabled={loading || !canSubmit} onClick={submit}>{loading ? "Creating..." : "Create Account"}</Button>
+          <Link to="/login"><Button variant="secondary" icon={KeyRound}>Sign In</Button></Link>
         </div>
       </Card>
+      <aside className="auth-visual" style={{ "--thumbnail-image": `url(${brandAssets.images[0]})` }}>
+        <div>
+          <span><ShieldCheck aria-hidden="true" size={16} /> Secure demo access</span>
+          <strong>Start with governed review paths</strong>
+          <p>Accounts route users into doctor or admin workspaces while keeping clinical summaries auditable.</p>
+        </div>
+      </aside>
+      </section>
     </main>
   );
 }

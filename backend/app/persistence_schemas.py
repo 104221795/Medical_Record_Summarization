@@ -708,6 +708,28 @@ class BenchmarkResultsResponse(PersistenceModel):
     proxy_warning: str
 
 
+class BenchmarkFlowComparisonRecord(PersistenceModel):
+    note_id: str
+    patient_id: str | None = None
+    encounter_id: str | None = None
+    dataset: str | None = None
+    model_provider: str
+    input_note: str | None = None
+    reference_summary: str | None = None
+    flows: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    highlights: list[str] = Field(default_factory=list)
+    verdict: str
+    rag_delta: dict[str, float | None] = Field(default_factory=dict)
+
+
+class BenchmarkFlowComparisonResponse(PersistenceModel):
+    flows: list[dict[str, str | None]]
+    records: list[BenchmarkFlowComparisonRecord] = Field(default_factory=list)
+    limit: int
+    provider_filter: str | None = None
+    proxy_warning: str
+
+
 class ModelJobCreateRequest(PersistenceModel):
     job_type: Literal["summarization_generation", "model_warmup"] = "model_warmup"
     model_provider: str = Field(default="bart", min_length=1, max_length=100)

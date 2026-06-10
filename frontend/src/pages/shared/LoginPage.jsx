@@ -1,4 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
+import { ArrowRight, KeyRound, ShieldCheck, UserPlus } from "lucide-react";
 import Card from "../../components/common/Card.jsx";
 import Button from "../../components/common/Button.jsx";
 import PublicNav from "../../components/navigation/PublicNav.jsx";
@@ -40,11 +41,12 @@ export default function LoginPage() {
         callback: handleGoogleCredential,
       });
       window.google.accounts.id.renderButton(googleButtonRef.current, {
-        theme: "outline",
+        theme: "filled_blue",
         size: "large",
         type: "standard",
-        shape: "rectangular",
+        shape: "pill",
         text: "continue_with",
+        logo_alignment: "left",
         width: googleButtonRef.current.clientWidth || 360,
       });
     };
@@ -134,45 +136,61 @@ export default function LoginPage() {
   return (
     <main className="login-page auth-page">
       <PublicNav />
-      <Card title="Sign In" className="auth-card">
-        <img className="login-logo" src={brandAssets.logo} alt="Medical Record Summarization logo" />
-        <p>Access the Medical Record Summarization workspace with your account role.</p>
-        <label className="field">
-          <span>Email or username</span>
-          <input required value={session.email || session.userId} onChange={(event) => updateSession({ userId: event.target.value, email: event.target.value })} placeholder="doctor@example.org" />
-        </label>
-        <label className="field">
-          <span>Password</span>
-          <input required type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
-        </label>
-        <label className="field">
-          <span>Account role</span>
-          <select value={role} onChange={(event) => setRole(event.target.value)}>
-            <option value="doctor">Doctor</option>
-            <option value="admin">Admin</option>
-          </select>
-        </label>
-        <p className="muted">Role access is controlled by account permissions. Role selection is available here for demo mode.</p>
-        {authConfig?.google_client_id_configured ? (
-          <div className="google-signin-wrap polished-google">
-            <span className="google-helper">Continue with your configured Google workspace account</span>
-            <div ref={googleButtonRef} className={googleLoading ? "google-button-loading" : ""} />
-            {googleLoading && <p className="muted">Signing in with Google...</p>}
+      <section className="auth-shell">
+        <Card title="Sign In" className="auth-card">
+          <img className="login-logo" src={brandAssets.logo} alt="Medical Record Summarization logo" />
+          <p>Access the Medical Record Summarization workspace with your account role.</p>
+          <label className="field">
+            <span>Email or username</span>
+            <input required value={session.email || session.userId} onChange={(event) => updateSession({ userId: event.target.value, email: event.target.value })} placeholder="doctor@example.org" />
+          </label>
+          <label className="field">
+            <span>Password</span>
+            <input required type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+          </label>
+          <label className="field">
+            <span>Account role</span>
+            <select value={role} onChange={(event) => setRole(event.target.value)}>
+              <option value="doctor">Doctor</option>
+              <option value="admin">Admin</option>
+            </select>
+          </label>
+          <p className="muted">Role access is controlled by account permissions. Role selection is available here for demo mode.</p>
+          {authConfig?.google_client_id_configured ? (
+            <div className="google-signin-wrap polished-google">
+              <span className="google-helper">Continue with your configured Google workspace account</span>
+              <div ref={googleButtonRef} className={googleLoading ? "google-button-loading" : ""} />
+              {googleLoading && <p className="muted">Signing in with Google...</p>}
+            </div>
+          ) : (
+            <button className="google-button" type="button" onClick={() => setError("GOOGLE_CLIENT_ID is not configured.")}>
+              Continue with Google (not configured)
+            </button>
+          )}
+          <Link className="inline-link" to="/forgot-password">Forget Password?</Link>
+          {success && <p className="review-result"><strong>{success}</strong></p>}
+          {error && <p className="warning-line">{error}</p>}
+          <div className="public-actions">
+            <Button icon={KeyRound} onClick={enter} disabled={loading || !password}>{loading ? "Signing in..." : "Sign In"}</Button>
+            <Link to="/signup"><Button variant="secondary" icon={UserPlus}>Create Account</Button></Link>
           </div>
-        ) : (
-          <button className="google-button" type="button" onClick={() => setError("GOOGLE_CLIENT_ID is not configured.")}>
-            Continue with Google (not configured)
-          </button>
-        )}
-        <Link className="inline-link" to="/forgot-password">Forget Password?</Link>
-        {success && <p className="review-result"><strong>{success}</strong></p>}
-        {error && <p className="warning-line">{error}</p>}
-        <div className="public-actions">
-          <Button onClick={enter} disabled={loading || !password}>{loading ? "Signing in..." : "Sign In"}</Button>
-          <Link to="/signup"><Button variant="secondary">Create Account</Button></Link>
-        </div>
-      </Card>
+        </Card>
+        <AuthVisual title="Evidence stays visible" image={brandAssets.images[3]} />
+      </section>
     </main>
+  );
+}
+
+function AuthVisual({ title, image }) {
+  return (
+    <aside className="auth-visual" style={{ "--thumbnail-image": `url(${image})` }}>
+      <div>
+        <span><ShieldCheck aria-hidden="true" size={16} /> Clinical review required</span>
+        <strong>{title}</strong>
+        <p>Generated summaries remain drafts until an authorized reviewer approves the final version.</p>
+        <Link to="/about"><Button variant="secondary" className="learn-more-button" icon={ArrowRight} iconPosition="right">Learn More</Button></Link>
+      </div>
+    </aside>
   );
 }
 

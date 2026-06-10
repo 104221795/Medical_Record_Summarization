@@ -13,6 +13,8 @@ export function getActiveNavKey(pathname) {
   if (cleanPath === "/admin" || cleanPath === "/admin/dashboard") return "admin-dashboard";
   if (cleanPath === "/admin/datasets") return "admin-datasets";
   if (cleanPath === "/admin/evaluation/benchmark") return "admin-benchmark";
+  if (cleanPath === "/admin/evaluation/rag-best-models") return "admin-rag-best-models";
+  if (cleanPath === "/admin/evaluation/flow-comparison") return "admin-flow-comparison";
   if (cleanPath === "/admin/evaluation") return "admin-evaluation";
   if (cleanPath === "/admin/audit") return "admin-audit";
   if (cleanPath === "/admin/settings") return "admin-settings";
