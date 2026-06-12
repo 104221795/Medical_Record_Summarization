@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Activity, ClipboardCheck, FileCheck2, ShieldCheck, Stethoscope } from "lucide-react";
+import { Activity, BrainCircuit, ClipboardCheck, DatabaseZap, FileCheck2, ShieldCheck, Stethoscope } from "lucide-react";
 
 import Badge from "../common/Badge.jsx";
 import Card from "../common/Card.jsx";
@@ -9,7 +9,9 @@ import MetricCard from "../common/MetricCard.jsx";
 import PageHeader from "../common/PageHeader.jsx";
 import { useApi } from "../../hooks/useApi.js";
 import { evaluationApi } from "../../services/evaluationApi.js";
-import { formatScore, ProviderReadinessChart, statusTone } from "./BenchmarkVisuals.jsx";
+import { formatScore, providerLabel, ProviderReadinessChart, statusTone } from "./BenchmarkVisuals.jsx";
+
+const FLOW_2_1_PROVIDERS = ["qwen2.5", "llama3.2", "gemini2.5_flash_lite"];
 
 export default function EvaluationDashboard() {
   const { data, error, loading, reload } = useApi(async () => {
@@ -29,8 +31,12 @@ export default function EvaluationDashboard() {
   const human = data?.humanSummary || {};
   const benchmark = data?.benchmarkStatus || {};
   const latest = data?.latestBenchmark || {};
+  const ragGate = readiness.rag_readiness_gate || {};
   const readyProviders = (readiness.provider_readiness || []).filter((provider) => provider.enabled).length;
   const totalProviders = (readiness.provider_readiness || []).length;
+  const flow21Providers = FLOW_2_1_PROVIDERS.map((name) => (
+    (readiness.provider_readiness || []).find((provider) => provider.provider === name)
+  )).filter(Boolean);
 
   return (
     <div className="stack admin-analytics-page evaluation-control-page">
@@ -53,6 +59,43 @@ export default function EvaluationDashboard() {
         <MetricCard label="Human reviews" value={human.total_evaluations ?? 0} detail="Doctor rubric submissions" />
         <MetricCard label="Benchmark dataset" value={benchmark.status || "unknown"} detail={benchmark.dataset_path || "dataset path unavailable"} />
       </div>
+
+      <Card title="Flow 2.1 Provider Readiness" actions={<Badge tone="info">RAG best models</Badge>}>
+        <div className="flow-provider-grid">
+          {flow21Providers.length ? flow21Providers.map((provider) => (
+            <FlowProviderCard key={provider.provider} provider={provider} />
+          )) : <p className="muted">Qwen2.5, Llama3.2, and Gemini 2.5 Flash Lite are not reported by the backend yet. Restart the backend after pulling local models.</p>}
+        </div>
+      </Card>
+
+      <Card title="RAG Readiness Gate" actions={<Badge tone={gateTone(ragGate.status)}>{ragGate.status || "not available"}</Badge>}>
+        <div className="rag-gate-panel">
+          <div className="rag-gate-summary">
+            <DatabaseZap aria-hidden="true" size={20} />
+            <div>
+              <strong>{humanize(ragGate.decision || "do_not_replace_doctor_flow")}</strong>
+              <p>{ragGate.message || "Run Flow 2.1 benchmark before considering doctor-flow integration."}</p>
+              <code>{ragGate.selected_output_dir || "Flow 2.1 output not selected"}</code>
+            </div>
+          </div>
+          <div className="rag-gate-metrics">
+            <div><span>Records</span><strong>{ragGate.record_count ?? "n/a"}</strong></div>
+            <div><span>Weak retrieval</span><strong>{ragGate.retrieval_summary?.weak_retrieval_count ?? "n/a"}</strong></div>
+            <div><span>Recall@5</span><strong>{formatScore(ragGate.retrieval_summary?.average_recall_at_5)}</strong></div>
+            <div><span>MRR</span><strong>{formatScore(ragGate.retrieval_summary?.average_mrr)}</strong></div>
+          </div>
+          <div className="rag-gate-checks">
+            {(ragGate.checks || []).map((check) => (
+              <div key={check.name}>
+                <Badge tone={gateTone(check.status)}>{check.status}</Badge>
+                <strong>{humanize(check.name)}</strong>
+                <span>{formatGateValue(check.value)}</span>
+                <p>{check.message}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
 
       <div className="evaluation-distinction-grid">
         <Card title="What This Page Is For" actions={<Badge tone="info">readiness</Badge>}>
@@ -131,6 +174,28 @@ function PurposeItem({ icon: Icon, title, text }) {
   );
 }
 
+function FlowProviderCard({ provider }) {
+  return (
+    <div className="flow-provider-card">
+      <div>
+        <BrainCircuit aria-hidden="true" size={18} />
+        <strong>{providerLabel(provider.provider)}</strong>
+      </div>
+      <Badge tone={statusTone(provider.status)}>{provider.status}</Badge>
+      <span>{provider.model_name || "model not configured"}</span>
+      <p>{provider.message}</p>
+      {provider.health_checks ? (
+        <div className="provider-health-list">
+          {"ollama_running" in provider.health_checks ? <span>Ollama: {provider.health_checks.ollama_running ? "running" : "offline"}</span> : null}
+          {"model_present" in provider.health_checks ? <span>Model: {provider.health_checks.model_present ? "found" : "missing"}</span> : null}
+          {provider.warmup_latency_ms ? <span>Warmup: {provider.warmup_latency_ms} ms</span> : null}
+          {"api_key_format_valid" in provider.health_checks ? <span>Gemini key: {provider.health_checks.api_key_format_valid ? "format ok" : "missing/invalid"}</span> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ReviewScore({ label, value }) {
   return (
     <div>
@@ -142,4 +207,19 @@ function ReviewScore({ label, value }) {
 
 function humanize(value = "") {
   return value.replaceAll("_", " ");
+}
+
+function gateTone(status = "") {
+  const normalized = String(status).toLowerCase();
+  if (normalized.includes("ready") || normalized.includes("passed")) return "success";
+  if (normalized.includes("blocked") || normalized.includes("failed")) return "danger";
+  if (normalized.includes("caution") || normalized.includes("warning")) return "warning";
+  return "info";
+}
+
+function formatGateValue(value) {
+  if (Array.isArray(value)) return value.length ? value.join(", ") : "none";
+  if (value === null || value === undefined || value === "") return "n/a";
+  if (typeof value === "number") return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(4);
+  return String(value);
 }

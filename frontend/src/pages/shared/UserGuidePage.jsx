@@ -1,16 +1,19 @@
+import { BookOpen, CheckCircle2, ClipboardCheck, FileText, Search, ShieldCheck } from "lucide-react";
 import Badge from "../../components/common/Badge.jsx";
 import Card from "../../components/common/Card.jsx";
 import PageHeader from "../../components/common/PageHeader.jsx";
 
 const workflowSteps = [
-  ["1", "Select Patient", "Open Patients, inspect profile, encounters, and source documents."],
-  ["2", "Generate Summary", "Choose a provider and create a draft only. Do not approve from this page."],
-  ["3", "Review Evidence", "Compare source evidence, editable summary, citations, and claim status."],
-  ["4", "Decide", "Start review, save edits, then approve or reject with audit history preserved."],
+  ["1", "Select Patient", "Open Patients, inspect profile, encounters, and source documents.", Search],
+  ["2", "Generate Summary", "Choose a provider and create a draft only. Do not approve from this page.", FileText],
+  ["3", "Review Evidence", "Compare source evidence, editable summary, citations, and claim status.", ShieldCheck],
+  ["4", "Decide", "Start review, save edits, then approve or reject with audit history preserved.", ClipboardCheck],
 ];
 
 const providers = [
   ["Deterministic", "Fast extractive baseline", "Local"],
+  ["Qwen2.5 / Llama3.2", "Local Ollama testing providers for RAG-style strict prompts", "Testing"],
+  ["Gemini 2.5 Flash Lite", "Gateway API provider; use only with approved governed data", "API"],
   ["Gemini", "API LLM provider; requires external governance", "API"],
   ["BART", "facebook/bart-large-cnn general summarization baseline", "Local"],
   ["Pegasus PubMed", "google/pegasus-pubmed; better medical/scientific fit", "Local"],
@@ -30,14 +33,25 @@ export default function UserGuidePage() {
       <PageHeader
         eyebrow="Clinical workflow guide"
         title="Doctor User Guide"
-        description="A practical walkthrough for generating evidence-grounded draft summaries and safely completing doctor review."
+        description="A one-minute guide for generating draft summaries and completing evidence-first doctor review."
       />
-      <div className="guide-steps">
-        {workflowSteps.map(([number, title, text]) => (
-          <Card key={title} title={title}>
-            <span className="guide-step-icon">{number}</span>
+      <section className="guide-hero-card">
+        <BookOpen aria-hidden="true" className="ui-icon" size={26} strokeWidth={2.2} />
+        <div>
+          <h2>Use the system as a draft-and-review workspace.</h2>
+          <p>Generate drafts, verify citations, resolve unsupported claims, then decide. Never treat generated output as final until doctor approval.</p>
+        </div>
+      </section>
+      <div className="guide-step-grid">
+        {workflowSteps.map(([number, title, text, Icon]) => (
+          <article className="guide-step-card" key={title}>
+            <div>
+              <span>{number}</span>
+              <Icon aria-hidden="true" className="ui-icon" size={21} strokeWidth={2.2} />
+            </div>
+            <h3>{title}</h3>
             <p>{text}</p>
-          </Card>
+          </article>
         ))}
       </div>
       <div className="grid-two">
@@ -50,11 +64,12 @@ export default function UserGuidePage() {
           <p className="muted">Edit only after checking cited evidence.</p>
         </Card>
       </div>
-      <Card title="How to Inspect Citations and Claims">
-        <div className="status-grid">
-          <div><Badge tone="success">Supported</Badge><p>The claim has linked evidence and can be considered during review.</p></div>
-          <div><Badge tone="warning">Needs Review</Badge><p>Evidence is weak, missing, or requires clinician inspection before approval.</p></div>
-          <div><Badge tone="danger">Unsupported</Badge><p>Do not approve until the issue is resolved or the summary is rejected.</p></div>
+      <Card title="Claim Statuses">
+        <div className="guide-status-grid">
+          <StatusExplainer tone="success" label="Supported" text="The claim has linked evidence and can be considered during review." />
+          <StatusExplainer tone="warning" label="Needs Review" text="Evidence is weak, missing, or requires clinician inspection before approval." />
+          <StatusExplainer tone="danger" label="Unsupported" text="Do not approve until resolved or rejected." />
+          <StatusExplainer tone="info" label="Unchecked" text="No final support decision has been made yet." />
         </div>
       </Card>
       <Card title="Provider Meanings">
@@ -62,7 +77,7 @@ export default function UserGuidePage() {
           {providers.map(([name, description, type]) => (
             <div key={name}>
               <strong>{name}</strong>
-              <Badge tone={type === "API" ? "warning" : "info"}>{type}</Badge>
+              <Badge tone={type === "API" || type === "Testing" ? "warning" : "info"}>{type}</Badge>
               <p>{description}</p>
             </div>
           ))}
@@ -73,12 +88,21 @@ export default function UserGuidePage() {
         <p>Approve only after citations and unsupported claims are inspected. Reject when evidence is missing, citation mapping is wrong, or critical information is absent.</p>
       </Card>
       <Card title="Troubleshooting">
-        <div className="dataset-layers">
+        <div className="guide-troubleshooting-list">
           {troubleshooting.map(([title, text]) => (
-            <section key={title}><h3>{title}</h3><p>{text}</p></section>
+            <section key={title}><CheckCircle2 aria-hidden="true" className="ui-icon" size={18} strokeWidth={2.2} /><div><h3>{title}</h3><p>{text}</p></div></section>
           ))}
         </div>
       </Card>
+    </div>
+  );
+}
+
+function StatusExplainer({ tone, label, text }) {
+  return (
+    <div>
+      <Badge tone={tone}>{label}</Badge>
+      <p>{text}</p>
     </div>
   );
 }

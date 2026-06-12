@@ -10,6 +10,10 @@ from typing import Any
 
 SENTENCE_RE = re.compile(r"(?<=[.!?])\s+|\n+")
 TOKEN_RE = re.compile(r"[A-Za-z0-9%./+-]+")
+NONCLINICAL_UNKNOWN_RE = re.compile(
+    r"\b(?:Medication|Plan|Diagnosis|Assessment|Timeline|Diagnostic|Diagnostics) information was not present in retrieved evidence\.?",
+    re.I,
+)
 
 
 @dataclass(frozen=True)
@@ -74,7 +78,13 @@ def analyze_prediction_row(row: dict[str, Any]) -> CitationGroundingResult:
 
 
 def split_claims(text: str) -> list[str]:
-    return [part.strip() for part in SENTENCE_RE.split(text or "") if len(part.strip().split()) >= 3]
+    claims = []
+    for part in SENTENCE_RE.split(text or ""):
+        clean = part.strip()
+        if len(clean.split()) < 3 or NONCLINICAL_UNKNOWN_RE.fullmatch(clean):
+            continue
+        claims.append(clean)
+    return claims
 
 
 def write_grounding_outputs(output_dir: Path, results: list[CitationGroundingResult]) -> dict[str, Any]:

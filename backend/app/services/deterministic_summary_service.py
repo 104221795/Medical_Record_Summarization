@@ -48,17 +48,29 @@ from .persistence_common import PersistedResourceNotFoundError
 from .safety_service import SafetyResult, SafetyService
 from .summary_providers import (
     BartProvider,
+    GATEWAY_PROVIDER_NAMES,
+    GatewayClinicalProvider,
     PegasusCnnDailyMailProvider,
     PegasusPubMedProvider,
     PegasusProvider,
     PegasusXSumProvider,
     ProviderExecutionError,
     ProviderOutput,
+    ProviderSectionOutput,
     SummaryProvider,
+    build_structured_clinical_context_v2,
 )
 
 
 MISSING_INFORMATION = "Không tìm thấy thông tin trong dữ liệu hiện có."
+_HUGGINGFACE_TEXT_PROVIDER_NAMES = {
+    "bart",
+    "pegasus",
+    "pegasus_pubmed",
+    "pegasus_cnn_dailymail",
+    "pegasus_xsum",
+}
+_TEXT_PROVIDER_NAMES = _HUGGINGFACE_TEXT_PROVIDER_NAMES | set(GATEWAY_PROVIDER_NAMES)
 
 
 class SummaryGenerationError(ValueError):
@@ -220,15 +232,7 @@ class DeterministicSummaryService:
             existing.summary_type,
         )
         model_provider = _model_provider_label(existing.model_run)
-        if model_provider not in {
-            "deterministic",
-            "gemini",
-            "bart",
-            "pegasus",
-            "pegasus_pubmed",
-            "pegasus_cnn_dailymail",
-            "pegasus_xsum",
-        }:
+        if model_provider not in {"deterministic", "gemini"} | _TEXT_PROVIDER_NAMES:
             model_provider = "deterministic"
         generate_request = SummaryGenerateRequest(
             encounter_id=existing.encounter_id,
@@ -335,7 +339,7 @@ class DeterministicSummaryService:
                 regeneration_reason=regeneration_reason,
                 started=started,
             )
-        if generation_provider in {"bart", "pegasus", "pegasus_pubmed", "pegasus_cnn_dailymail", "pegasus_xsum"}:
+        if generation_provider in _TEXT_PROVIDER_NAMES:
             return self._generate_with_text_provider(
                 generation_provider,
                 patient,
@@ -432,7 +436,7 @@ class DeterministicSummaryService:
         provider = request.model_provider or request.provider or configured
         if provider in {"mock", "local", "deterministic"}:
             return "deterministic"
-        if provider in {"bart", "pegasus", "pegasus_pubmed", "pegasus_cnn_dailymail", "pegasus_xsum"}:
+        if provider in _TEXT_PROVIDER_NAMES:
             return provider
         if provider == "external":
             raise SummaryGenerationError(
@@ -753,6 +757,8 @@ class DeterministicSummaryService:
             provider = PegasusCnnDailyMailProvider()
         elif provider_name == "pegasus_xsum":
             provider = PegasusXSumProvider()
+        elif provider_name in GATEWAY_PROVIDER_NAMES:
+            provider = GatewayClinicalProvider(provider_name)
         else:
             raise SummaryGenerationError(f"Unsupported summary provider: {provider_name}.")
         self.model_providers[provider_name] = provider
@@ -798,6 +804,13 @@ class DeterministicSummaryService:
                     "Use only source_id values present in evidence_pack.evidence. "
                     "If a clinical statement has no direct source_id, set support_status "
                     "to unsupported or insufficient_evidence and place it in Needs Clinician Review."
+                ),
+                "Structured clinical context v2 JSON:",
+                json.dumps(
+                    build_structured_clinical_context_v2(evidence_pack),
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    default=_json_default,
                 ),
                 "Evidence pack JSON:",
                 json.dumps(evidence_pack, ensure_ascii=False, sort_keys=True, default=_json_default),
@@ -1125,46 +1138,61 @@ class DeterministicSummaryService:
         evidence_pack: dict[str, Any],
         citation_lookup: dict[str, CitationDraft],
     ) -> list[SectionDraft]:
-        generated = SectionDraft("Generated Summary", "generated_summary")
+        section_outputs = provider_output.sections or [
+            ProviderSectionOutput(
+                section_title="Generated Summary",
+                section_text=provider_output.summary_text,
+                section_type="generated_summary",
+            )
+        ]
+        drafts: list[SectionDraft] = []
         needs_review = SectionDraft("Needs Clinician Review", "needs_clinician_review")
-        claim_texts: list[str] = []
-        for section in provider_output.sections:
-            claim_texts.extend(section.claims)
-        if not claim_texts:
-            claim_texts = _split_claim_text(provider_output.summary_text)
+        used_section_types: set[str] = {"needs_clinician_review"}
 
-        for text in claim_texts:
-            claim_text = text.strip()
-            if not claim_text:
-                continue
-            claim_type = _infer_claim_type(claim_text)
-            citations = self._match_claim_citations(claim_text, evidence_pack, citation_lookup)
-            clinical_risk_level = _risk_level(claim_type, None)
-            confidence_score = Decimal("0.72") if citations else Decimal("0")
-            support_status = (
-                ClaimSupportStatus.SUPPORTED
-                if citations
-                else ClaimSupportStatus.INSUFFICIENT_EVIDENCE
+        for index, provider_section in enumerate(section_outputs, start=1):
+            title = provider_section.section_title or "Generated Summary"
+            section_type = _unique_section_type(
+                provider_section.section_type or _section_type_from_title(title) or "generated_summary",
+                used_section_types,
+                index,
             )
-            if _contains_forbidden_clinical_advice(claim_text):
-                support_status = ClaimSupportStatus.UNSUPPORTED
-                clinical_risk_level = "critical"
-                citations = []
-                confidence_score = Decimal("0")
-            draft = ClaimDraft(
-                text=claim_text,
-                claim_type=claim_type,
-                support_status=support_status,
-                clinical_risk_level=clinical_risk_level,
-                citations=citations,
-                confidence_score=confidence_score,
+            used_section_types.add(section_type)
+            generated = SectionDraft(title, section_type)
+            claim_texts = provider_section.claims or _split_claim_text(
+                provider_section.section_text or provider_output.summary_text
             )
-            if support_status == ClaimSupportStatus.SUPPORTED:
-                generated.claims.append(draft)
-            else:
-                needs_review.claims.append(draft)
+            for text in claim_texts:
+                claim_text = text.strip()
+                if not claim_text:
+                    continue
+                claim_type = _infer_claim_type(claim_text)
+                citations = self._match_claim_citations(claim_text, evidence_pack, citation_lookup)
+                clinical_risk_level = _risk_level(claim_type, None)
+                confidence_score = Decimal("0.72") if citations else Decimal("0")
+                support_status = (
+                    ClaimSupportStatus.SUPPORTED
+                    if citations
+                    else ClaimSupportStatus.INSUFFICIENT_EVIDENCE
+                )
+                if _contains_forbidden_clinical_advice(claim_text):
+                    support_status = ClaimSupportStatus.UNSUPPORTED
+                    clinical_risk_level = "critical"
+                    citations = []
+                    confidence_score = Decimal("0")
+                generated.claims.append(
+                    ClaimDraft(
+                        text=claim_text,
+                        claim_type=claim_type,
+                        support_status=support_status,
+                        clinical_risk_level=clinical_risk_level,
+                        citations=citations,
+                        confidence_score=confidence_score,
+                    )
+                )
+            if generated.claims:
+                drafts.append(generated)
 
-        if not generated.claims and not needs_review.claims:
+        if not drafts:
             needs_review.claims.append(
                 ClaimDraft(
                     text=MISSING_INFORMATION,
@@ -1183,7 +1211,7 @@ class DeterministicSummaryService:
                 confidence_score=Decimal("0"),
             )
         )
-        return [generated, needs_review]
+        return [*drafts, needs_review]
 
     def _match_claim_citations(
         self,
@@ -1191,6 +1219,13 @@ class DeterministicSummaryService:
         evidence_pack: dict[str, Any],
         citation_lookup: dict[str, CitationDraft],
     ) -> list[CitationDraft]:
+        direct_sources = [
+            citation
+            for source_id, citation in citation_lookup.items()
+            if f"[{source_id}]" in claim_text or f"({source_id})" in claim_text
+        ]
+        if direct_sources:
+            return direct_sources[:2]
         claim_tokens = _token_set(claim_text)
         if len(claim_tokens) < 3:
             return []
@@ -2061,6 +2096,14 @@ def _section_type_from_title(title: str) -> str | None:
     if "review" in normalized or "missing" in normalized or "safety" in normalized:
         return "needs_clinician_review"
     return None
+
+
+def _unique_section_type(base: str | None, used: set[str], index: int) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "_", str(base or "generated_summary").lower()).strip("_")
+    candidate = normalized or "generated_summary"
+    if candidate not in used:
+        return candidate
+    return f"{candidate}_{index}"
 
 
 def _split_claim_text(text: str) -> list[str]:

@@ -42,6 +42,39 @@ PROVIDER_CATALOG: tuple[ProviderMetadata, ...] = (
         description="Structured JSON provider with citation validation when API governance is configured.",
     ),
     ProviderMetadata(
+        provider_name="qwen2.5",
+        display_name="Qwen2.5 3B via Ollama",
+        model_name="ollama/qwen2.5:3b",
+        provider_type="local_gateway_llm",
+        requires_api_key=False,
+        local_model=True,
+        domain_fit="Testing-only local RAG summarizer",
+        description="Local chat model routed through the LLM gateway with strict clinical context v2 prompts.",
+        default_status="testing_only",
+    ),
+    ProviderMetadata(
+        provider_name="llama3.2",
+        display_name="Llama3.2 3B via Ollama",
+        model_name="ollama/llama3.2:3b",
+        provider_type="local_gateway_llm",
+        requires_api_key=False,
+        local_model=True,
+        domain_fit="Testing-only local RAG summarizer",
+        description="Local chat model routed through the LLM gateway with strict clinical context v2 prompts.",
+        default_status="testing_only",
+    ),
+    ProviderMetadata(
+        provider_name="gemini2.5_flash_lite",
+        display_name="Gemini 2.5 Flash Lite",
+        model_name="gemini/gemini-2.5-flash-lite",
+        provider_type="gateway_external_llm",
+        requires_api_key=True,
+        local_model=False,
+        domain_fit="Testing-only citation-aware cloud summarizer",
+        description="Gateway-routed cloud model for de-identified testing; outputs remain draft-only.",
+        default_status="testing_only",
+    ),
+    ProviderMetadata(
         provider_name="bart",
         display_name="BART CNN/DailyMail",
         model_name="facebook/bart-large-cnn",
@@ -98,13 +131,13 @@ class SummaryProviderGateway:
 
     def _provider_info(self, metadata: ProviderMetadata) -> ProviderInfo:
         status = metadata.default_status
-        if metadata.provider_name == "gemini" and not self.settings.gemini_api_key:
+        if metadata.provider_name in {"gemini", "gemini2.5_flash_lite"} and not self.settings.gemini_api_key:
             status = "configuration_required"
-        if metadata.local_model:
+        if metadata.provider_type == "local_huggingface_seq2seq":
             cache_error = _cache_status_error()
             if cache_error:
                 status = cache_error
-            elif metadata.provider_name != "deterministic" and not _real_baselines_enabled():
+            elif not _real_baselines_enabled():
                 status = "disabled_until_RUN_REAL_BASELINES_1"
         return ProviderInfo(
             provider_name=metadata.provider_name,

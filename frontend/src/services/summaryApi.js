@@ -3,7 +3,11 @@ import { apiClient } from "./apiClient.js";
 export const SUMMARY_PROVIDERS = [
   "deterministic",
   "gemini",
+  "qwen2.5",
+  "llama3.2",
+  "gemini2.5_flash_lite",
   "bart",
+  "pegasus",
   "pegasus_pubmed",
   "pegasus_cnn_dailymail",
   "pegasus_xsum",

@@ -3,10 +3,14 @@ from __future__ import annotations
 import csv
 import json
 import os
+import subprocess
+import time
 import uuid
 from collections import Counter
 from pathlib import Path
 from typing import Any
+from urllib import error as urlerror
+from urllib import request as urlrequest
 
 from sqlalchemy.orm import Session
 
@@ -196,6 +200,7 @@ class EvaluationService:
             audit_readiness="ready" if counts["audit_logs"] else "runnable",
             metrics_readiness="ready",
             evaluation_layers=self._evaluation_layers(),
+            rag_readiness_gate=self._rag_readiness_gate(),
         )
 
     def functional_status(self) -> FunctionalValidationResponse:
@@ -531,11 +536,28 @@ class EvaluationService:
 
     def provider_readiness(self) -> list[EvaluationProviderStatus]:
         latest = self.repository.latest_model_run(
-            ["local", "deterministic", "bart", "pegasus", "pegasus_pubmed", "pegasus_cnn_dailymail", "gemini"]
+            [
+                "local",
+                "deterministic",
+                "bart",
+                "pegasus",
+                "pegasus_pubmed",
+                "pegasus_cnn_dailymail",
+                "qwen2.5",
+                "llama3.2",
+                "gemini2.5_flash_lite",
+                "gemini",
+            ]
         )
         deterministic = latest.get("local") or latest.get("deterministic")
         bart_enabled = _real_baselines_enabled()
         pegasus_enabled = _real_baselines_enabled()
+        qwen_health = _ollama_model_health("qwen2.5:3b")
+        llama_health = _ollama_model_health("llama3.2:3b")
+        qwen_enabled = bool(qwen_health.get("model_present")) or latest.get("qwen2.5") is not None
+        llama_enabled = bool(llama_health.get("model_present")) or latest.get("llama3.2") is not None
+        gemini_flash_health = _gemini_key_health(os.environ.get("GEMINI_API_KEY") or self.settings.gemini_api_key)
+        gemini_flash_configured = bool(os.environ.get("GEMINI_API_KEY") or self.settings.gemini_api_key)
         gemini_enabled = (
             self.settings.llm_provider == "gemini"
             and self.settings.llm_external_enabled
@@ -584,6 +606,35 @@ class EvaluationService:
                 message="Real Hugging Face execution requires RUN_REAL_BASELINES=1.",
             ),
             _provider_status(
+                "qwen2.5",
+                configured=qwen_enabled,
+                enabled=qwen_enabled and bool(qwen_health.get("ollama_running")),
+                model_name=os.environ.get("LLM_GATEWAY_QWEN2_5_MODEL") or "ollama/qwen2.5:3b",
+                latest=latest.get("qwen2.5"),
+                message=_ollama_health_message("qwen2.5", qwen_health),
+                health_checks=qwen_health,
+                warmup_latency_ms=_int_or_none(qwen_health.get("warmup_latency_ms")),
+            ),
+            _provider_status(
+                "llama3.2",
+                configured=llama_enabled,
+                enabled=llama_enabled and bool(llama_health.get("ollama_running")),
+                model_name=os.environ.get("LLM_GATEWAY_LLAMA3_2_MODEL") or "ollama/llama3.2:3b",
+                latest=latest.get("llama3.2"),
+                message=_ollama_health_message("llama3.2", llama_health),
+                health_checks=llama_health,
+                warmup_latency_ms=_int_or_none(llama_health.get("warmup_latency_ms")),
+            ),
+            _provider_status(
+                "gemini2.5_flash_lite",
+                configured=gemini_flash_configured,
+                enabled=gemini_flash_configured,
+                model_name=os.environ.get("LLM_GATEWAY_GEMINI2_5_FLASH_LITE_MODEL") or "gemini/gemini-2.5-flash-lite",
+                latest=latest.get("gemini2.5_flash_lite"),
+                message=gemini_flash_health.get("message") or "Cloud gateway model for Flow 2.1.",
+                health_checks=gemini_flash_health,
+            ),
+            _provider_status(
                 "gemini",
                 configured=bool(self.settings.gemini_api_key),
                 enabled=gemini_enabled,
@@ -595,6 +646,86 @@ class EvaluationService:
                 ),
             ),
         ]
+
+    def _rag_readiness_gate(self) -> dict[str, Any]:
+        selected_dir, _discovered = _select_benchmark_output_dir(BENCHMARK_DISCOVERY_DIRS, "rag_best_models")
+        retrieval_path = selected_dir / "retrieval_metrics.csv"
+        comparison_path = selected_dir / "model_comparison.csv"
+        if not selected_dir.exists() or not retrieval_path.exists():
+            return {
+                "status": "not_available",
+                "decision": "do_not_replace_doctor_flow",
+                "selected_output_dir": str(selected_dir),
+                "message": "Run Flow 2.1 RAG benchmark before considering doctor-flow integration.",
+                "checks": [],
+            }
+
+        retrieval_summary = _rag_retrieval_gate_summary(retrieval_path)
+        model_rows = _read_model_comparison(comparison_path)
+        completed_models = [
+            row.model_provider
+            for row in model_rows
+            if row.completed_count > 0 and str(row.status).lower() in {"completed", "partial"}
+        ]
+        target_models = {"qwen2.5", "llama3.2"}
+        has_local_llm = bool(target_models.intersection(completed_models))
+        weak_count = int(retrieval_summary.get("weak_retrieval_count") or 0)
+        record_count = int(retrieval_summary.get("record_count") or 0)
+        weak_rate = (weak_count / record_count) if record_count else 1.0
+        hard_fail = record_count == 0 or not has_local_llm or weak_rate > 0.25
+        caution = not hard_fail and (
+            weak_count > 0
+            or int(retrieval_summary.get("missing_medication_evidence_count") or 0) > 0
+            or float(retrieval_summary.get("average_recall_at_5") or 0.0) < 0.85
+        )
+        status = "blocked" if hard_fail else "caution" if caution else "ready"
+        decision = {
+            "ready": "safe_to_pilot_in_admin_only",
+            "caution": "review_retrieval_before_doctor_flow",
+            "blocked": "do_not_replace_doctor_flow",
+        }[status]
+        checks = [
+            {
+                "name": "diagnosis_evidence",
+                "status": "passed" if int(retrieval_summary.get("missing_diagnosis_evidence_count") or 0) == 0 else "warning",
+                "value": retrieval_summary.get("missing_diagnosis_evidence_count"),
+                "message": "Records missing diagnosis facts before summarization.",
+            },
+            {
+                "name": "medication_evidence",
+                "status": "passed" if int(retrieval_summary.get("missing_medication_evidence_count") or 0) == 0 else "warning",
+                "value": retrieval_summary.get("missing_medication_evidence_count"),
+                "message": "Medication may be absent in source, but missing medication evidence is surfaced for review.",
+            },
+            {
+                "name": "timeline_evidence",
+                "status": "passed" if int(retrieval_summary.get("missing_timeline_evidence_count") or 0) == 0 else "warning",
+                "value": retrieval_summary.get("missing_timeline_evidence_count"),
+                "message": "Records missing timeline facts before summarization.",
+            },
+            {
+                "name": "retrieval_quality",
+                "status": "passed" if weak_count == 0 else "warning" if weak_rate <= 0.25 else "failed",
+                "value": round(weak_rate, 4),
+                "message": "Weak retrieval records are flagged as review_retrieval_first.",
+            },
+            {
+                "name": "local_llm_completed",
+                "status": "passed" if has_local_llm else "failed",
+                "value": sorted(target_models.intersection(completed_models)),
+                "message": "At least one local Flow 2.1 model should complete before doctor-flow integration.",
+            },
+        ]
+        return {
+            "status": status,
+            "decision": decision,
+            "selected_output_dir": str(selected_dir),
+            "record_count": record_count,
+            "completed_models": completed_models,
+            "retrieval_summary": retrieval_summary,
+            "checks": checks,
+            "message": "Keep RAG inside Admin evaluation until this gate is ready and reviewed.",
+        }
 
     def _evaluation_layers(self) -> list[EvaluationLayerStatus]:
         benchmark = self.benchmark_status()
@@ -764,6 +895,8 @@ def _provider_status(
     model_name: str | None,
     latest: ModelRun | None,
     message: str,
+    health_checks: dict[str, Any] | None = None,
+    warmup_latency_ms: int | None = None,
 ) -> EvaluationProviderStatus:
     if not configured:
         status = "not_configured"
@@ -782,7 +915,201 @@ def _provider_status(
         last_run_status=latest.status if latest else None,
         latency_ms=latest.latency_ms if latest else None,
         message=message,
+        health_checks=health_checks or {},
+        warmup_latency_ms=warmup_latency_ms,
     )
+
+
+def _ollama_model_health(model_name: str) -> dict[str, Any]:
+    base_url = os.environ.get("OLLAMA_API_BASE", "http://127.0.0.1:11434").rstrip("/")
+    result: dict[str, Any] = {
+        "ollama_running": False,
+        "model_present": False,
+        "model_name": model_name,
+        "ollama_models_dir": os.environ.get("OLLAMA_MODELS") or None,
+        "api_base": base_url,
+        "warmup_status": "not_run",
+        "warmup_latency_ms": None,
+    }
+    tags = _ollama_tags(base_url)
+    if tags.get("error"):
+        result["error"] = tags["error"]
+        return result
+    result["ollama_running"] = True
+    names = set(tags.get("models") or [])
+    result["available_models"] = sorted(names)
+    result["model_present"] = model_name in names
+    if not result["model_present"]:
+        return result
+    smoke = _ollama_smoke(base_url, model_name)
+    result.update(smoke)
+    return result
+
+
+def _ollama_tags(base_url: str) -> dict[str, Any]:
+    try:
+        payload = _http_json(f"{base_url}/api/tags", timeout=2.0)
+    except Exception as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"}
+    models = [
+        str(item.get("name") or "")
+        for item in payload.get("models", [])
+        if isinstance(item, dict) and item.get("name")
+    ]
+    return {"models": models}
+
+
+def _ollama_smoke(base_url: str, model_name: str) -> dict[str, Any]:
+    body = {
+        "model": model_name,
+        "messages": [
+            {"role": "user", "content": "Reply with OK only."},
+        ],
+        "stream": False,
+        "keep_alive": os.environ.get("OLLAMA_KEEP_ALIVE", "10m"),
+        "options": {"temperature": 0, "num_predict": 8, "num_ctx": 1024},
+    }
+    started = time.perf_counter()
+    try:
+        payload = _http_json(f"{base_url}/api/chat", method="POST", body=body, timeout=12.0)
+    except Exception as exc:
+        return {
+            "warmup_status": "failed",
+            "warmup_latency_ms": int((time.perf_counter() - started) * 1000),
+            "warmup_error": f"{type(exc).__name__}: {exc}",
+        }
+    content = ""
+    message = payload.get("message")
+    if isinstance(message, dict):
+        content = str(message.get("content") or "")
+    ok = bool(content.strip())
+    return {
+        "warmup_status": "passed" if ok else "failed",
+        "warmup_latency_ms": int((time.perf_counter() - started) * 1000),
+        "warmup_response_preview": content.strip()[:80],
+    }
+
+
+def _http_json(url: str, *, method: str = "GET", body: dict[str, Any] | None = None, timeout: float) -> dict[str, Any]:
+    data = None if body is None else json.dumps(body).encode("utf-8")
+    req = urlrequest.Request(url, data=data, method=method, headers={"Content-Type": "application/json"})
+    try:
+        with urlrequest.urlopen(req, timeout=timeout) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urlerror.URLError as exc:
+        raise RuntimeError(str(exc.reason)) from exc
+
+
+def _gemini_key_health(api_key: Any) -> dict[str, Any]:
+    # Accept str, None, or pydantic SecretStr; extract a plain string value safely
+    if api_key is None:
+        key = ""
+    elif hasattr(api_key, "get_secret_value"):
+        try:
+            key = (api_key.get_secret_value() or "").strip()
+        except Exception:
+            key = str(api_key) if api_key is not None else ""
+            key = (key or "").strip()
+    else:
+        key = str(api_key).strip()
+
+    present = bool(key)
+    format_valid = present and len(key) >= 20 and key.startswith("AIza")
+    return {
+        "api_key_present": present,
+        "api_key_format_valid": format_valid,
+        "cloud_validation": "not_run",
+        "message": (
+            "Gemini key is present and format looks valid; live cloud validation is not run from Admin refresh."
+            if format_valid
+            else "Gemini key is missing or does not look like a Google API key."
+        ),
+    }
+
+
+def _ollama_health_message(provider: str, health: dict[str, Any]) -> str:
+    if not health.get("ollama_running"):
+        return f"{provider} requires Ollama running at {health.get('api_base')}."
+    if not health.get("model_present"):
+        return f"{provider} requires local model {health.get('model_name')} in ollama list."
+    if health.get("warmup_status") != "passed":
+        return f"{provider} model exists but warmup failed: {health.get('warmup_error') or 'empty response'}."
+    return f"{provider} is available through local Ollama; warmup latency {health.get('warmup_latency_ms')} ms."
+
+
+def _int_or_none(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _rag_retrieval_gate_summary(path: Path) -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    try:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            rows = list(csv.DictReader(handle))
+    except OSError:
+        return {"status": "not_available", "record_count": 0}
+    record_count = len(rows)
+    missing_diagnosis = 0
+    missing_medication = 0
+    missing_timeline = 0
+    weak_retrieval = 0
+    recall_values: list[float] = []
+    mrr_values: list[float] = []
+    latency_values: list[float] = []
+    for row in rows:
+        facts = _json_dict_any(row.get("critical_fact_counts"))
+        diagnosis_count = int(facts.get("DIAGNOSIS") or 0)
+        medication_count = int(facts.get("MEDICATIONS") or 0)
+        timeline_count = int(facts.get("TIMELINE") or 0)
+        recall = _float_value_any(row.get("recall_at_5")) or 0.0
+        mrr = _float_value_any(row.get("mrr")) or 0.0
+        context_chunks = _int_value_any(row.get("context_chunk_count"))
+        if diagnosis_count == 0:
+            missing_diagnosis += 1
+        if medication_count == 0:
+            missing_medication += 1
+        if timeline_count == 0:
+            missing_timeline += 1
+        if diagnosis_count == 0 or timeline_count == 0 or recall < 0.5 or context_chunks == 0:
+            weak_retrieval += 1
+        recall_values.append(recall)
+        mrr_values.append(mrr)
+        latency = _float_value_any(row.get("retrieval_latency_ms"))
+        if latency is not None:
+            latency_values.append(latency)
+    return {
+        "status": "available",
+        "record_count": record_count,
+        "weak_retrieval_count": weak_retrieval,
+        "missing_diagnosis_evidence_count": missing_diagnosis,
+        "missing_medication_evidence_count": missing_medication,
+        "missing_timeline_evidence_count": missing_timeline,
+        "average_recall_at_5": _mean(recall_values),
+        "average_mrr": _mean(mrr_values),
+        "latency_p95_ms": _percentile(latency_values, 95),
+    }
+
+
+def _json_dict_any(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if not value:
+        return {}
+    try:
+        parsed = json.loads(str(value))
+        return parsed if isinstance(parsed, dict) else {}
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {}
+
+
+def _int_value_any(value: Any) -> int:
+    try:
+        return int(float(value or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _readiness_item(name: str, ready: bool, ready_message: str) -> EvaluationReadinessItem:

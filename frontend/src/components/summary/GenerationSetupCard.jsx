@@ -18,7 +18,7 @@ export default function GenerationSetupCard({
 }) {
   const canGenerate = Boolean(selectedPatient?.patient_id) && !generating;
   return (
-    <Card title="Generation Setup" className="golden-card">
+    <Card title="Provider" className="golden-card compact-generation-panel">
       <div className="generation-setup">
         <ProviderSelector
           providers={providers}
@@ -27,9 +27,9 @@ export default function GenerationSetupCard({
           value={provider}
           onChange={setProvider}
         />
-        <div className="setup-summary">
+        <div className="setup-summary compact">
           <div>
-            <span>Selected patient</span>
+            <span>Patient</span>
             <strong>{selectedPatient?.external_patient_id || selectedPatient?.patient_hash || selectedPatient?.patient_id || "None selected"}</strong>
           </div>
           <div>
@@ -37,21 +37,21 @@ export default function GenerationSetupCard({
             <strong>{selectedEncounter?.encounter_type || selectedEncounter?.department || selectedEncounter?.encounter_id || "All encounters"}</strong>
           </div>
           <div>
-            <span>Provider type</span>
+            <span>Type</span>
             <strong>{selectedProvider?.local_model === false || selectedProvider?.provider_type === "api" ? "API provider" : "Local/model baseline"}</strong>
           </div>
           <div>
-            <span>Clinical safety</span>
-            <Badge tone="warning">Draft only</Badge>
+            <span>Context mode</span>
+            <Badge tone="info">Evidence-first</Badge>
           </div>
         </div>
-        <p className="muted">
-          This page only creates a draft. Citation and claim checks happen on Review & Evidence.
-        </p>
-        {generationError && <p className="warning-line">{generationError.message || String(generationError)}</p>}
-        <Button disabled={!canGenerate} onClick={onGenerate}>
-          {generating ? "Generating Draft..." : "Generate Draft"}
-        </Button>
+        <div className="generate-sticky-action">
+          <p className="muted">Draft only. Review evidence before approval.</p>
+          {generationError && <p className="warning-line">{generationError.message || String(generationError)}</p>}
+          <Button disabled={!canGenerate} onClick={onGenerate}>
+            {generating ? "Generating Draft..." : "Generate Draft"}
+          </Button>
+        </div>
       </div>
     </Card>
   );

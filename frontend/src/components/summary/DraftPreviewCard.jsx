@@ -2,28 +2,27 @@ import { Link } from "react-router-dom";
 import Badge from "../common/Badge.jsx";
 import Button from "../common/Button.jsx";
 import Card from "../common/Card.jsx";
-import EmptyState from "../common/EmptyState.jsx";
 import { formatDateTime, statusTone } from "../../utils/clinicalDisplay.js";
 
 export default function DraftPreviewCard({ summary }) {
   if (!summary) {
     return (
-      <Card title="Draft Preview" className="golden-card">
-        <EmptyState
-          title="No draft generated yet"
-          message="Select a patient, choose a provider, then generate a draft summary."
-        />
+      <Card title="Draft Preview" className="golden-card draft-preview-card compact">
+        <div className="draft-empty-compact">
+          <strong>No draft yet</strong>
+          <p>Select patient, choose provider, then generate a draft.</p>
+        </div>
       </Card>
     );
   }
   return (
     <Card
-      title="Draft Generated Successfully"
-      className="golden-card draft-preview-card"
+      title="Draft Preview"
+      className="golden-card draft-preview-card compact"
       actions={<Badge tone={statusTone(summary.status)}>{summary.status}</Badge>}
     >
       <div className="draft-preview-meta">
-        <div><span>Summary ID</span><strong>{summary.summary_id}</strong></div>
+        <div><span>Summary ID</span><strong title={summary.summary_id}>{compactId(summary.summary_id)}</strong></div>
         <div><span>Provider</span><strong>{summary.model_provider || summary.model_name || "not available"}</strong></div>
         <div><span>Generated</span><strong>{formatDateTime(summary.generated_at)}</strong></div>
       </div>
@@ -37,4 +36,10 @@ export default function DraftPreviewCard({ summary }) {
       </div>
     </Card>
   );
+}
+
+function compactId(value = "") {
+  const text = String(value || "");
+  if (text.length <= 18) return text || "not available";
+  return `${text.slice(0, 8)}...${text.slice(-6)}`;
 }

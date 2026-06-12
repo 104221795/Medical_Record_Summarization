@@ -30,7 +30,7 @@ export default function PatientGenerationSelector({
   }, [patients, query]);
 
   return (
-    <Card title="Patient & Encounter" className="golden-card">
+    <Card title="Patient & Source" className="golden-card compact-patient-panel">
       <div className="patient-selector-layout">
         <label className="field">
           <span>Patient search</span>
@@ -40,16 +40,19 @@ export default function PatientGenerationSelector({
         {error && <p className="warning-line">{error.message || String(error)}</p>}
         {!loading && !filteredPatients.length && <EmptyState title="No matching patients" message="Try another search or seed/import de-identified records." />}
         <div className="patient-pick-list">
-          {filteredPatients.slice(0, 8).map((patient) => (
+          {filteredPatients.slice(0, 10).map((patient) => (
             <button
               type="button"
-              className={`patient-pick-card ${patient.patient_id === selectedPatientId ? "active" : ""}`}
+              className={`patient-pick-card dense ${patient.patient_id === selectedPatientId ? "active" : ""}`}
               key={patient.patient_id}
               onClick={() => onSelectPatient(patient.patient_id)}
+              title={patientLabel(patient)}
             >
-              <strong>{patientLabel(patient)}</strong>
-              <span>{patient.gender || "gender unknown"}</span>
-              <Badge tone={patient.is_deidentified ? "success" : "warning"}>{patient.is_deidentified ? "de-identified" : "restricted"}</Badge>
+              <strong className="patient-pick-id">{patientLabel(patient)}</strong>
+              <span className="patient-pick-gender">{patient.gender || "gender unknown"}</span>
+              <Badge className="patient-pick-badge" tone={patient.is_deidentified ? "success" : "warning"}>
+                {patient.is_deidentified ? "de-id" : "restricted"}
+              </Badge>
             </button>
           ))}
         </div>
@@ -72,7 +75,7 @@ function SelectedContext({ context, encounterId, setEncounterId, sourceDocumentI
     return <EmptyState title="Select a patient" message="Patient context will appear here before draft generation." />;
   }
   return (
-    <div className="selected-context">
+    <div className="selected-context sticky-context">
       <div className="selected-context-header">
         <div>
           <span>Selected patient</span>

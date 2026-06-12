@@ -5,10 +5,15 @@ import { useProviders } from "./useProviders.js";
 
 const preferredProviders = [
   "deterministic",
+  "qwen2.5",
+  "llama3.2",
+  "gemini2.5_flash_lite",
   "gemini",
   "bart",
+  "pegasus",
   "pegasus_pubmed",
   "pegasus_cnn_dailymail",
+  "pegasus_xsum",
 ];
 
 export function useSummaryGeneration(initialPatientId = "") {
@@ -148,10 +153,15 @@ export function useSummaryGeneration(initialPatientId = "") {
 function fallbackProvider(providerName) {
   const labels = {
     deterministic: ["Deterministic", "extractive baseline", "Fast extractive baseline"],
+    "qwen2.5": ["Qwen2.5", "ollama/qwen2.5:3b", "Testing-only local RAG summarizer"],
+    "llama3.2": ["Llama3.2", "ollama/llama3.2:3b", "Testing-only local RAG summarizer"],
+    "gemini2.5_flash_lite": ["Gemini 2.5 Flash Lite", "gemini/gemini-2.5-flash-lite", "Testing-only citation-aware gateway provider"],
     gemini: ["Gemini", "API LLM provider", "External API LLM provider"],
     bart: ["BART", "facebook/bart-large-cnn", "General summarization baseline"],
+    pegasus: ["Pegasus", "google/pegasus-pubmed", "Configurable Pegasus baseline"],
     pegasus_pubmed: ["Pegasus PubMed", "google/pegasus-pubmed", "Better medical/scientific fit"],
     pegasus_cnn_dailymail: ["Pegasus CNN/DailyMail", "google/pegasus-cnn_dailymail", "General baseline"],
+    pegasus_xsum: ["Pegasus XSum", "google/pegasus-xsum", "Optional XSum baseline"],
   };
   const [displayName, modelName, description] = labels[providerName] || [providerName, providerName, "Provider metadata unavailable."];
   return {
@@ -160,8 +170,8 @@ function fallbackProvider(providerName) {
     model_name: modelName,
     status: "metadata_fallback",
     domain_fit: description,
-    provider_type: providerName === "gemini" ? "api" : "local",
-    local_model: providerName !== "gemini",
+    provider_type: providerName.includes("gemini") ? "api" : "local",
+    local_model: !providerName.includes("gemini"),
     description,
   };
 }

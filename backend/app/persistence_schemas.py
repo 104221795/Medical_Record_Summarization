@@ -515,6 +515,8 @@ class EvaluationProviderStatus(PersistenceModel):
     last_run_status: str | None = None
     latency_ms: int | None = None
     message: str | None = None
+    health_checks: dict[str, Any] = Field(default_factory=dict)
+    warmup_latency_ms: int | None = None
 
 
 class EvaluationReadinessItem(PersistenceModel):
@@ -539,6 +541,7 @@ class EvaluationStatusResponse(PersistenceModel):
     audit_readiness: str
     metrics_readiness: str
     evaluation_layers: list[EvaluationLayerStatus]
+    rag_readiness_gate: dict[str, Any] = Field(default_factory=dict)
 
 
 class DemoReadinessResponse(PersistenceModel):
@@ -631,6 +634,9 @@ SummaryProviderName = Literal[
     "pegasus_pubmed",
     "pegasus_cnn_dailymail",
     "pegasus_xsum",
+    "qwen2.5",
+    "llama3.2",
+    "gemini2.5_flash_lite",
 ]
 
 

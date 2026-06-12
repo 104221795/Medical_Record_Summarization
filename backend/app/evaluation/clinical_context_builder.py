@@ -12,8 +12,8 @@ ABSENCE_WARNING = (
     "this finding, medication, event, assessment, or plan."
 )
 SECTION_QUERIES = {
-    "DIAGNOSIS": "diagnosis assessment impression condition disease",
-    "MEDICATIONS": "medications treatments drugs dose therapy antibiotics insulin",
+    "DIAGNOSIS": "diagnosis assessment impression condition disease infarction infection tumor herniation occlusion",
+    "MEDICATIONS": "medications drugs dose antibiotics insulin anticoagulant aspirin clopidogrel heparin nitroglycerin",
     "TIMELINE": "timeline hospital course admission discharge follow-up duration after before",
     "ASSESSMENT": "assessment clinical impression findings diagnosis severity",
     "PLAN": "plan follow-up discharge instructions treatment monitoring referral",
@@ -21,13 +21,53 @@ SECTION_QUERIES = {
 }
 
 SECTION_PATTERNS = {
-    "DIAGNOSIS": re.compile(r"\b(diagnos\w*|dx|impression|condition|disease|syndrome)\b", re.I),
-    "MEDICATIONS": re.compile(r"\b(medication|drug|dose|mg|mcg|tablet|treatment|therapy|antibiotic|insulin)\b", re.I),
+    "DIAGNOSIS": re.compile(
+        r"\b(diagnos\w*|dx|impression|condition|disease|syndrome|ami|myocardial infarction|infarction|"
+        r"occlusion|herniation|pseudocyst|pancreatitis|tuberculosis|infection|mass|tumou?r|neoplasm|"
+        r"carcinoma|cyst|fracture)\b",
+        re.I,
+    ),
+    "MEDICATIONS": re.compile(
+        r"\b(medication|drug|dose|mg|mcg|tablet|capsule|oral|intravenous|iv|antibiotic|insulin|"
+        r"aspirin|clopidogrel|metoprolol|heparin|nitroglycerin|lisinopril|ceftriaxone|cefuroxim|"
+        r"ciprofloxacin|ciprofloxacine|isoniazid|rifampicin|pyrazinamide|ethambutol|pyridoxine)\b",
+        re.I,
+    ),
     "TIMELINE": re.compile(r"\b(day|week|month|year|follow[- ]?up|admission|discharg\w*|after|before|course)\b", re.I),
-    "ASSESSMENT": re.compile(r"\b(assessment|impression|finding|exam|symptom|clinical)\b", re.I),
-    "PLAN": re.compile(r"\b(plan|follow[- ]?up|continue|monitor|refer|discharg\w*|return)\b", re.I),
-    "DIAGNOSTICS": re.compile(r"\b(lab|image|mri|ct|x-?ray|ultrasound|patholog\w*|test|report|blood)\b", re.I),
+    "ASSESSMENT": re.compile(r"\b(assessment|impression|finding|findings|exam|symptom|clinical|consistent with|compatible with|suspicion|found)\b", re.I),
+    "PLAN": re.compile(r"\b(plan|planned|recommend\w*|scheduled|will|should|follow[- ]?up|continue|monitor|refer|return)\b", re.I),
+    "DIAGNOSTICS": re.compile(
+        r"\b(lab|image|imaging|mri|ct|x-?ray|ultrasound|ultrasonograph\w*|patholog\w*|histolog\w*|"
+        r"biopsy|test|report|blood|troponin|ck-?mb|enzyme|ecg|electrocardiogram|angiograph\w*|"
+        r"catheterization|biomarker|scan)\b",
+        re.I,
+    ),
 }
+MEDICATION_FACT_PATTERN = re.compile(
+    r"\b(medication|drug|dose|mg|mcg|tablet|capsule|oral|intravenous\s+(?!contrast)|\biv\b|"
+    r"antibiotic|insulin|administered|given|prescribed|susceptib\w*|aspirin|clopidogrel|metoprolol|"
+    r"heparin|nitroglycerin|lisinopril|ceftriaxone|cefuroxim|ciprofloxacin|ciprofloxacine|"
+    r"isoniazid|rifampicin|pyrazinamide|ethambutol|pyridoxine)\b",
+    re.I,
+)
+NON_MEDICATION_PROCEDURE_PATTERN = re.compile(
+    r"\b(intravenous contrast|contrast-enhanced|laparoscopic treatment|surgical treatment|operative treatment|"
+    r"radiation therapy|physical therapy|imaging|ct|mri|ultrasound)\b",
+    re.I,
+)
+PLAN_INTENT_PATTERN = re.compile(
+    r"\b(will|should|planned|plan(?:ned)?|recommend\w*|scheduled|follow[- ]?up|continue|monitor|refer|return|advised|arranged)\b",
+    re.I,
+)
+PAST_EVENT_PATTERN = re.compile(
+    r"\b(underwent|performed|was done|were done|revealed|showed|confirmed|yielded|presented|admitted|discharged|treated|received|resolved|had|was able)\b",
+    re.I,
+)
+PAST_FOLLOW_UP_PATTERN = re.compile(
+    r"\b(at (?:the )?(?:most recent )?follow[- ]?up|\d+(?:\.\d+)?\s*(?:day|week|month|year)s?\s+later)\b",
+    re.I,
+)
+TRUNCATED_ENDING_PATTERN = re.compile(r"\b(and|or|with|without|for|to|of|the|a|an|in|on|at|by|from|as|than|because|while|after|before)$", re.I)
 
 
 @dataclass(frozen=True)
@@ -44,23 +84,23 @@ def build_clinical_context(
     *,
     max_chunks: int = 10,
     max_chars_per_chunk: int = 700,
-    max_facts_per_section: int = 2,
-    max_chars_per_fact: int = 280,
+    max_facts_per_section: int = 4,
+    max_chars_per_fact: int = 420,
 ) -> ClinicalContext:
     selected = deduplicate_evidence(evidence)[:max_chunks]
     sectioned: dict[str, list[EvidenceChunk]] = {name: [] for name in SECTION_QUERIES}
     for chunk in selected:
-        label = classify_evidence_section(chunk)
+        label = normalize_evidence_section(chunk.section) or classify_evidence_section(chunk)
         sectioned[label].append(chunk)
     critical_facts = extract_citation_first_facts(
-        selected,
+        sectioned,
         max_facts_per_section=max_facts_per_section,
         max_chars_per_fact=max_chars_per_fact,
     )
     lines = [
-        "Build the summary from the cited clinical facts first. Use only the evidence below. "
-        "Preserve diagnoses, medications, timeline, assessment, and plan. "
-        "Do not add clinical facts that are not supported by a cited chunk id. "
+        "You are reading a strict clinical RAG context. Use the FACTS blocks first and the retrieved evidence only as support. "
+        "Every clinical claim must be supported by an explicit chunk id. "
+        "Do not borrow facts across sections. Do not complete truncated source text. "
         "Important: 'not present in retrieved evidence' means unknown, not absent.",
         "",
         "[CITATION_FIRST_CLINICAL_FACTS]",
@@ -69,8 +109,6 @@ def build_clinical_context(
     for section in SECTION_QUERIES:
         lines.append(f"[{section}_FACTS]")
         facts = critical_facts.get(section, [])
-        if not facts:
-            lines.append(f"- {section.lower()} {ABSENCE_WARNING}")
         for chunk_id, fact in facts:
             lines.append(f"- ({chunk_id}) {fact}")
         lines.append("")
@@ -78,7 +116,7 @@ def build_clinical_context(
     for section, chunks in sectioned.items():
         lines.append(f"[{section}]")
         if not chunks:
-            lines.append(f"- {section.lower()} {ABSENCE_WARNING}")
+            lines.append(f"- [{section}] {ABSENCE_WARNING}")
         for chunk in chunks:
             preview = normalize_whitespace(chunk.text)[:max_chars_per_chunk]
             lines.append(f"- ({chunk.chunk_id}) {preview}")
@@ -159,29 +197,30 @@ def clinical_salience_score(chunk: EvidenceChunk, section: str | None = None) ->
 
 
 def extract_citation_first_facts(
-    evidence: Iterable[EvidenceChunk],
+    sectioned_evidence: dict[str, list[EvidenceChunk]],
     *,
     max_facts_per_section: int = 2,
     max_chars_per_fact: int = 280,
 ) -> dict[str, list[tuple[str, str]]]:
-    """Extract compact cited facts before raw evidence.
+    """Extract compact cited facts with strict section isolation.
 
-    Seq2seq summarizers often drop low-frequency clinical details when given
-    long chunks. This lightweight pre-pass gives the model a short, cited
-    checklist for each clinical section while still preserving the original
-    evidence below it.
+    Facts for a section are extracted only from chunks already routed to that
+    section. Missing sections stay blank; this prevents medication, plan, or
+    diagnosis facts from being borrowed from timeline-heavy chunks.
     """
 
-    chunks = list(evidence)
     facts: dict[str, list[tuple[str, str]]] = {name: [] for name in SECTION_QUERIES}
     for section in SECTION_QUERIES:
+        chunks = sectioned_evidence.get(section, [])
+        if not chunks:
+            continue
         ranked = sorted(chunks, key=lambda chunk: clinical_salience_score(chunk, section), reverse=True)
         seen: set[str] = set()
         for chunk in ranked:
             for sentence in _section_candidate_sentences(chunk, section):
-                fact = normalize_whitespace(sentence)[:max_chars_per_fact].strip(" ,;:-")
+                fact = safe_fact_text(sentence, max_chars=max_chars_per_fact)
                 key = fact.casefold()
-                if len(fact.split()) < 5 or key in seen:
+                if len(fact.split()) < 5 or key in seen or not is_valid_section_fact(fact, section):
                     continue
                 facts[section].append((chunk.chunk_id, fact))
                 seen.add(key)
@@ -196,7 +235,7 @@ def deduplicate_evidence(evidence: Iterable[EvidenceChunk]) -> list[EvidenceChun
     seen: set[str] = set()
     result: list[EvidenceChunk] = []
     for chunk in sorted(evidence, key=lambda item: float(item.score or 0.0), reverse=True):
-        key = chunk.chunk_id or normalize_whitespace(chunk.text)[:120]
+        key = f"{normalize_evidence_section(chunk.section) or classify_evidence_section(chunk)}:{chunk.chunk_id or normalize_whitespace(chunk.text)[:120]}"
         if key in seen:
             continue
         seen.add(key)
@@ -211,8 +250,36 @@ def classify_evidence_section(chunk: EvidenceChunk) -> str:
     return best[0] if best[1] > 0 else "ASSESSMENT"
 
 
+def normalize_evidence_section(section: str | None) -> str | None:
+    normalized = normalize_whitespace(section or "").upper()
+    return normalized if normalized in SECTION_QUERIES else None
+
+
 def normalize_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", text or "").strip()
+
+
+def safe_fact_text(sentence: str, *, max_chars: int) -> str:
+    fact = normalize_whitespace(sentence).strip(" ,;:-")
+    if len(fact) <= max_chars:
+        return fact
+    clipped = fact[:max_chars].rsplit(" ", 1)[0].strip(" ,;:-")
+    return clipped if clipped and not TRUNCATED_ENDING_PATTERN.search(clipped) else ""
+
+
+def is_valid_section_fact(fact: str, section: str) -> bool:
+    if not fact:
+        return False
+    if section == "MEDICATIONS":
+        return bool(MEDICATION_FACT_PATTERN.search(fact)) and not bool(NON_MEDICATION_PROCEDURE_PATTERN.search(fact))
+    if section == "PLAN":
+        return bool(PLAN_INTENT_PATTERN.search(fact)) and not _looks_like_completed_event(fact) and not PAST_FOLLOW_UP_PATTERN.search(fact)
+    if section == "TIMELINE":
+        return bool(SECTION_PATTERNS["TIMELINE"].search(fact)) and not (
+            PLAN_INTENT_PATTERN.search(fact) and not PAST_EVENT_PATTERN.search(fact)
+        )
+    pattern = SECTION_PATTERNS.get(section)
+    return bool(pattern.search(fact)) if pattern else True
 
 
 def _section_candidate_sentences(chunk: EvidenceChunk, section: str) -> list[str]:
@@ -227,3 +294,7 @@ def _section_candidate_sentences(chunk: EvidenceChunk, section: str) -> list[str
         if matching:
             return matching
     return sentences[:2]
+
+
+def _looks_like_completed_event(text: str) -> bool:
+    return bool(PAST_EVENT_PATTERN.search(text)) and not re.search(r"\bwill|should|planned|scheduled|recommend\w*\b", text, re.I)

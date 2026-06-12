@@ -3,17 +3,31 @@ import { useMemo, useState } from "react";
 export function useCitationSelection(summary) {
   const citations = useMemo(() => extractCitations(summary), [summary]);
   const claims = useMemo(() => extractClaims(summary), [summary]);
+  const citationsById = useMemo(() => Object.fromEntries(citations.map((citation) => [citation.citation_id, citation])), [citations]);
+  const evidenceByCitationId = citationsById;
+  const claimsByCitationId = useMemo(() => {
+    const lookup = {};
+    citations.forEach((citation) => {
+      const claim = claims.find((item) => item.claim_id === citation.claim_id);
+      if (claim) lookup[citation.citation_id] = claim;
+    });
+    return lookup;
+  }, [citations, claims]);
   const [selectedCitationId, setSelectedCitationId] = useState("");
+  const [hoveredCitationId, setHoveredCitationId] = useState("");
   const [selectedClaimId, setSelectedClaimId] = useState("");
 
+  const activeCitationId = hoveredCitationId || selectedCitationId;
   const selectedCitation = citations.find((citation) => citation.citation_id === selectedCitationId) || citations[0] || null;
-  const selectedClaim = claims.find((claim) => claim.claim_id === selectedClaimId)
-    || claims.find((claim) => claim.citations?.some((citation) => citation.citation_id === selectedCitation?.citation_id))
+  const activeCitation = citations.find((citation) => citation.citation_id === activeCitationId) || selectedCitation;
+  const activeClaimId = (activeCitation?.citation_id && claimsByCitationId[activeCitation.citation_id]?.claim_id) || selectedClaimId;
+  const selectedClaim = claims.find((claim) => claim.claim_id === activeClaimId)
     || null;
 
   const selectCitation = (citationId, claimId = "") => {
     setSelectedCitationId(citationId || "");
-    if (claimId) setSelectedClaimId(claimId);
+    const linkedClaimId = claimId || claimsByCitationId[citationId]?.claim_id || "";
+    if (linkedClaimId) setSelectedClaimId(linkedClaimId);
   };
 
   const selectClaim = (claimId) => {
@@ -26,8 +40,16 @@ export function useCitationSelection(summary) {
   return {
     citations,
     claims,
+    citationsById,
+    evidenceByCitationId,
+    claimsByCitationId,
+    activeCitation,
+    activeCitationId,
+    activeClaimId,
     selectedCitation,
     selectedCitationId,
+    hoveredCitationId,
+    setHoveredCitationId,
     selectedClaim,
     selectedClaimId,
     selectCitation,
@@ -45,6 +67,7 @@ export function extractCitations(summary) {
       ...citation,
       claim_id: claim.claim_id,
       claim_text: claim.claim_text,
+      claim_type: claim.claim_type,
       claim_status: claim.support_status,
       citation_label: citation.citation_id ? `C${String(index + 1).padStart(2, "0")}` : "Citation",
     })),

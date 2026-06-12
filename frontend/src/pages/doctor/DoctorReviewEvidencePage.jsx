@@ -9,6 +9,7 @@ import ReviewActionBar from "../../components/summary/ReviewActionBar.jsx";
 import ReviewContextBar from "../../components/summary/ReviewContextBar.jsx";
 import ReviewOutcomePanel from "../../components/summary/ReviewOutcomePanel.jsx";
 import SourceEvidencePanel from "../../components/summary/SourceEvidencePanel.jsx";
+import SummaryQualityPanel from "../../components/summary/SummaryQualityPanel.jsx";
 import SummaryEditorPanel from "../../components/summary/SummaryEditorPanel.jsx";
 import { useCitationSelection } from "../../hooks/useCitationSelection.js";
 import { useRole } from "../../hooks/useRole.js";
@@ -59,7 +60,21 @@ export default function DoctorReviewEvidencePage() {
         title="Review & Evidence"
         description="Compare source evidence against the generated draft before editing, approval, or rejection."
       />
-      <ReviewContextBar summary={workflow.summary} patient={workflow.patient} />
+      <div className="review-top-area">
+        <ReviewContextBar summary={workflow.summary} patient={workflow.patient} />
+        <SummaryQualityPanel summary={workflow.summary} />
+      </div>
+      <div className={`review-zone actions-zone ${mobilePanel === "actions" ? "mobile-active" : ""}`}>
+        <ReviewActionBar
+          summary={workflow.summary}
+          busyAction={workflow.busyAction}
+          toast={workflow.toast}
+          onStartReview={workflow.startReview}
+          onSaveEdit={workflow.saveEdit}
+          onApprove={workflow.approve}
+          onReject={workflow.reject}
+        />
+      </div>
       <ReviewOutcomePanel outcome={workflow.lastOutcome} reviewer={session.fullName || session.email || session.userId} />
       <div className="mobile-review-tabs">
         {[
@@ -85,7 +100,10 @@ export default function DoctorReviewEvidencePage() {
             documents={workflow.documents}
             citations={citationState.citations}
             selectedCitationId={citationState.selectedCitationId}
+            hoveredCitationId={citationState.hoveredCitationId}
+            activeCitationId={citationState.activeCitationId}
             onSelectCitation={citationState.selectCitation}
+            onHoverCitation={citationState.setHoveredCitationId}
           />
         </div>
         <div className={`review-zone summary-zone ${mobilePanel === "summary" ? "mobile-active" : ""}`}>
@@ -95,7 +113,13 @@ export default function DoctorReviewEvidencePage() {
             setEditedText={workflow.setEditedText}
             citations={citationState.citations}
             selectedCitationId={citationState.selectedCitationId}
+            hoveredCitationId={citationState.hoveredCitationId}
+            activeCitationId={citationState.activeCitationId}
+            selectedClaimId={citationState.selectedClaimId}
+            activeClaimId={citationState.activeClaimId}
             onSelectCitation={citationState.selectCitation}
+            onSelectClaim={citationState.selectClaim}
+            onHoverCitation={citationState.setHoveredCitationId}
             onSave={workflow.saveEdit}
             saving={workflow.busyAction === "edit"}
           />
@@ -105,22 +129,17 @@ export default function DoctorReviewEvidencePage() {
             citations={citationState.citations}
             claims={citationState.claims}
             selectedCitationId={citationState.selectedCitationId}
+            hoveredCitationId={citationState.hoveredCitationId}
+            activeCitationId={citationState.activeCitationId}
+            selectedCitation={citationState.activeCitation || citationState.selectedCitation}
+            selectedClaim={citationState.selectedClaim}
             selectedClaimId={citationState.selectedClaimId}
+            activeClaimId={citationState.activeClaimId}
             onSelectCitation={citationState.selectCitation}
+            onHoverCitation={citationState.setHoveredCitationId}
             onSelectClaim={citationState.selectClaim}
           />
         </div>
-      </div>
-      <div className={`review-zone actions-zone ${mobilePanel === "actions" ? "mobile-active" : ""}`}>
-        <ReviewActionBar
-          summary={workflow.summary}
-          busyAction={workflow.busyAction}
-          toast={workflow.toast}
-          onStartReview={workflow.startReview}
-          onSaveEdit={workflow.saveEdit}
-          onApprove={workflow.approve}
-          onReject={workflow.reject}
-        />
       </div>
     </div>
   );

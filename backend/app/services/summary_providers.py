@@ -1,10 +1,20 @@
 from __future__ import annotations
 
 import os
+import re
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from time import perf_counter
 from typing import Any
+
+from ..evaluation.llmgateway import (
+    GATEWAY_MODEL_ALIASES,
+    LLMGatewayError,
+    clean_gateway_output,
+    gateway_model_name,
+    generate_llm_summary,
+)
 
 
 @dataclass(frozen=True)
@@ -121,6 +131,66 @@ class GeminiProvider(SummaryProvider):
         )
 
 
+class GatewayClinicalProvider(SummaryProvider):
+    """Testing-only adapter for local/cloud chat models routed through the LLM gateway."""
+
+    model_version = "gateway-structured-clinical-v2"
+
+    def __init__(self, provider_name: str):
+        if provider_name not in GATEWAY_MODEL_ALIASES:
+            supported = ", ".join(sorted(GATEWAY_MODEL_ALIASES))
+            raise ProviderExecutionError(f"Unsupported gateway provider '{provider_name}'. Supported: {supported}.")
+        self.provider_name = provider_name
+        self.model_name = gateway_model_name(provider_name)
+
+    def generate_summary(
+        self,
+        *,
+        patient: Any,
+        encounter: Any | None,
+        context: dict[str, list],
+        evidence_pack: dict[str, Any],
+        summary_type: str,
+        language: str,
+        options: Mapping[str, Any],
+    ) -> ProviderOutput:
+        prompt = _gateway_prompt(
+            self.provider_name,
+            patient=patient,
+            encounter=encounter,
+            evidence_pack=evidence_pack,
+            summary_type=summary_type,
+            language=language,
+        )
+        started = perf_counter()
+        try:
+            generated = generate_llm_summary(prompt, self.provider_name)
+        except LLMGatewayError as exc:
+            raise ProviderExecutionError(str(exc)) from exc
+        generated = clean_gateway_output(generated)
+        if not generated:
+            raise ProviderExecutionError(f"{self.provider_name} returned empty output.")
+        sections = _structured_sections_from_output(generated)
+        return ProviderOutput(
+            provider=self.provider_name,
+            model_name=self.model_name,
+            model_version=self.model_version,
+            summary_text=generated,
+            sections=sections,
+            latency_ms=int((perf_counter() - started) * 1000),
+            raw_output={
+                "summary_type": summary_type,
+                "language": language,
+                "source": "llm_gateway_testing_provider",
+                "testing_only": True,
+                "clinical_context_schema": "v2",
+                "options": dict(options),
+            },
+            prompt_template_name=f"{self.provider_name}_clinical_context_v2",
+            prompt_template_version="2.0.0",
+        )
+
+
 class HuggingFaceTextProvider(SummaryProvider):
     provider_name: str
     default_model_name: str
@@ -158,12 +228,13 @@ class HuggingFaceTextProvider(SummaryProvider):
                 "summarization in the persisted workflow."
             )
         summarizer = self._summarizer or self._build_summarizer()
+        source_note = _provider_input_text(self.provider_name, evidence_pack, context)
         output = summarizer.generate(
             {
                 "note_id": _note_id(patient, encounter),
                 "patient_id": str(patient.patient_id),
                 "encounter_id": str(encounter.encounter_id) if encounter else "",
-                "source_note": _source_note_from_context(context, evidence_pack),
+                "source_note": source_note,
                 "reference_summary": "",
                 "dataset": "persisted_clinical_context",
                 "split": "inference",
@@ -190,9 +261,10 @@ class HuggingFaceTextProvider(SummaryProvider):
                 "language": language,
                 "real_model_enabled": self.real_enabled,
                 "source": "huggingface_baseline_provider",
+                "clinical_context_schema": "v2_extract_short",
             },
-            prompt_template_name=f"{self.provider_name}_text_normalizer",
-            prompt_template_version="1.0.0",
+            prompt_template_name=f"{self.provider_name}_extractive_context_v2",
+            prompt_template_version="2.0.0",
         )
 
     def _build_summarizer(self) -> Any:
@@ -268,6 +340,9 @@ class PegasusXSumProvider(PegasusProvider):
         super().__init__(**kwargs)
 
 
+GATEWAY_PROVIDER_NAMES = frozenset(GATEWAY_MODEL_ALIASES)
+
+
 def _real_baselines_enabled() -> bool:
     return os.environ.get("RUN_REAL_BASELINES") == "1" or os.environ.get("RAG_RUN_REAL_BASELINES") == "1"
 
@@ -292,3 +367,227 @@ def _source_note_from_context(context: dict[str, list], evidence_pack: dict[str,
     if evidence_text:
         return "\n\n".join(evidence_text)[:12000]
     raise ProviderExecutionError("No text evidence is available for this provider.")
+
+
+def _provider_input_text(provider_name: str, evidence_pack: dict[str, Any], context: dict[str, list]) -> str:
+    if provider_name in {"bart", "pegasus", "pegasus_pubmed", "pegasus_cnn_dailymail", "pegasus_xsum"}:
+        return _extractive_context_for_seq2seq(evidence_pack)
+    return _source_note_from_context(context, evidence_pack)
+
+
+def _extractive_context_for_seq2seq(evidence_pack: dict[str, Any]) -> str:
+    sections = build_structured_clinical_context_v2(evidence_pack, max_items_per_section=5)
+    lines = [
+        "Extractive clinical summarization context. Use only these evidence facts.",
+        "Preserve diagnosis, medications, timeline, diagnostics, assessment, and plan.",
+    ]
+    for title in (
+        "Patient Snapshot",
+        "Diagnosis Evidence",
+        "Medication Evidence",
+        "Timeline Evidence",
+        "Diagnostics Evidence",
+        "Assessment Evidence",
+        "Plan Evidence",
+    ):
+        items = sections.get(title, [])
+        if not items:
+            continue
+        lines.append(f"[{title}]")
+        lines.extend(f"- {item}" for item in items[:5])
+    return "\n".join(lines)[:9000]
+
+
+def _gateway_prompt(
+    provider_name: str,
+    *,
+    patient: Any,
+    encounter: Any | None,
+    evidence_pack: dict[str, Any],
+    summary_type: str,
+    language: str,
+) -> str:
+    context_sections = build_structured_clinical_context_v2(evidence_pack, max_items_per_section=8)
+    rendered_context = _render_context_sections(context_sections)
+    if provider_name in {"qwen2.5", "llama3.2"}:
+        style_rules = (
+            "Use terse, structured clinical bullets. Keep every claim tied to visible evidence. "
+            "Do not write recommendations, diagnoses, medication changes, or negative findings unless the evidence explicitly says so."
+        )
+    elif provider_name == "gemini2.5_flash_lite":
+        style_rules = (
+            "Be citation-aware and safety-heavy. Flag unknowns and unsupported claims visibly. "
+            "Prefer incomplete-but-grounded output over fluent unsupported output."
+        )
+    else:
+        style_rules = "Use concise, evidence-grounded clinical language."
+
+    patient_id = evidence_pack.get("patient_id") or getattr(patient, "patient_id", "")
+    encounter_id = str(getattr(encounter, "encounter_id", "") or evidence_pack.get("encounter_id") or "all_encounters")
+    return "\n\n".join(
+        [
+            "You are a strict, clinically precise RAG extraction and summarization engine.",
+            f"Task: create a {summary_type} draft in language={language}.",
+            f"Patient scope: patient_id={patient_id}; encounter_scope={encounter_id}.",
+            style_rules,
+            "Critical rules:",
+            "1. Use only the supplied [STRUCTURED_CLINICAL_CONTEXT_V2].",
+            "2. Every clinical fact must include a source_id in square brackets, for example [condition:123].",
+            "3. If diagnosis, medication, timeline, diagnostics, assessment, or plan evidence is missing, say Unknown / not retrieved.",
+            "4. Keep timeline facts separate from future plan facts.",
+            "5. Do not infer absence. Missing retrieved evidence means unknown, not negative.",
+            "6. This is a draft for clinician review, not clinical advice.",
+            "[STRUCTURED_CLINICAL_CONTEXT_V2]",
+            rendered_context,
+            "Return exactly these sections:",
+            "[Patient Snapshot]",
+            "- ... [source_id]",
+            "[Diagnosis Evidence]",
+            "- ... [source_id]",
+            "[Medication Evidence]",
+            "- ... [source_id]",
+            "[Timeline Evidence]",
+            "- ... [source_id]",
+            "[Diagnostics Evidence]",
+            "- ... [source_id]",
+            "[Assessment Evidence]",
+            "- ... [source_id]",
+            "[Plan Evidence]",
+            "- ... [source_id]",
+            "[Unknown / Missing Evidence]",
+            "- Missing or weak evidence that the doctor should verify.",
+        ]
+    )
+
+
+def build_structured_clinical_context_v2(
+    evidence_pack: dict[str, Any],
+    *,
+    max_items_per_section: int = 8,
+) -> dict[str, list[str]]:
+    sections: dict[str, list[str]] = {
+        "Patient Snapshot": [],
+        "Diagnosis Evidence": [],
+        "Medication Evidence": [],
+        "Timeline Evidence": [],
+        "Diagnostics Evidence": [],
+        "Assessment Evidence": [],
+        "Plan Evidence": [],
+        "Unknown / Missing Evidence": [],
+    }
+    for item in evidence_pack.get("evidence", []):
+        if not isinstance(item, dict):
+            continue
+        source_id = str(item.get("source_id") or "").strip()
+        text = _compact_text(item.get("text"))
+        if not source_id or not text:
+            continue
+        rendered = f"({source_id}) {text}"
+        for section in _section_targets_for_item(item, text):
+            if len(sections[section]) < max_items_per_section:
+                sections[section].append(rendered)
+
+    for required in ("Diagnosis Evidence", "Medication Evidence", "Timeline Evidence"):
+        if not sections[required]:
+            sections["Unknown / Missing Evidence"].append(
+                f"- {required} information was not present in the retrieved evidence."
+            )
+    return sections
+
+
+def _section_targets_for_item(item: dict[str, Any], text: str) -> list[str]:
+    source_type = str(item.get("source_type") or "").casefold()
+    lowered = text.casefold()
+    targets: list[str] = []
+    if source_type in {"patient", "encounter"}:
+        targets.append("Patient Snapshot")
+    if source_type == "condition" or _contains_any(lowered, ("diagnosis", "diagnosed", "condition", "problem", "tumor", "cancer")):
+        targets.append("Diagnosis Evidence")
+    if source_type == "medication" or _contains_any(lowered, ("medication", "medicine", "dose", "dosage", "mg", "tablet", "insulin", "antibiotic")):
+        targets.append("Medication Evidence")
+    if source_type in {"encounter", "document_chunk", "clinical_document"} or _contains_any(
+        lowered,
+        ("timeline", "history", "course", "presented", "reported", "underwent", "admitted", "followed"),
+    ):
+        targets.append("Timeline Evidence")
+    if source_type in {"observation", "diagnostic_report"} or _contains_any(
+        lowered,
+        ("lab", "imaging", "ct", "mri", "x-ray", "ultrasound", "biopsy", "pathology", "creatinine", "hemoglobin"),
+    ):
+        targets.append("Diagnostics Evidence")
+    if _contains_any(lowered, ("assessment", "impression", "summary impression", "clinical impression")):
+        targets.append("Assessment Evidence")
+    if _contains_any(lowered, ("plan", "follow-up", "follow up", "scheduled", "recommendation", "pending", "next")):
+        targets.append("Plan Evidence")
+    if not targets:
+        targets.append("Timeline Evidence")
+    return _dedupe(targets)
+
+
+def _render_context_sections(sections: dict[str, list[str]]) -> str:
+    blocks: list[str] = []
+    for title, items in sections.items():
+        blocks.append(f"[{title}]")
+        if items:
+            blocks.extend(f"- {item.lstrip('- ').strip()}" for item in items)
+        else:
+            blocks.append(f"- {title} information was not present in the retrieved evidence.")
+    return "\n".join(blocks)
+
+
+def _structured_sections_from_output(text: str) -> list[ProviderSectionOutput]:
+    matches = list(re.finditer(r"^\[(?P<title>[^\]]+)\]\s*$", text, flags=re.MULTILINE))
+    if not matches:
+        claims = [line.strip("- ").strip() for line in text.splitlines() if line.strip("- ").strip()]
+        return [
+            ProviderSectionOutput(
+                section_title="Generated Summary",
+                section_type="generated_summary",
+                section_text=text,
+                claims=claims[:24],
+            )
+        ]
+    sections: list[ProviderSectionOutput] = []
+    for index, match in enumerate(matches):
+        start = match.end()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        title = match.group("title").strip()
+        section_text = text[start:end].strip()
+        claims = [
+            line.strip().lstrip("-*").strip()
+            for line in section_text.splitlines()
+            if line.strip().lstrip("-*").strip()
+        ]
+        sections.append(
+            ProviderSectionOutput(
+                section_title=title,
+                section_type=_section_type_from_title(title),
+                section_text=section_text,
+                claims=claims[:12],
+            )
+        )
+    return sections
+
+
+def _section_type_from_title(title: str) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "_", title.casefold()).strip("_")
+    return normalized or "generated_summary"
+
+
+def _compact_text(value: Any, *, limit: int = 700) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    return text if len(text) <= limit else f"{text[: limit - 3].rstrip()}..."
+
+
+def _contains_any(text: str, markers: tuple[str, ...]) -> bool:
+    return any(marker in text for marker in markers)
+
+
+def _dedupe(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value not in seen:
+            result.append(value)
+            seen.add(value)
+    return result

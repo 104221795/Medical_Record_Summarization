@@ -101,7 +101,7 @@ def compute_clinical_record_metrics(row: dict[str, Any]) -> dict[str, Any]:
 
     source = _text(row.get("source_note"))
     reference = _text(row.get("reference_summary"))
-    generated = _text(row.get("generated_summary"))
+    generated = _nonclinical_unknowns_removed(_text(row.get("generated_summary")))
     evidence = _text(row.get("retrieved_evidence") or row.get("evidence") or source)
 
     reference_diagnoses = _clinical_terms(reference, DIAGNOSIS_TERMS)
@@ -332,12 +332,25 @@ def _coverage_rate(reference_terms: set[str], generated_terms: set[str]) -> floa
 
 
 def _claim_like_sentence_count(text: str) -> int:
-    sentences = [item.strip() for item in re.split(r"[.!?\n]+", text) if item.strip()]
+    sentences = [
+        item.strip()
+        for item in re.split(r"[.!?\n]+", _nonclinical_unknowns_removed(text))
+        if item.strip()
+    ]
     return len(sentences)
 
 
 def _tokens(text: Any) -> list[str]:
-    return [token.casefold() for token in TOKEN_PATTERN.findall(_text(text))]
+    return [token.casefold() for token in TOKEN_PATTERN.findall(_nonclinical_unknowns_removed(_text(text)))]
+
+
+def _nonclinical_unknowns_removed(text: str) -> str:
+    return re.sub(
+        r"\b(?:Medication|Plan|Diagnosis|Assessment|Timeline|Diagnostic|Diagnostics) information was not present in retrieved evidence\.?",
+        " ",
+        text or "",
+        flags=re.I,
+    )
 
 
 def _text(value: Any) -> str:

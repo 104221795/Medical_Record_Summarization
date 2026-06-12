@@ -123,6 +123,8 @@ def _generate_via_litellm(
     try:
         from litellm import completion
     except ImportError as exc:
+        if provider in LOCAL_GATEWAY_PROVIDERS:
+            return _generate_via_ollama_native(model_name, provider, messages, config)
         raise LLMGatewayError("litellm is not installed. Use LLM_GATEWAY_MODE=proxy or install litellm.") from exc
 
     kwargs: dict[str, Any] = {
@@ -138,6 +140,40 @@ def _generate_via_litellm(
         kwargs["api_key"] = os.environ["GEMINI_API_KEY"]
     response = completion(**kwargs)
     return str(response.choices[0].message.content or "")
+
+
+def _generate_via_ollama_native(
+    model_name: str,
+    provider: str,
+    messages: list[dict[str, str]],
+    config: GatewayConfig,
+) -> str:
+    """Fallback for local Ollama models when LiteLLM is not installed.
+
+    The benchmark still uses the centralized gateway module and the same
+    safety hyperparameters; only the local transport changes to Ollama's
+    native chat endpoint.
+    """
+
+    if provider not in LOCAL_GATEWAY_PROVIDERS:
+        raise LLMGatewayError(f"Native Ollama fallback is not supported for {provider}.")
+    base_url = os.environ.get("OLLAMA_API_BASE", "http://127.0.0.1:11434").rstrip("/")
+    payload = {
+        "model": _ollama_model_name(model_name),
+        "messages": messages,
+        "stream": False,
+        "keep_alive": os.environ.get("OLLAMA_KEEP_ALIVE", "10m"),
+        "options": {
+            "temperature": config.temperature,
+            "num_ctx": config.local_num_ctx,
+            "num_predict": config.max_tokens,
+        },
+    }
+    response = _post_json(f"{base_url}/api/chat", payload, config)
+    message = response.get("message")
+    if isinstance(message, dict):
+        return str(message.get("content") or "")
+    return str(response.get("response") or "")
 
 
 def _chat_payload(
@@ -186,6 +222,14 @@ def _extract_chat_completion_text(response: dict[str, Any]) -> str:
     if isinstance(message, dict):
         return str(message.get("content") or "")
     return str(first.get("text") or "")
+
+
+def _ollama_model_name(model_name: str) -> str:
+    clean = model_name.strip()
+    for prefix in ("ollama_chat/", "ollama/"):
+        if clean.startswith(prefix):
+            return clean[len(prefix) :]
+    return clean
 
 
 def _summary_messages(prompt: str) -> list[dict[str, str]]:

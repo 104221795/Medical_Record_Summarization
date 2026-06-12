@@ -158,6 +158,11 @@ class ReviewService:
                 "edit_comment": payload.edit_comment,
                 "edit_distance_score": str(edit_distance),
                 "citation_revalidation_required": True,
+                "training_signal": _review_training_signal(
+                    summary,
+                    action="edit",
+                    edit_distance_score=edit_distance,
+                ),
             },
         )
         self.repository.session.flush()
@@ -217,6 +222,7 @@ class ReviewService:
                 "previous_status": previous.value,
                 "status": SummaryStatus.APPROVED.value,
                 "approval_comment": payload.approval_comment,
+                "training_signal": _review_training_signal(summary, action="approve"),
             },
         )
         self.repository.session.flush()
@@ -265,6 +271,11 @@ class ReviewService:
                 "status": SummaryStatus.REJECTED.value,
                 "rejection_reason": payload.rejection_reason,
                 "rejection_comment": payload.rejection_comment,
+                "training_signal": _review_training_signal(
+                    summary,
+                    action="reject",
+                    rejection_reason=payload.rejection_reason,
+                ),
             },
         )
         self.repository.session.flush()
@@ -460,6 +471,84 @@ def _summary_audit_metadata(summary: Summary) -> dict[str, object | None]:
         "latency_ms": summary.model_run.latency_ms if summary.model_run else None,
     }
     return {key: value for key, value in metadata.items() if value is not None}
+
+
+def _review_training_signal(
+    summary: Summary,
+    *,
+    action: str,
+    rejection_reason: str | None = None,
+    edit_distance_score: Decimal | None = None,
+) -> dict[str, object | None]:
+    categories = _review_failure_categories(summary, rejection_reason)
+    return {
+        "action": action,
+        "provider": _model_provider_label(summary.model_run),
+        "model_name": summary.model_run.model_name if summary.model_run else None,
+        "summary_id": str(summary.summary_id),
+        "citation_coverage": str(summary.citation_coverage) if summary.citation_coverage is not None else None,
+        "unsupported_claim_count": summary.unsupported_claim_count,
+        "conflict_count": summary.conflict_count,
+        "critical_unsupported_count": len(_critical_unsupported_claims(summary)),
+        "missing_required_domains": _missing_required_domains(summary),
+        "failure_categories": categories,
+        "rejection_reason": rejection_reason,
+        "edit_distance_score": str(edit_distance_score) if edit_distance_score is not None else None,
+        "improvement_targets": _improvement_targets(categories),
+    }
+
+
+def _review_failure_categories(summary: Summary, rejection_reason: str | None) -> list[str]:
+    categories: set[str] = set()
+    if rejection_reason:
+        categories.add(rejection_reason)
+    for claim in summary.claims:
+        status = claim.support_status
+        claim_type = claim.claim_type or "general"
+        if status == ClaimSupportStatus.CONFLICTING:
+            categories.add("conflicting_evidence")
+        elif status == ClaimSupportStatus.UNSUPPORTED:
+            categories.add("unsupported_claim")
+        elif status == ClaimSupportStatus.INSUFFICIENT_EVIDENCE:
+            if claim_type == "diagnosis":
+                categories.add("missing_diagnosis")
+            elif claim_type == "medication":
+                categories.add("missing_medication")
+            elif claim_type == "timeline_event":
+                categories.add("missing_timeline")
+            else:
+                categories.add("insufficient_evidence")
+    for domain in _missing_required_domains(summary):
+        categories.add(f"missing_{domain}")
+    return sorted(categories)
+
+
+def _missing_required_domains(summary: Summary) -> list[str]:
+    supported_types = {
+        claim.claim_type
+        for claim in summary.claims
+        if claim.support_status == ClaimSupportStatus.SUPPORTED and claim.citations
+    }
+    missing: list[str] = []
+    if "diagnosis" not in supported_types:
+        missing.append("diagnosis")
+    if "medication" not in supported_types:
+        missing.append("medication")
+    if not supported_types.intersection({"timeline_event", "encounter_context", "procedure"}):
+        missing.append("timeline")
+    return missing
+
+
+def _improvement_targets(categories: list[str]) -> list[str]:
+    targets: set[str] = set()
+    for category in categories:
+        if category in {"wrong_citation", "missing_diagnosis", "missing_medication", "missing_timeline", "insufficient_evidence"}:
+            targets.add("retrieval_or_reranking")
+        if category in {"unsupported_claim", "unsafe_output", "incorrect_clinical_fact", "too_generic", "poor_readability"}:
+            targets.add("prompt_or_model_selection")
+        if category in {"conflicting_evidence", "missing_critical_info"}:
+            targets.add("doctor_review_rubric")
+    return sorted(targets) or ["monitor"]
 
 
 def _model_provider_label(model_run: object | None) -> str | None:

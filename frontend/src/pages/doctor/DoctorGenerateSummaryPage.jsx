@@ -1,5 +1,6 @@
 import { useParams, useSearchParams } from "react-router-dom";
 import PageHeader from "../../components/common/PageHeader.jsx";
+import Badge from "../../components/common/Badge.jsx";
 import DraftPreviewCard from "../../components/summary/DraftPreviewCard.jsx";
 import GenerationSetupCard from "../../components/summary/GenerationSetupCard.jsx";
 import PatientGenerationSelector from "../../components/summary/PatientGenerationSelector.jsx";
@@ -15,27 +16,36 @@ export default function DoctorGenerateSummaryPage() {
   };
 
   return (
-    <div className="doctor-golden-page">
+    <div className="doctor-golden-page compact-generate-page">
       <PageHeader
         eyebrow="Doctor Golden Path"
         title="Generate Summary"
         description="Create a draft patient snapshot. Evidence review, editing, and approval happen on the Review & Evidence page."
       />
-      <div className="generate-summary-layout">
-        <PatientGenerationSelector
-          patients={workflow.patients}
-          loading={workflow.patientsLoading}
-          error={workflow.patientsError}
-          selectedPatientId={workflow.selectedPatientId}
-          onSelectPatient={workflow.setSelectedPatientId}
-          patientContext={workflow.patientContext}
-          contextLoading={workflow.contextLoading}
-          encounterId={workflow.encounterId}
-          setEncounterId={workflow.setEncounterId}
-          sourceDocumentId={workflow.sourceDocumentId}
-          setSourceDocumentId={workflow.setSourceDocumentId}
-        />
-        <div className="stack">
+      <section className="clinical-notice-card compact generate-flow-strip">
+        <Badge tone="info">Flow 1.5 / evidence-first</Badge>
+        <div>
+          <strong>Doctor generation uses structured clinical context before provider inference.</strong>
+          <p>Full MiniLM + Qdrant Flow 2 is still the benchmark path; this doctor page is prepared for evidence-first provider testing.</p>
+        </div>
+      </section>
+      <div className="generate-compact-workspace">
+        <div className="generate-left-panel">
+          <PatientGenerationSelector
+            patients={workflow.patients}
+            loading={workflow.patientsLoading}
+            error={workflow.patientsError}
+            selectedPatientId={workflow.selectedPatientId}
+            onSelectPatient={workflow.setSelectedPatientId}
+            patientContext={workflow.patientContext}
+            contextLoading={workflow.contextLoading}
+            encounterId={workflow.encounterId}
+            setEncounterId={workflow.setEncounterId}
+            sourceDocumentId={workflow.sourceDocumentId}
+            setSourceDocumentId={workflow.setSourceDocumentId}
+          />
+        </div>
+        <div className="generate-right-panel">
           <GenerationSetupCard
             providers={workflow.providers}
             providersLoading={workflow.providersLoading}
@@ -49,6 +59,8 @@ export default function DoctorGenerateSummaryPage() {
             generationError={workflow.generationError}
             onGenerate={generateDraft}
           />
+        </div>
+        <div className="generate-preview-panel">
           <DraftPreviewCard summary={workflow.generatedSummary} />
         </div>
       </div>
