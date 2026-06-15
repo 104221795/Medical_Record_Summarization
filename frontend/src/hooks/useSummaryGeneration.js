@@ -8,7 +8,6 @@ const preferredProviders = [
   "qwen2.5",
   "llama3.2",
   "gemini2.5_flash_lite",
-  "gemini",
   "bart",
   "pegasus",
   "pegasus_pubmed",
@@ -108,7 +107,7 @@ export function useSummaryGeneration(initialPatientId = "") {
       const created = await summaryApi.generate(selectedPatientId, {
         encounter_id: encounterId || null,
         summary_type: "patient_snapshot",
-        language: "vi",
+        language: "en",
         model_provider: provider,
       });
       const detail = await summaryApi.detail(created.summary_id);
@@ -156,7 +155,6 @@ function fallbackProvider(providerName) {
     "qwen2.5": ["Qwen2.5", "ollama/qwen2.5:3b", "Testing-only local RAG summarizer"],
     "llama3.2": ["Llama3.2", "ollama/llama3.2:3b", "Testing-only local RAG summarizer"],
     "gemini2.5_flash_lite": ["Gemini 2.5 Flash Lite", "gemini/gemini-2.5-flash-lite", "Testing-only citation-aware gateway provider"],
-    gemini: ["Gemini", "API LLM provider", "External API LLM provider"],
     bart: ["BART", "facebook/bart-large-cnn", "General summarization baseline"],
     pegasus: ["Pegasus", "google/pegasus-pubmed", "Configurable Pegasus baseline"],
     pegasus_pubmed: ["Pegasus PubMed", "google/pegasus-pubmed", "Better medical/scientific fit"],

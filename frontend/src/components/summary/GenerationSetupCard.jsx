@@ -42,7 +42,7 @@ export default function GenerationSetupCard({
           </div>
           <div>
             <span>Context mode</span>
-            <Badge tone="info">Evidence-first</Badge>
+            <Badge tone="success">RAG MiniLM + Qdrant</Badge>
           </div>
         </div>
         <div className="generate-sticky-action">

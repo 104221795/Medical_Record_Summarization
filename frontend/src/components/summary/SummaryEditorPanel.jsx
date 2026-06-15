@@ -4,6 +4,7 @@ import Button from "../common/Button.jsx";
 import Card from "../common/Card.jsx";
 import TextArea from "../common/TextArea.jsx";
 import { statusTone } from "../../utils/clinicalDisplay.js";
+import { formatClinicalDisplayLines, normalizeClinicalText } from "../../utils/clinicalTextFormat.js";
 
 export default function SummaryEditorPanel({
   summary,
@@ -22,6 +23,9 @@ export default function SummaryEditorPanel({
   saving,
 }) {
   const [editing, setEditing] = useState(false);
+  const activeEvidenceId = activeCitationId || hoveredCitationId || selectedCitationId;
+  const activeCitation = citations.find((citation) => citation.citation_id === activeEvidenceId);
+  const unsupportedCount = countUnsupportedClaims(summary);
   return (
     <Card
       title="Generated Summary"
@@ -34,6 +38,13 @@ export default function SummaryEditorPanel({
           {editing ? "Back to Review" : "Edit Draft"}
         </Button>
       </div>
+      {unsupportedCount > 0 && (
+        <div className="unsupported-review-alert">
+          <Badge tone="danger">{unsupportedCount} needs review</Badge>
+          <strong>Unsupported or weakly cited claims must be resolved before approval.</strong>
+        </div>
+      )}
+      <ActiveEvidenceExcerpt citation={activeCitation} />
       {!editing ? (
         <ClinicalSectionRenderer
           summary={summary}
@@ -67,6 +78,25 @@ export default function SummaryEditorPanel({
         <span>{summary?.unsupported_claim_count ?? 0} unsupported claims</span>
       </div>
     </Card>
+  );
+}
+
+function ActiveEvidenceExcerpt({ citation }) {
+  if (!citation) {
+    return (
+      <div className="active-evidence-excerpt empty">
+        <span>Evidence focus</span>
+        <strong>Hover or click a citation to inspect the exact source excerpt.</strong>
+      </div>
+    );
+  }
+  const excerpt = citation.source_text_span || citation.surrounding_context || "Evidence excerpt unavailable.";
+  return (
+    <div className="active-evidence-excerpt">
+      <span>{citation.source_type || citation.source_record_type || "Source evidence"}</span>
+      <strong>{excerpt}</strong>
+      {citation.claim_text && <small>Linked claim: {citation.claim_text}</small>}
+    </div>
   );
 }
 
@@ -131,7 +161,7 @@ function ClinicalSectionRenderer({
                   onFocus={() => onSelectClaim?.(claim.claim_id)}
                 >
                   <button type="button" className="summary-claim-text" onClick={() => onSelectClaim?.(claim.claim_id)}>
-                    {claim.claim_text}
+                    <FormattedClinicalText text={claim.claim_text} />
                   </button>
                   <div className="summary-claim-meta">
                     <Badge tone={statusTone(claim.support_status)}>{claim.support_status || "unchecked"}</Badge>
@@ -191,10 +221,31 @@ function CitationChip({ citation, label, active, onClick, onHover }) {
   );
 }
 
+function FormattedClinicalText({ text }) {
+  const lines = formatClinicalDisplayLines(text);
+  if (lines.length <= 1) return <span>{text}</span>;
+  return (
+    <span className="formatted-clinical-text inline">
+      {lines.map((line, index) => (
+        <span className={`formatted-clinical-line ${line.type}`} key={`${line.type}-${index}`}>
+          {line.type === "bullet" && <b aria-hidden="true">•</b>}
+          <span>{line.text}</span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function claimIdForCitation(summary, citationId) {
   if (!citationId) return "";
   const claims = summary?.sections?.flatMap((section) => section.claims || []) || [];
   return claims.find((claim) => claim.citations?.some((citation) => citation.citation_id === citationId))?.claim_id || "";
+}
+
+function countUnsupportedClaims(summary) {
+  return (summary?.sections || [])
+    .flatMap((section) => section.claims || [])
+    .filter((claim) => claim.support_status !== "supported").length;
 }
 
 function toggleSection(current, sectionKey) {
@@ -205,7 +256,7 @@ function toggleSection(current, sectionKey) {
 }
 
 function parsePlainSummarySections(text = "") {
-  const normalized = String(text || "").trim();
+  const normalized = normalizeClinicalText(text);
   if (!normalized) return [];
   const knownHeadings = [
     "Patient Snapshot",

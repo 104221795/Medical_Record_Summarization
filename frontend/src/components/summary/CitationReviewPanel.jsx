@@ -1,14 +1,8 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Badge from "../common/Badge.jsx";
 import Card from "../common/Card.jsx";
 import EmptyState from "../common/EmptyState.jsx";
 import { statusTone } from "../../utils/clinicalDisplay.js";
-
-const tabs = [
-  { key: "citations", label: "Citations" },
-  { key: "claims", label: "Claims" },
-  { key: "unsupported", label: "Needs Review" },
-];
 
 export default function CitationReviewPanel({
   citations = [],
@@ -27,6 +21,15 @@ export default function CitationReviewPanel({
   const [activeTab, setActiveTab] = useState("citations");
   const unsupported = claims.filter((claim) => claim.support_status !== "supported");
   const currentCitationId = activeCitationId || hoveredCitationId || selectedCitationId;
+  const tabItems = useMemo(() => ([
+    { key: "citations", label: "Citations", count: citations.length },
+    { key: "claims", label: "Claims", count: claims.length },
+    { key: "unsupported", label: "Needs Review", count: unsupported.length },
+  ]), [citations.length, claims.length, unsupported.length]);
+
+  useEffect(() => {
+    if (unsupported.length && activeTab === "citations" && !citations.length) setActiveTab("unsupported");
+  }, [activeTab, citations.length, unsupported.length]);
 
   return (
     <Card title="Citation & Claim Review" className="citation-review-panel">
@@ -38,14 +41,15 @@ export default function CitationReviewPanel({
         <LegendItem tone="info" label="Unchecked" />
       </div>
       <div className="review-tabs">
-        {tabs.map((tab) => (
+        {tabItems.map((tab) => (
           <button
             type="button"
             key={tab.key}
             className={activeTab === tab.key ? "active" : ""}
             onClick={() => setActiveTab(tab.key)}
           >
-            {tab.label}
+            <span>{tab.label}</span>
+            <Badge tone={tab.key === "unsupported" && tab.count ? "danger" : "info"}>{tab.count}</Badge>
           </button>
         ))}
       </div>
@@ -120,7 +124,7 @@ function SelectedCitationDetail({ citation, claim }) {
   }
   const excerpt = citation?.source_text_span || citation?.surrounding_context || "Evidence excerpt unavailable.";
   return (
-    <div className="selected-citation-detail">
+    <div className={`selected-citation-detail ${claim?.support_status !== "supported" ? "needs-review" : ""}`}>
       <div>
         <Badge tone={statusTone(claim?.support_status || citation?.claim_status)}>{claim?.support_status || citation?.claim_status || "unchecked"}</Badge>
         <strong>{citation?.source_type || citation?.source_record_type || "Source evidence"}</strong>

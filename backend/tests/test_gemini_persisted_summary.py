@@ -49,15 +49,23 @@ class FakeGeminiJsonClient:
 
         source_ids = re.findall(r'"source_id":\s*"([^"]+)"', user_text)
 
-        def first(prefix: str) -> str:
-            return next(source_id for source_id in source_ids if source_id.startswith(prefix))
+        def first(prefix: str, fallback_index: int = 0) -> str:
+            matching = next(
+                (source_id for source_id in source_ids if source_id.startswith(prefix)),
+                None,
+            )
+            if matching:
+                return matching
+            if source_ids:
+                return source_ids[min(fallback_index, len(source_ids) - 1)]
+            return f"{prefix}missing"
 
-        patient_id = first("patient:")
-        condition_id = first("condition:")
-        chunk_id = first("chunk:")
-        medication_id = first("medication:")
-        observation_id = first("observation:")
-        report_id = first("diagnostic_report:")
+        patient_id = first("patient:", 0)
+        condition_id = first("condition:", 0)
+        chunk_id = first("chunk:", 0)
+        medication_id = first("medication:", 1)
+        observation_id = first("observation:", 2)
+        report_id = first("diagnostic_report:", 3)
         if self.mode == "loose_realistic":
             return json.dumps(
                 {
@@ -101,6 +109,33 @@ class FakeGeminiJsonClient:
                         "AI-generated draft requires doctor review before clinical use.",
                         "Trợ lý phải tóm tắt các phát hiện mạch máu được ghi nhận, không đề xuất can thiệp.",
                     ],
+                }
+            )
+        if self.mode == "inline_bare_uuid":
+            bare_condition_id = condition_id.split(":", 1)[1]
+            return json.dumps(
+                {
+                    "summary_type": "patient_snapshot",
+                    "language": "vi",
+                    "requires_clinician_review": True,
+                    "sections": [
+                        {
+                            "section_title": "Active Problems",
+                            "section_type": "active_problems",
+                            "section_order": 1,
+                            "claims": [
+                                {
+                                    "claim_text": f"Source records include one active problem [{bare_condition_id}].",
+                                    "claim_type": "diagnosis",
+                                    "support_status": "supported",
+                                    "citation_ids": [],
+                                    "clinical_risk_level": "high",
+                                    "confidence_score": 0.9,
+                                }
+                            ],
+                        }
+                    ],
+                    "safety_notes": [],
                 }
             )
         active_problem_citations = (
@@ -329,12 +364,14 @@ def test_gemini_generation_persists_draft_claims_citations_model_run_and_audit(
             assert model_run.provider == "gemini"
             assert model_run.model_name == "gemini-test-model"
             assert model_run.prompt_template_id == "patient_snapshot_vi"
-            assert model_run.prompt_version == "1.0.0"
+            assert model_run.prompt_version == "1.0.1"
             assert model_run.context_hash
             assert model_run.output_hash
             assert model_run.run_metadata["requires_deidentified_or_governed_data"] is True
             audit = session.scalar(
-                select(AuditLog).where(AuditLog.action == "generate_summary")
+                select(AuditLog)
+                .where(AuditLog.action == "generate_summary")
+                .order_by(AuditLog.timestamp.desc())
             )
             assert audit is not None
             assert audit.metadata_json["provider"] == "gemini"
@@ -348,13 +385,15 @@ def test_invalid_gemini_json_fails_safely_without_summary(tmp_path: Path) -> Non
     try:
         with TestClient(app) as client:
             patient_id, encounter_id = import_patient(client)
+            with session_factory() as session:
+                before_count = session.scalar(select(func.count()).select_from(Summary))
             generated = _generate_with_gemini(client, patient_id, encounter_id)
 
             assert generated["status_code"] == 422
             assert "invalid structured JSON" in generated["body"]["detail"]
 
         with session_factory() as session:
-            assert session.scalar(select(func.count()).select_from(Summary)) == 0
+            assert session.scalar(select(func.count()).select_from(Summary)) == before_count
     finally:
         engine.dispose()
 
@@ -367,6 +406,8 @@ def test_loose_realistic_gemini_json_is_normalized_and_still_safe(
     try:
         with TestClient(app) as client:
             patient_id, encounter_id = import_patient(client)
+            with session_factory() as session:
+                before_count = session.scalar(select(func.count()).select_from(Summary))
             generated = _generate_with_gemini(client, patient_id, encounter_id)
 
             assert generated["status_code"] == 201, generated["body"]
@@ -394,7 +435,7 @@ def test_loose_realistic_gemini_json_is_normalized_and_still_safe(
 
         with session_factory() as session:
             summary_count = session.scalar(select(func.count()).select_from(Summary))
-            assert summary_count == 1
+            assert summary_count == before_count + 1
     finally:
         engine.dispose()
 
@@ -426,5 +467,32 @@ def test_gemini_supported_claim_with_unknown_citation_is_downgraded(
             )
             assert downgraded_claim["support_status"] == "insufficient_evidence"
             assert downgraded_claim["citation_count"] == 0
+    finally:
+        engine.dispose()
+
+
+def test_gemini_inline_bare_uuid_citation_is_resolved(
+    tmp_path: Path,
+) -> None:
+    fake_client = FakeGeminiJsonClient(mode="inline_bare_uuid")
+    app, _session_factory, engine = _build_gemini_app(tmp_path, fake_client)
+    try:
+        with TestClient(app) as client:
+            patient_id, encounter_id = import_patient(client, fhir_like_payload())
+            generated = _generate_with_gemini(client, patient_id, encounter_id)
+
+            assert generated["status_code"] == 201, generated["body"]
+            detail = client.get(
+                f"/api/v1/summaries/{generated['body']['summary_id']}",
+                headers=HEADERS,
+            ).json()
+            active_problem = next(
+                claim
+                for section in detail["sections"]
+                for claim in section["claims"]
+                if "active problem" in claim["claim_text"]
+            )
+            assert active_problem["support_status"] == "supported"
+            assert active_problem["citation_count"] >= 1
     finally:
         engine.dispose()

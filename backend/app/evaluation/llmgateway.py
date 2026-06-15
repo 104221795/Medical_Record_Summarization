@@ -92,7 +92,9 @@ def clean_gateway_output(text: str) -> str:
     cleaned = re.sub(r"^\s*(assistant|model)\s*:\s*", "", cleaned, flags=re.I)
     cleaned = re.sub(r"```(?:text|markdown)?\s*", "", cleaned, flags=re.I)
     cleaned = cleaned.replace("```", "")
-    return re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = "\n".join(re.sub(r"[ \t]+", " ", line).strip() for line in cleaned.splitlines())
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
 
 
 def _generate_via_proxy(
@@ -241,7 +243,10 @@ def _summary_messages(prompt: str) -> list[dict[str, str]]:
                 "Use only the supplied retrieved evidence. Preserve diagnoses, medications, timeline, "
                 "assessment, and plan. Do not invent clinical facts. Treat missing retrieved evidence as unknown, "
                 "not absent. Never infer 'no medications', 'no diagnosis', or 'no plan' unless the evidence "
-                "explicitly states that absence."
+                "explicitly states that absence. Write the final clinical summary in English. Preserve every "
+                "source_id exactly as supplied, including prefixes like chunk:, condition:, medication:, "
+                "observation:, and diagnostic_report:. Every clinical bullet must include an exact source_id "
+                "in square brackets or be moved to Unknown / Missing Evidence."
             ),
         },
         {"role": "user", "content": prompt},

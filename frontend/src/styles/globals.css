@@ -6706,3 +6706,378 @@ tbody tr:last-child td {
 .doctor-next-box .btn:focus-visible {
   color: #fff;
 }
+
+/* Doctor workflow v2.4: clinical review UX polish */
+.compact-generation-panel .provider-panel {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.selected-provider-strip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid rgba(14, 116, 144, 0.18);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(236, 253, 245, 0.8), rgba(240, 249, 255, 0.86));
+}
+
+.selected-provider-strip span,
+.selected-provider-strip strong {
+  min-width: 0;
+}
+
+.selected-provider-strip span {
+  color: var(--text-muted, #64748b);
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.selected-provider-strip strong {
+  overflow: hidden;
+  color: var(--text-strong, #0f172a);
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-group-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.provider-group-tabs button {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid rgba(14, 116, 144, 0.16);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text-muted, #64748b);
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 900;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.provider-group-tabs button:hover,
+.provider-group-tabs button:focus-visible {
+  border-color: rgba(14, 116, 144, 0.36);
+  color: var(--primary, #0e7490);
+  transform: translateY(-1px);
+}
+
+.provider-group-tabs button.active {
+  border-color: rgba(14, 116, 144, 0.62);
+  background: rgba(14, 116, 144, 0.08);
+  color: var(--primary, #0e7490);
+}
+
+.provider-group-list.compact {
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.provider-group-list.compact .provider-group-title {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding-block: 2px;
+  background: linear-gradient(180deg, #fff 70%, rgba(255, 255, 255, 0));
+}
+
+.provider-group-list.compact .provider-radio-option {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.provider-group-list.compact .provider-domain,
+.provider-group-list.compact .provider-kind {
+  grid-column: 2;
+}
+
+.review-evidence-page {
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  padding-bottom: 10px;
+}
+
+.review-top-area {
+  align-items: stretch;
+}
+
+.review-action-bar {
+  border: 1px solid rgba(14, 116, 144, 0.12);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.review-action-message {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.reject-fields-panel {
+  width: 100%;
+}
+
+.reject-fields-panel[open] .reject-fields {
+  position: static;
+  width: 100%;
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.reject-fields {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.45fr) minmax(180px, 1fr);
+  gap: 6px;
+}
+
+.reject-fields select,
+.reject-fields input {
+  min-width: 0;
+  min-height: 32px;
+  border: 1px solid rgba(14, 116, 144, 0.18);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 0.72rem;
+}
+
+.review-action-buttons {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.review-evidence-grid {
+  grid-template-columns: minmax(300px, 0.82fr) minmax(460px, 1.22fr) minmax(330px, 0.96fr);
+}
+
+.review-zone .card {
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.07);
+}
+
+.source-zone .card-body,
+.summary-zone .summary-editor-panel .card-body,
+.evidence-zone .card-body {
+  max-height: calc(100vh - 315px);
+}
+
+.summary-zone .summary-editor-panel .card-body {
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+}
+
+.unsupported-review-alert {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 8px 9px;
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  border-radius: 10px;
+  background: rgba(254, 242, 242, 0.9);
+  color: #991b1b;
+}
+
+.unsupported-review-alert strong {
+  min-width: 0;
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.active-evidence-excerpt {
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid rgba(14, 116, 144, 0.2);
+  border-radius: 10px;
+  background: rgba(236, 254, 255, 0.72);
+}
+
+.active-evidence-excerpt.empty {
+  border-style: dashed;
+  background: rgba(248, 250, 252, 0.72);
+}
+
+.active-evidence-excerpt span {
+  color: var(--primary, #0e7490);
+  font-size: 0.66rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.active-evidence-excerpt strong {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--text-strong, #0f172a);
+  font-size: 0.77rem;
+  line-height: 1.42;
+}
+
+.active-evidence-excerpt small {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  color: var(--text-muted, #64748b);
+  font-size: 0.68rem;
+}
+
+.summary-claim-block.needs-review {
+  border-left: 3px solid rgba(220, 38, 38, 0.86);
+  background: linear-gradient(90deg, rgba(254, 242, 242, 0.92), #fff 42%);
+}
+
+.summary-claim-block.needs-review .summary-claim-text {
+  color: #7f1d1d;
+  font-weight: 780;
+}
+
+.citation-chip .citation-popover {
+  width: min(420px, 72vw);
+  border: 1px solid rgba(14, 116, 144, 0.18);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.2);
+}
+
+.selected-citation-detail.needs-review {
+  border-color: rgba(239, 68, 68, 0.26);
+  background: rgba(254, 242, 242, 0.9);
+}
+
+.review-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.review-tabs button .badge {
+  font-size: 0.58rem;
+}
+
+.claim-review-card.needs-review {
+  border-color: rgba(239, 68, 68, 0.24);
+  background: rgba(254, 242, 242, 0.72);
+}
+
+.evidence-card.selected,
+.citation-card.selected,
+.claim-review-card.selected {
+  border-color: rgba(14, 116, 144, 0.7);
+  background: rgba(236, 254, 255, 0.9);
+  box-shadow: inset 3px 0 0 var(--primary, #0e7490);
+}
+
+@media (max-width: 1400px) {
+  .source-zone .card-body,
+  .summary-zone .summary-editor-panel .card-body,
+  .evidence-zone .card-body {
+    max-height: none;
+  }
+}
+
+/* Clinical text formatter: readable bullets for Qwen/Llama/Gemini outputs */
+.formatted-clinical-text {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.formatted-clinical-text.inline {
+  width: 100%;
+}
+
+.formatted-clinical-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  color: inherit;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.formatted-clinical-line.section {
+  margin-top: 3px;
+  padding: 4px 7px;
+  border-left: 3px solid rgba(14, 116, 144, 0.6);
+  border-radius: 7px;
+  background: rgba(236, 254, 255, 0.7);
+  color: var(--primary, #0e7490);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.formatted-clinical-line.bullet {
+  grid-template-columns: 14px minmax(0, 1fr);
+  align-items: start;
+  gap: 5px;
+}
+
+.formatted-clinical-line.bullet b {
+  color: var(--primary, #0e7490);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.formatted-clinical-line.bullet span,
+.formatted-clinical-line.text span {
+  line-height: 1.45;
+}
+
+.draft-preview-text .formatted-clinical-line.section {
+  font-size: 0.66rem;
+}
+
+.summary-claim-text .formatted-clinical-text {
+  gap: 4px;
+  text-align: left;
+}
+
+.summary-claim-text .formatted-clinical-line.section {
+  margin-top: 4px;
+}
+
+.clinical-summary-section.open .summary-claim-text {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  white-space: normal;
+}
+
+.clinical-summary-section.open .summary-claim-text > span {
+  display: block;
+}
+
+@media (max-width: 1180px) {
+  .provider-group-tabs,
+  .reject-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .review-action-buttons {
+    justify-content: stretch;
+  }
+
+  .review-action-buttons .btn,
+  .review-action-buttons a {
+    flex: 1 1 160px;
+  }
+}

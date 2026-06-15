@@ -17,7 +17,7 @@ export default function ReviewActionBar({
   return (
     <section className="review-action-bar">
       <div className="review-action-message">
-        <strong>{hasSummary ? "Review actions" : "Load a summary to begin review"}</strong>
+        <strong>{hasSummary ? "Clinical review decision" : "Load a summary to begin review"}</strong>
         {Number(summary?.unsupported_claim_count || 0) > 0 && (
           <span className="toast-error">{summary.unsupported_claim_count} unsupported claim(s) require review before approval.</span>
         )}
@@ -46,13 +46,13 @@ export default function ReviewActionBar({
       </div>
       <div className="review-action-buttons">
         <Button disabled={!hasSummary || Boolean(busyAction)} onClick={onStartReview}>
-          {busyAction === "start" ? "Starting..." : "Start Review"}
+          {busyAction === "start" ? "Starting..." : "Mark In Review"}
         </Button>
         <Button variant="secondary" disabled={!hasSummary || Boolean(busyAction)} onClick={onSaveEdit}>
-          {busyAction === "edit" ? "Saving..." : "Save Edit"}
+          {busyAction === "edit" ? "Saving..." : "Save Edits"}
         </Button>
         <Button variant="success" disabled={!hasSummary || Boolean(busyAction)} onClick={onApprove}>
-          {busyAction === "approve" ? "Approving..." : "Approve"}
+          {busyAction === "approve" ? "Approving..." : "Approve Draft"}
         </Button>
         <Button
           variant="secondary"
@@ -62,14 +62,14 @@ export default function ReviewActionBar({
             rejectionComment: rejectionComment || "Revision requested from doctor evidence review workspace.",
           })}
         >
-          {busyAction === "reject" ? "Requesting..." : "Request Revision"}
+          {busyAction === "reject" ? "Requesting..." : "Request Changes"}
         </Button>
         <Button
           variant="danger"
           disabled={!hasSummary || Boolean(busyAction)}
           onClick={() => onReject({ rejectionReason, rejectionComment })}
         >
-          {busyAction === "reject" ? "Rejecting..." : "Reject"}
+          {busyAction === "reject" ? "Rejecting..." : "Reject Draft"}
         </Button>
         <Link to="/doctor/generate-summary">
           <Button variant="ghost">Back to Generate Summary</Button>

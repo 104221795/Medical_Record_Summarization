@@ -143,6 +143,7 @@ def get_summary_service(
         request.app.state.settings,
         getattr(request.app.state, "gemini_json_client", None),
         getattr(request.app.state, "summary_model_providers", None),
+        getattr(request.app.state, "rag_service", None),
     )
 
 

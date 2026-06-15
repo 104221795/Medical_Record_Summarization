@@ -23,10 +23,10 @@ export default function DoctorGenerateSummaryPage() {
         description="Create a draft patient snapshot. Evidence review, editing, and approval happen on the Review & Evidence page."
       />
       <section className="clinical-notice-card compact generate-flow-strip">
-        <Badge tone="info">Flow 1.5 / evidence-first</Badge>
+        <Badge tone="success">Flow 2 / RAG evidence-first</Badge>
         <div>
-          <strong>Doctor generation uses structured clinical context before provider inference.</strong>
-          <p>Full MiniLM + Qdrant Flow 2 is still the benchmark path; this doctor page is prepared for evidence-first provider testing.</p>
+          <strong>Doctor generation now uses patient-scoped MiniLM + Qdrant retrieval before provider inference.</strong>
+          <p>Notes are chunked, embedded, retrieved by clinical section, checked by a quality gate, then sent to the selected provider as cited context.</p>
         </div>
       </section>
       <div className="generate-compact-workspace">

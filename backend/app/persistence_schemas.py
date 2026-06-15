@@ -799,6 +799,8 @@ class SummaryGenerateResponse(PersistenceModel):
     unsupported_claim_count: int
     conflict_count: int
     generated_at: datetime
+    generation_flow: str | None = None
+    retrieval_quality_gate: dict[str, Any] = Field(default_factory=dict)
 
 
 class SummarySafetyResponse(PersistenceModel):
@@ -878,6 +880,9 @@ class SummaryDetailResponse(PersistenceModel):
     latest_review_comment: str | None = None
     latest_edit_distance_score: Decimal | None = None
     citation_revalidation_required: bool = False
+    generation_flow: str | None = None
+    retrieval_quality_gate: dict[str, Any] = Field(default_factory=dict)
+    model_run_metadata: dict[str, Any] = Field(default_factory=dict)
     sections: list[SummarySectionResponse]
     safety_summary: SummarySafetyResponse
 

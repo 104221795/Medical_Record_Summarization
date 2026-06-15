@@ -2,8 +2,12 @@ import { useState } from "react";
 import Badge from "../common/Badge.jsx";
 
 export default function ProviderSelector({ providers = [], value, onChange, loading, error }) {
-  const [showDisabled, setShowDisabled] = useState(false);
+  const [showDisabled, setShowDisabled] = useState(true);
+  const [activeGroupKey, setActiveGroupKey] = useState("recommended");
   const groups = groupProviders(providers);
+  const selected = providers.find((provider) => provider.provider_name === value);
+  const activeGroup = groups.find((group) => group.key === activeGroupKey) || groups[0];
+
   return (
     <div className="provider-panel">
       <div className="section-title">
@@ -11,22 +15,45 @@ export default function ProviderSelector({ providers = [], value, onChange, load
         {loading && <span className="muted">Checking provider status...</span>}
       </div>
       {error && <p className="warning-line">Provider metadata is unavailable; using local fallback descriptions.</p>}
-      <div className="provider-group-list">
+      {selected && (
+        <div className="selected-provider-strip">
+          <span>Selected</span>
+          <strong>{selected.display_name}</strong>
+          <Badge tone={providerTone(selected.status)}>{readableStatus(selected.status)}</Badge>
+        </div>
+      )}
+      <div className="provider-group-tabs" role="tablist" aria-label="Provider groups">
         {groups.map((group) => (
-          <section className="provider-group" key={group.key}>
+          <button
+            type="button"
+            key={group.key}
+            className={group.key === activeGroup?.key ? "active" : ""}
+            onClick={() => setActiveGroupKey(group.key)}
+          >
+            <span>{group.shortTitle}</span>
+            <Badge tone="info">{group.items.length}</Badge>
+          </button>
+        ))}
+      </div>
+      <div className="provider-group-list compact">
+        {activeGroup && (
+          <section className="provider-group" key={activeGroup.key}>
             <div className="provider-group-title">
-              <strong>{group.title}</strong>
-              <span>{group.description}</span>
+              <strong>{activeGroup.title}</strong>
+              <span>{activeGroup.description}</span>
             </div>
             <div className="provider-radio-list">
-              {visibleProviders(group, showDisabled).map((provider) => {
+              {visibleProviders(activeGroup, showDisabled).map((provider) => {
                 const active = provider.provider_name === value;
                 return (
                   <button
                     type="button"
                     className={`provider-radio-option ${active ? "active" : ""} ${isDisabledProvider(provider) ? "disabled-provider" : ""}`}
                     key={provider.provider_name}
-                    onClick={() => onChange(provider.provider_name)}
+                    disabled={isDisabledProvider(provider)}
+                    onClick={() => {
+                      if (!isDisabledProvider(provider)) onChange(provider.provider_name);
+                    }}
                   >
                     <span className="provider-radio-dot" aria-hidden="true" />
                     <span className="provider-card-head">
@@ -39,13 +66,13 @@ export default function ProviderSelector({ providers = [], value, onChange, load
                 );
               })}
             </div>
-            {group.items.some(isDisabledProvider) && (
+            {activeGroup.items.some(isDisabledProvider) && (
               <button type="button" className="provider-collapse-button" onClick={() => setShowDisabled((value) => !value)}>
-                {showDisabled ? "Hide disabled baselines" : `Show ${group.items.filter(isDisabledProvider).length} disabled baseline(s)`}
+                {showDisabled ? "Hide disabled providers" : `Show ${activeGroup.items.filter(isDisabledProvider).length} disabled provider(s)`}
               </button>
             )}
           </section>
-        ))}
+        )}
       </div>
     </div>
   );
@@ -70,7 +97,8 @@ function readableStatus(status = "") {
 
 function providerKind(provider) {
   if (provider.provider_name?.includes("qwen") || provider.provider_name?.includes("llama")) return "Local Ollama testing";
-  if (provider.provider_name?.includes("gemini")) return "API / governed";
+  if (provider.provider_name === "gemini2.5_flash_lite") return "API / Gemini Flash Lite";
+  if (provider.provider_name?.includes("gemini")) return "API / governed legacy";
   if (provider.provider_type?.includes("baseline")) return "Baseline";
   if (provider.provider_type?.includes("huggingface")) return "Local Hugging Face";
   return provider.local_model === false || provider.provider_type === "api" ? "API provider" : "Local model";
@@ -81,6 +109,7 @@ function groupProviders(providers) {
     {
       key: "recommended",
       title: "Recommended testing providers",
+      shortTitle: "Recommended",
       description: "Best current fit for RAG-based doctor workflow testing.",
       match: (provider) => ["qwen2.5", "llama3.2"].includes(provider.provider_name),
       items: [],
@@ -88,6 +117,7 @@ function groupProviders(providers) {
     {
       key: "governed",
       title: "Governed API providers",
+      shortTitle: "API",
       description: "Use only with approved de-identified or governed data.",
       match: (provider) => provider.provider_name?.includes("gemini"),
       items: [],
@@ -95,6 +125,7 @@ function groupProviders(providers) {
     {
       key: "baselines",
       title: "Baselines",
+      shortTitle: "Baselines",
       description: "Comparison models. Disabled baselines stay collapsed until needed.",
       match: (provider) => true,
       items: [],
@@ -113,5 +144,12 @@ function visibleProviders(group, showDisabled) {
 }
 
 function isDisabledProvider(provider) {
-  return readableStatus(provider.status).includes("disabled") || readableStatus(provider.status).includes("cache issue");
+  const status = readableStatus(provider.status);
+  return (
+    status.includes("disabled")
+    || status.includes("cache issue")
+    || status.includes("needs config")
+    || status.includes("misconfigured")
+    || status.includes("governance")
+  );
 }

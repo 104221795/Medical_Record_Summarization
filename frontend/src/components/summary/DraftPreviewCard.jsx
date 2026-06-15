@@ -3,6 +3,7 @@ import Badge from "../common/Badge.jsx";
 import Button from "../common/Button.jsx";
 import Card from "../common/Card.jsx";
 import { formatDateTime, statusTone } from "../../utils/clinicalDisplay.js";
+import { formatClinicalDisplayLines } from "../../utils/clinicalTextFormat.js";
 
 export default function DraftPreviewCard({ summary }) {
   if (!summary) {
@@ -27,7 +28,7 @@ export default function DraftPreviewCard({ summary }) {
         <div><span>Generated</span><strong>{formatDateTime(summary.generated_at)}</strong></div>
       </div>
       <div className="draft-preview-text">
-        {summary.summary_text || "Draft summary text is unavailable."}
+        <FormattedClinicalText text={summary.summary_text || "Draft summary text is unavailable."} />
       </div>
       <div className="public-actions">
         <Link to={`/doctor/review/${summary.summary_id}`}>
@@ -35,6 +36,20 @@ export default function DraftPreviewCard({ summary }) {
         </Link>
       </div>
     </Card>
+  );
+}
+
+function FormattedClinicalText({ text }) {
+  const lines = formatClinicalDisplayLines(text);
+  return (
+    <div className="formatted-clinical-text">
+      {lines.map((line, index) => (
+        <span className={`formatted-clinical-line ${line.type}`} key={`${line.type}-${index}`}>
+          {line.type === "bullet" && <b aria-hidden="true">•</b>}
+          <span>{line.text}</span>
+        </span>
+      ))}
+    </div>
   );
 }
 

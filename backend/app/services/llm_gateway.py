@@ -32,16 +32,6 @@ PROVIDER_CATALOG: tuple[ProviderMetadata, ...] = (
         description="Fast extractive baseline for smoke tests and workflow validation.",
     ),
     ProviderMetadata(
-        provider_name="gemini",
-        display_name="Gemini governed provider",
-        model_name="gemini",
-        provider_type="external_llm",
-        requires_api_key=True,
-        local_model=False,
-        domain_fit="Configurable external provider",
-        description="Structured JSON provider with citation validation when API governance is configured.",
-    ),
-    ProviderMetadata(
         provider_name="qwen2.5",
         display_name="Qwen2.5 3B via Ollama",
         model_name="ollama/qwen2.5:3b",
@@ -131,8 +121,15 @@ class SummaryProviderGateway:
 
     def _provider_info(self, metadata: ProviderMetadata) -> ProviderInfo:
         status = metadata.default_status
-        if metadata.provider_name in {"gemini", "gemini2.5_flash_lite"} and not self.settings.gemini_api_key:
+        description = metadata.description
+        if metadata.provider_name == "gemini":
+            status, description = self._gemini_governed_status(metadata.description)
+        elif metadata.provider_name == "gemini2.5_flash_lite" and not self.settings.gemini_api_key:
             status = "configuration_required"
+            description = (
+                f"{metadata.description} Configure GEMINI_API_KEY or RAG_GEMINI_API_KEY "
+                "before using this gateway provider."
+            )
         if metadata.provider_type == "local_huggingface_seq2seq":
             cache_error = _cache_status_error()
             if cache_error:
@@ -148,8 +145,25 @@ class SummaryProviderGateway:
             requires_api_key=metadata.requires_api_key,
             local_model=metadata.local_model,
             domain_fit=metadata.domain_fit,
-            description=metadata.description,
+            description=description,
         )
+
+    def _gemini_governed_status(self, base_description: str) -> tuple[str, str]:
+        missing: list[str] = []
+        if self.settings.llm_provider != "gemini":
+            missing.append("RAG_LLM_PROVIDER=gemini")
+        if not self.settings.llm_external_enabled:
+            missing.append("RAG_LLM_EXTERNAL_ENABLED=true")
+        if not self.settings.llm_allow_phi_external:
+            missing.append("RAG_LLM_ALLOW_PHI_EXTERNAL=true")
+        if not self.settings.gemini_api_key:
+            missing.append("RAG_GEMINI_API_KEY or GEMINI_API_KEY")
+        if missing:
+            return (
+                "configuration_required",
+                f"{base_description} Missing governed Gemini setting(s): {', '.join(missing)}.",
+            )
+        return "available", base_description
 
 
 def _real_baselines_enabled() -> bool:

@@ -12,7 +12,8 @@ export default function SummaryQualityPanel({ summary }) {
   const unsupported = claims.filter((claim) => claim.support_status !== "supported");
   const missingDomains = missingRequiredDomains(claims);
   const citationCoverage = numeric(summary?.citation_coverage);
-  const reasons = flagReasons(summary, unsupported, missingDomains, citationCoverage);
+  const gate = summary?.retrieval_quality_gate || {};
+  const reasons = flagReasons(summary, unsupported, missingDomains, citationCoverage, gate);
 
   return (
     <Card
@@ -24,6 +25,7 @@ export default function SummaryQualityPanel({ summary }) {
         <QualityMetric label="Citation coverage" value={citationCoverage == null ? "n/a" : citationCoverage.toFixed(2)} tone={citationCoverage >= 0.9 ? "success" : "warning"} />
         <QualityMetric label="Unsupported claims" value={unsupported.length} tone={unsupported.length ? "danger" : "success"} />
         <QualityMetric label="Conflicts" value={summary?.conflict_count ?? 0} tone={Number(summary?.conflict_count || 0) ? "danger" : "success"} />
+        <QualityMetric label="Retrieval gate" value={gate.status || "n/a"} tone={gateTone(gate.status)} />
         <QualityMetric label="Provider" value={summary?.model_provider || "n/a"} tone="info" />
         <QualityMetric label="Review status" value={summary?.status || "not loaded"} tone={summary?.status === "approved" ? "success" : "warning"} />
       </div>
@@ -76,8 +78,23 @@ function missingRequiredDomains(claims) {
     .map((domain) => domain.key);
 }
 
-function flagReasons(summary, unsupported, missingDomains, citationCoverage) {
+function flagReasons(summary, unsupported, missingDomains, citationCoverage, gate = {}) {
   const reasons = [];
+  if (gate.status && gate.status !== "pass") {
+    reasons.push(`Retrieval quality gate status is ${gate.status}; review retrieved evidence before approval.`);
+  }
+  (gate.missing_required_sections || []).forEach((section) => {
+    reasons.push(`${section.toLowerCase()} retrieval evidence is missing from the RAG context.`);
+  });
+  (gate.missing_optional_sections || []).forEach((section) => {
+    reasons.push(`${section.toLowerCase()} retrieval evidence was weak or absent.`);
+  });
+  (gate.scope_errors || []).slice(0, 2).forEach((issue) => {
+    reasons.push(issue);
+  });
+  if ((gate.conflict_evidence || []).length) {
+    reasons.push(`${gate.conflict_evidence.length} possible conflict evidence item(s) were retrieved.`);
+  }
   if (citationCoverage != null && citationCoverage < 0.9) {
     reasons.push(`Citation coverage is ${citationCoverage.toFixed(2)}, below the 0.90 doctor-review target.`);
   }
@@ -91,6 +108,13 @@ function flagReasons(summary, unsupported, missingDomains, citationCoverage) {
     reasons.push(`${domain} evidence is missing or not cited in the generated draft.`);
   });
   return reasons;
+}
+
+function gateTone(status = "") {
+  if (status === "pass") return "success";
+  if (status === "fail") return "danger";
+  if (status === "warning") return "warning";
+  return "info";
 }
 
 function numeric(value) {

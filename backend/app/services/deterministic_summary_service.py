@@ -43,8 +43,10 @@ from ..persistence_schemas import (
 )
 from ..repositories import SummaryRepository
 from .audit_service import AuditService
+from .doctor_rag_workflow import DoctorRagError, DoctorRagWorkflow
 from .generators import GeminiJsonClient, GenerationError
 from .persistence_common import PersistedResourceNotFoundError
+from .rag import RagService
 from .safety_service import SafetyResult, SafetyService
 from .summary_providers import (
     BartProvider,
@@ -190,6 +192,7 @@ class DeterministicSummaryService:
         settings: Settings | None = None,
         gemini_client: GeminiJsonClient | None = None,
         model_providers: dict[str, SummaryProvider] | None = None,
+        rag_service: RagService | None = None,
     ):
         self.repository = repository
         self.safety_service = safety_service
@@ -197,6 +200,7 @@ class DeterministicSummaryService:
         self.settings = settings
         self.gemini_client = gemini_client
         self.model_providers = model_providers or {}
+        self.rag_workflow = DoctorRagWorkflow(rag_service) if rag_service is not None else None
 
     def generate(
         self,
@@ -487,11 +491,12 @@ class DeterministicSummaryService:
         assert self.settings.gemini_api_key is not None
 
         prompt_template = self._load_prompt_template(request.summary_type)
-        evidence_pack, citation_lookup = self._build_evidence_pack(
+        evidence_pack, citation_lookup, rag_metadata = self._build_generation_evidence_pack(
             patient,
             encounter,
             context,
             request,
+            tenant_id=tenant_id,
         )
         context_hash = hashlib.sha256(
             json.dumps(evidence_pack, sort_keys=True, default=_json_default).encode("utf-8")
@@ -556,6 +561,8 @@ class DeterministicSummaryService:
                 "temperature": self.settings.llm_temperature,
                 "require_citations": request.options.require_citations,
                 "include_safety_check": request.options.include_safety_check,
+                "generation_flow": _generation_flow(rag_metadata),
+                "rag": rag_metadata,
             },
         )
         self.repository.add_model_run(model_run)
@@ -626,11 +633,12 @@ class DeterministicSummaryService:
         regeneration_reason: str | None,
         started: float,
     ) -> SummaryGenerateResponse:
-        evidence_pack, citation_lookup = self._build_evidence_pack(
+        evidence_pack, citation_lookup, rag_metadata = self._build_generation_evidence_pack(
             patient,
             encounter,
             context,
             request,
+            tenant_id=tenant_id,
         )
         context_hash = hashlib.sha256(
             json.dumps(evidence_pack, sort_keys=True, default=_json_default).encode("utf-8")
@@ -687,10 +695,12 @@ class DeterministicSummaryService:
             status="completed",
             run_metadata={
                 "llm_used": True,
-                "provider_path": f"baseline/{provider_name}",
+                "provider_path": f"rag_doctor_workflow/{provider_name}" if rag_metadata else f"baseline/{provider_name}",
                 "normalization": "sentence_overlap_citation",
                 "require_citations": request.options.require_citations,
                 "include_safety_check": request.options.include_safety_check,
+                "generation_flow": _generation_flow(rag_metadata),
+                "rag": rag_metadata,
                 "raw_output": provider_output.raw_output,
             },
         )
@@ -764,6 +774,41 @@ class DeterministicSummaryService:
         self.model_providers[provider_name] = provider
         return provider
 
+    def _build_generation_evidence_pack(
+        self,
+        patient: Patient,
+        encounter: Encounter | None,
+        context: dict[str, list],
+        request: SummaryGenerateRequest,
+        *,
+        tenant_id: str,
+    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]:
+        if self.rag_workflow is None:
+            evidence_pack, citation_lookup = self._build_evidence_pack(patient, encounter, context, request)
+            return evidence_pack, citation_lookup, None
+        try:
+            rag_result = self.rag_workflow.build_evidence_pack(
+                tenant_id=tenant_id,
+                patient=patient,
+                encounter=encounter,
+                context=context,
+                summary_type=request.summary_type,
+                language=request.language,
+            )
+        except DoctorRagError as exc:
+            raise SummaryGenerationError(str(exc)) from exc
+        metadata = {
+            "enabled": True,
+            "workflow": (
+                "patient/encounter scoped notes -> chunking -> MiniLM embedding -> Qdrant retrieval "
+                "-> clinical context builder -> provider generation -> citation validation -> doctor review"
+            ),
+            "ingestion": rag_result.ingestion,
+            "quality_gate": rag_result.quality_gate.model_dump(),
+            "retrieval_config": rag_result.evidence_pack.get("retrieval_config", {}),
+        }
+        return rag_result.evidence_pack, rag_result.citation_lookup, metadata
+
     def _load_prompt_template(self, summary_type: str) -> dict[str, Any]:
         if self.settings is None:
             raise SummaryGenerationError("Prompt templates require application settings.")
@@ -801,9 +846,16 @@ class DeterministicSummaryService:
                 f"Summary type: {request.summary_type}",
                 f"Language: {request.language}",
                 (
-                    "Use only source_id values present in evidence_pack.evidence. "
-                    "If a clinical statement has no direct source_id, set support_status "
-                    "to unsupported or insufficient_evidence and place it in Needs Clinician Review."
+                    "Citation rules are mandatory. For every supported clinical claim, copy one or "
+                    "more exact source_id strings from evidence_pack.evidence into citation_ids. "
+                    "Use the full identifier exactly as written, including prefixes such as "
+                    "patient:, encounter:, condition:, medication:, observation:, diagnostic_report:, "
+                    "or chunk:. Do not translate, shorten, reformat, or invent source IDs. "
+                    "Also end the claim_text with the same source_id in square brackets so clinicians "
+                    "can visually audit the citation. Vietnamese clinical text is allowed, but source_id "
+                    "strings must remain unchanged ASCII identifiers. If a clinical statement has no "
+                    "direct exact source_id, set support_status to unsupported or insufficient_evidence, "
+                    "leave citation_ids empty, and place it in Needs Clinician Review."
                 ),
                 "Structured clinical context v2 JSON:",
                 json.dumps(
@@ -1087,11 +1139,7 @@ class DeterministicSummaryService:
                 section_type = "needs_clinician_review"
             target_section = sections[section_type]
             for generated_claim in generated_section.claims:
-                citations = [
-                    citation_lookup[source_id]
-                    for source_id in generated_claim.citation_ids
-                    if source_id in citation_lookup
-                ]
+                citations = _resolve_gemini_claim_citations(generated_claim, citation_lookup)
                 support_status = ClaimSupportStatus(generated_claim.support_status)
                 clinical_risk_level = _risk_level(
                     generated_claim.claim_type,
@@ -1222,7 +1270,7 @@ class DeterministicSummaryService:
         direct_sources = [
             citation
             for source_id, citation in citation_lookup.items()
-            if f"[{source_id}]" in claim_text or f"({source_id})" in claim_text
+            if _claim_contains_citation_alias(claim_text, source_id, citation)
         ]
         if direct_sources:
             return direct_sources[:2]
@@ -1575,6 +1623,8 @@ class DeterministicSummaryService:
             unsupported_claim_count=summary.unsupported_claim_count,
             conflict_count=summary.conflict_count,
             generated_at=summary.generated_at,
+            generation_flow=_summary_generation_flow(summary),
+            retrieval_quality_gate=_summary_retrieval_quality_gate(summary),
         )
 
     def _summary_detail(self, summary: Summary) -> SummaryDetailResponse:
@@ -1618,6 +1668,9 @@ class DeterministicSummaryService:
             latest_review_comment=latest_review.comment if latest_review else None,
             latest_edit_distance_score=latest_edit.edit_distance_score if latest_edit else None,
             citation_revalidation_required=latest_edit is not None and summary.status == SummaryStatus.EDITED,
+            generation_flow=_summary_generation_flow(summary),
+            retrieval_quality_gate=_summary_retrieval_quality_gate(summary),
+            model_run_metadata=_summary_model_run_metadata(summary),
             sections=[
                 SummarySectionResponse(
                     section_id=section.section_id,
@@ -1672,6 +1725,29 @@ def _model_provider_label(model_run: ModelRun | None) -> str | None:
     if model_run.provider == "local":
         return "deterministic"
     return model_run.provider
+
+
+def _generation_flow(rag_metadata: dict[str, Any] | None) -> str:
+    return "flow_2_rag_minilm_qdrant" if rag_metadata else "flow_1_5_structured_context"
+
+
+def _summary_model_run_metadata(summary: Summary) -> dict[str, Any]:
+    if summary.model_run is None or not isinstance(summary.model_run.run_metadata, dict):
+        return {}
+    return summary.model_run.run_metadata
+
+
+def _summary_generation_flow(summary: Summary) -> str | None:
+    metadata = _summary_model_run_metadata(summary)
+    value = metadata.get("generation_flow")
+    return str(value) if value else None
+
+
+def _summary_retrieval_quality_gate(summary: Summary) -> dict[str, Any]:
+    metadata = _summary_model_run_metadata(summary)
+    rag = metadata.get("rag") if isinstance(metadata.get("rag"), dict) else {}
+    quality_gate = rag.get("quality_gate") if isinstance(rag, dict) else {}
+    return quality_gate if isinstance(quality_gate, dict) else {}
 
 
 def _chunk_citation(chunk: DocumentChunk, confidence: Decimal) -> CitationDraft:
@@ -2002,6 +2078,76 @@ def _normalize_citation_ids(value: Any) -> list[str]:
     return citation_ids
 
 
+def _resolve_gemini_claim_citations(
+    generated_claim: GeminiPersistedClaim,
+    citation_lookup: dict[str, CitationDraft],
+) -> list[CitationDraft]:
+    candidates = [
+        *_normalize_citation_ids(generated_claim.citation_ids),
+        *_extract_inline_citation_ids(generated_claim.claim_text),
+    ]
+    citations: list[CitationDraft] = []
+    seen_source_ids: set[str] = set()
+    for candidate in candidates:
+        source_id = _resolve_citation_source_id(candidate, citation_lookup)
+        if source_id is None or source_id in seen_source_ids:
+            continue
+        citations.append(citation_lookup[source_id])
+        seen_source_ids.add(source_id)
+    return citations
+
+
+def _extract_inline_citation_ids(text: str) -> list[str]:
+    citation_ids: list[str] = []
+    for raw_candidate in re.findall(r"[\[\(]([A-Za-z0-9][A-Za-z0-9:_./-]{5,})[\]\)]", text):
+        for candidate in re.split(r"[,;]\s*", raw_candidate):
+            clean = candidate.strip()
+            if clean:
+                citation_ids.append(clean)
+    return citation_ids
+
+
+def _resolve_citation_source_id(
+    candidate: str,
+    citation_lookup: dict[str, CitationDraft],
+) -> str | None:
+    clean = _clean_citation_candidate(candidate)
+    if not clean:
+        return None
+    if clean in citation_lookup:
+        return clean
+
+    lowered = clean.casefold()
+    bare = lowered.split(":", 1)[1] if ":" in lowered else lowered
+    for source_id, citation in citation_lookup.items():
+        aliases = _citation_aliases(source_id, citation)
+        if lowered in aliases or bare in aliases:
+            return source_id
+    return None
+
+
+def _clean_citation_candidate(candidate: str) -> str:
+    return str(candidate or "").strip().strip("[](){}.,;: ")
+
+
+def _citation_aliases(source_id: str, citation: CitationDraft) -> set[str]:
+    aliases = {source_id.casefold()}
+    if ":" in source_id:
+        aliases.add(source_id.split(":", 1)[1].casefold())
+    for value in (
+        citation.source_document_id,
+        citation.source_chunk_id,
+        citation.source_condition_id,
+        citation.source_observation_id,
+        citation.source_medication_id,
+        citation.source_report_id,
+        citation.source_record_id,
+    ):
+        if value:
+            aliases.add(str(value).casefold())
+    return aliases
+
+
 def _normalize_confidence_score(value: Any) -> Decimal | None:
     if value is None or value == "":
         return None
@@ -2125,6 +2271,38 @@ def _token_set(text: str) -> set[str]:
         for token in re.findall(r"[\wÀ-ỹ]+", text.casefold(), flags=re.UNICODE)
         if len(token) > 2 and token not in {"the", "and", "for", "with", "patient"}
     }
+
+
+def _claim_contains_citation_alias(
+    claim_text: str,
+    source_id: str,
+    citation: CitationDraft,
+) -> bool:
+    haystack = claim_text.casefold()
+    aliases = {source_id}
+    if ":" in source_id:
+        aliases.add(source_id.split(":", 1)[1])
+    for value in (
+        citation.source_document_id,
+        citation.source_chunk_id,
+        citation.source_condition_id,
+        citation.source_observation_id,
+        citation.source_medication_id,
+        citation.source_report_id,
+        citation.source_record_id,
+    ):
+        if value:
+            aliases.add(str(value))
+    for alias in aliases:
+        clean = str(alias or "").strip()
+        if not clean:
+            continue
+        lowered = clean.casefold()
+        if f"[{lowered}]" in haystack or f"({lowered})" in haystack:
+            return True
+        if re.search(rf"(?<![a-z0-9]){re.escape(lowered)}(?![a-z0-9])", haystack):
+            return True
+    return False
 
 
 def _infer_claim_type(text: str) -> str:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -14,7 +15,8 @@ from backend.app.db.session import create_db_engine, create_session_factory
 from backend.app.main import create_app
 from backend.app.models import AuditLog, ModelRun, Summary, SummaryStatus
 from backend.app.services.rag import build_rag_service
-from backend.app.services.summary_providers import ProviderOutput, SummaryProvider
+from backend.app.services.llm_gateway import SummaryProviderGateway
+from backend.app.services.summary_providers import ProviderOutput, SummaryProvider, _gateway_prompt
 from backend.tests.summary_test_utils import HEADERS, api_client, import_patient
 
 
@@ -255,3 +257,44 @@ def test_invalid_model_provider_returns_validation_error(api_client) -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_provider_catalog_hides_legacy_governed_gemini(tmp_path: Path) -> None:
+    settings = Settings(
+        environment="test",
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'providers.db'}",
+        qdrant_path=tmp_path / "qdrant",
+        gemini_api_key="fake-key",
+    )
+
+    providers = SummaryProviderGateway(settings).list_providers().providers
+    provider_names = {provider.provider_name for provider in providers}
+
+    assert "gemini2.5_flash_lite" in provider_names
+    assert "gemini" not in provider_names
+
+
+def test_gemini_flash_prompt_requires_english_and_exact_citations() -> None:
+    prompt = _gateway_prompt(
+        "gemini2.5_flash_lite",
+        patient=SimpleNamespace(patient_id="patient-001"),
+        encounter=SimpleNamespace(encounter_id="encounter-001"),
+        evidence_pack={
+            "patient_id": "patient-001",
+            "encounter_id": "encounter-001",
+            "evidence": [
+                {
+                    "source_id": "chunk:abc-123",
+                    "source_type": "document_chunk",
+                    "text": "Patient reports fatigue during the visit.",
+                }
+            ],
+        },
+        summary_type="patient_snapshot",
+        language="vi",
+    )
+
+    assert "final clinical summary language=English" in prompt
+    assert "Do not use Vietnamese wording" in prompt
+    assert "cite it as [chunk:abc]" in prompt
+    assert "(chunk:abc-123) Patient reports fatigue during the visit." in prompt

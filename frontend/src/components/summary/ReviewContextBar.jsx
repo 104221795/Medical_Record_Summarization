@@ -9,7 +9,7 @@ export default function ReviewContextBar({ summary, patient }) {
       <ContextItem label="Provider" value={summary?.model_provider || summary?.model_name || "not available"} />
       <div className="context-item">
         <span>Flow</span>
-        <strong className="context-pill info">Evidence-first</strong>
+        <strong className="context-pill info">{flowLabel(summary?.generation_flow)}</strong>
       </div>
       <div className="context-item">
         <span>Review status</span>
@@ -34,4 +34,10 @@ function compactId(value = "") {
   const text = String(value || "");
   if (!text || text.length <= 18) return text;
   return `${text.slice(0, 8)}...${text.slice(-6)}`;
+}
+
+function flowLabel(value = "") {
+  if (value === "flow_2_rag_minilm_qdrant") return "Flow 2 RAG";
+  if (value === "flow_1_5_structured_context") return "Flow 1.5";
+  return "Evidence-first";
 }

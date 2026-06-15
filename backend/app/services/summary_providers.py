@@ -168,6 +168,7 @@ class GatewayClinicalProvider(SummaryProvider):
         except LLMGatewayError as exc:
             raise ProviderExecutionError(str(exc)) from exc
         generated = clean_gateway_output(generated)
+        generated = _normalize_structured_provider_text(generated)
         if not generated:
             raise ProviderExecutionError(f"{self.provider_name} returned empty output.")
         sections = _structured_sections_from_output(generated)
@@ -416,8 +417,11 @@ def _gateway_prompt(
         )
     elif provider_name == "gemini2.5_flash_lite":
         style_rules = (
-            "Be citation-aware and safety-heavy. Flag unknowns and unsupported claims visibly. "
-            "Prefer incomplete-but-grounded output over fluent unsupported output."
+            "Use the same strict evidence-grounded style as the local Qwen/Llama RAG providers. "
+            "Write the final draft in English only, even when the UI request language is not English. "
+            "Do not translate section headings, source identifiers, medications, diagnoses, or evidence IDs. "
+            "Prefer short, extractive clinical bullets over fluent paraphrases. If a fact cannot be tied "
+            "to an exact source_id, omit it from clinical sections and list it under Unknown / Missing Evidence."
         )
     else:
         style_rules = "Use concise, evidence-grounded clinical language."
@@ -427,7 +431,7 @@ def _gateway_prompt(
     return "\n\n".join(
         [
             "You are a strict, clinically precise RAG extraction and summarization engine.",
-            f"Task: create a {summary_type} draft in language={language}.",
+            f"Task: create a {summary_type} draft. Requested UI language={language}; final clinical summary language=English.",
             f"Patient scope: patient_id={patient_id}; encounter_scope={encounter_id}.",
             style_rules,
             "Critical rules:",
@@ -436,7 +440,12 @@ def _gateway_prompt(
             "3. If diagnosis, medication, timeline, diagnostics, assessment, or plan evidence is missing, say Unknown / not retrieved.",
             "4. Keep timeline facts separate from future plan facts.",
             "5. Do not infer absence. Missing retrieved evidence means unknown, not negative.",
-            "6. This is a draft for clinician review, not clinical advice.",
+            "6. Put each section heading and each bullet on its own line. Do not return one long paragraph.",
+            "7. Copy source_id values exactly as they appear, including prefixes such as chunk:, condition:, medication:, or observation:.",
+            "8. This is a draft for clinician review, not clinical advice.",
+            "9. Do not use Vietnamese wording unless it is an exact quote from the source evidence.",
+            "10. Do not output standalone disclaimers as clinical claims; the application already marks all summaries as draft-only.",
+            "11. If a context item starts with (chunk:abc), cite it as [chunk:abc], not [abc].",
             "[STRUCTURED_CLINICAL_CONTEXT_V2]",
             rendered_context,
             "Return exactly these sections:",
@@ -536,6 +545,7 @@ def _render_context_sections(sections: dict[str, list[str]]) -> str:
 
 
 def _structured_sections_from_output(text: str) -> list[ProviderSectionOutput]:
+    text = _normalize_structured_provider_text(text)
     matches = list(re.finditer(r"^\[(?P<title>[^\]]+)\]\s*$", text, flags=re.MULTILINE))
     if not matches:
         claims = [line.strip("- ").strip() for line in text.splitlines() if line.strip("- ").strip()]
@@ -567,6 +577,72 @@ def _structured_sections_from_output(text: str) -> list[ProviderSectionOutput]:
             )
         )
     return sections
+
+
+STRUCTURED_SECTION_TITLES = (
+    "Patient Snapshot",
+    "Diagnosis Evidence",
+    "Medication Evidence",
+    "Timeline Evidence",
+    "Diagnostics Evidence",
+    "Assessment Evidence",
+    "Plan Evidence",
+    "Unknown / Missing Evidence",
+    "Active Problems",
+    "Recent Clinical Course",
+    "Medications",
+    "Labs and Imaging Highlights",
+    "Needs Clinician Review",
+    "DIAGNOSIS_FACTS",
+    "MEDICATIONS_FACTS",
+    "TIMELINE_FACTS",
+    "ASSESSMENT_FACTS",
+    "PLAN_FACTS",
+    "DIAGNOSTICS_FACTS",
+)
+STRUCTURED_SECTION_RE = re.compile(
+    r"\[\s*(" + "|".join(re.escape(title) for title in STRUCTURED_SECTION_TITLES) + r")\s*\]",
+    re.I,
+)
+
+
+def _normalize_structured_provider_text(text: str) -> str:
+    compact = str(text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not compact:
+        return ""
+    compact = STRUCTURED_SECTION_RE.sub(lambda match: f"\n[{_canonical_section_title(match.group(1))}]\n", compact)
+    lines: list[str] = []
+    for raw_line in compact.splitlines():
+        line = re.sub(r"[ \t]+", " ", raw_line).strip()
+        if not line:
+            continue
+        if STRUCTURED_SECTION_RE.fullmatch(line):
+            lines.append(line)
+            continue
+        bullet_parts = [part.strip() for part in re.split(r"\s+-\s+", line) if part.strip()]
+        if len(bullet_parts) > 1:
+            for part in bullet_parts:
+                lines.append(f"- {part.lstrip('- ').strip()}")
+        elif line.startswith(("- ", "* ", "• ")):
+            lines.append(f"- {line[2:].strip()}")
+        else:
+            lines.append(line)
+    return "\n".join(_dedupe_adjacent_blank(lines)).strip()
+
+
+def _canonical_section_title(title: str) -> str:
+    normalized = title.strip()
+    lookup = {item.casefold(): item for item in STRUCTURED_SECTION_TITLES}
+    return lookup.get(normalized.casefold(), normalized)
+
+
+def _dedupe_adjacent_blank(lines: list[str]) -> list[str]:
+    result: list[str] = []
+    for line in lines:
+        if not line and (not result or not result[-1]):
+            continue
+        result.append(line)
+    return result
 
 
 def _section_type_from_title(title: str) -> str:
