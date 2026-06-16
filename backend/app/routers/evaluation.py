@@ -12,9 +12,12 @@ from ..persistence_schemas import (
     BenchmarkStatusResponse,
     EvaluationStatusResponse,
     FunctionalValidationResponse,
+    HumanEvaluationAnalyticsResponse,
     HumanEvaluationCreateRequest,
+    HumanEvaluationExportResponse,
     HumanEvaluationListResponse,
     HumanEvaluationResponse,
+    HumanEvaluationRubricResponse,
     HumanEvaluationSummaryResponse,
 )
 from ..services.evaluation_service import EvaluationService
@@ -106,6 +109,32 @@ def human_evaluation_summary(
     service: Annotated[EvaluationService, Depends(get_evaluation_service)],
 ) -> HumanEvaluationSummaryResponse:
     return service.human_summary()
+
+
+@router.get("/human/rubric", response_model=HumanEvaluationRubricResponse)
+def human_evaluation_rubric(
+    _context: Annotated[RequestContext, Depends(get_request_context)],
+    service: Annotated[EvaluationService, Depends(get_evaluation_service)],
+) -> HumanEvaluationRubricResponse:
+    return service.human_rubric()
+
+
+@router.get("/human/analytics", response_model=HumanEvaluationAnalyticsResponse)
+def human_evaluation_analytics(
+    _context: Annotated[RequestContext, Depends(get_request_context)],
+    service: Annotated[EvaluationService, Depends(get_evaluation_service)],
+) -> HumanEvaluationAnalyticsResponse:
+    return service.human_analytics()
+
+
+@router.get("/human/export", response_model=HumanEvaluationExportResponse)
+def human_evaluation_export(
+    _context: Annotated[RequestContext, Depends(get_request_context)],
+    service: Annotated[EvaluationService, Depends(get_evaluation_service)],
+    include_text: Annotated[bool, Query()] = False,
+    limit: Annotated[int, Query(ge=1, le=5000)] = 500,
+) -> HumanEvaluationExportResponse:
+    return service.human_export(include_text=include_text, limit=limit)
 
 
 @router.get("/human/by-summary/{summary_id}", response_model=HumanEvaluationListResponse)

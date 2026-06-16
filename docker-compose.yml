@@ -1,0 +1,59 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      RAG_ENVIRONMENT: staging
+      RAG_DATABASE_URL: postgresql+psycopg://clin_summ:clin_summ_dev@db:5432/clin_summ
+      RAG_AUTH_SECRET_KEY: local-compose-change-me
+      RAG_CORS_ORIGINS: http://127.0.0.1:8080,http://localhost:8080
+      RAG_EMBEDDING_PROVIDER: hashing
+      RAG_QDRANT_COLLECTION: clinical_record_chunks
+      RAG_JOB_BACKEND: in_process
+      RAG_REDIS_URL: redis://redis:6379/0
+      RAG_RQ_REQUIRE_LIVE_WORKER: "false"
+      RAG_EVALUATION_ARTIFACT_ROOT: /app/artifacts
+      HF_HOME: /tmp/hf_cache
+      HF_HUB_CACHE: /tmp/hf_cache/hub
+      HF_DATASETS_CACHE: /tmp/hf_cache/datasets
+      TRANSFORMERS_CACHE: /tmp/hf_cache/hub
+      VITE_API_PREFIX: /api/v1
+      PORT: 8080
+    command: >
+      sh -c "python -m alembic -c alembic.ini upgrade head
+      && python -m uvicorn backend.app.main:app --host 0.0.0.0 --port $${PORT:-8080}"
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - app_artifacts:/app/artifacts
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: clin_summ
+      POSTGRES_PASSWORD: clin_summ_dev
+      POSTGRES_DB: clin_summ
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clin_summ -d clin_summ"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_data:
+  app_artifacts:

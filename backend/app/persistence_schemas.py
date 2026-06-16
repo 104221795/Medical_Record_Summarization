@@ -361,6 +361,15 @@ class AuditLogListResponse(PersistenceModel):
     pagination: PaginationResponse
 
 
+class AuditExportResponse(PersistenceModel):
+    export_version: str
+    generated_at: datetime
+    phi_safe: bool
+    row_count: int
+    filters: dict[str, Any] = Field(default_factory=dict)
+    items: list[AuditLogResponse]
+
+
 class AuthLoginRequest(PersistenceModel):
     user_id: str | None = Field(default=None, min_length=2, max_length=128)
     email: str | None = Field(default=None, min_length=3, max_length=255)
@@ -621,6 +630,77 @@ class HumanEvaluationListResponse(PersistenceModel):
     evaluations: list[HumanEvaluationResponse]
 
 
+class HumanEvaluationRubricDimension(PersistenceModel):
+    key: str
+    label: str
+    description: str
+    score_1: str
+    score_3: str
+    score_5: str
+
+
+class HumanEvaluationRubricResponse(PersistenceModel):
+    rubric_version: str
+    scoring_scale: str
+    dimensions: list[HumanEvaluationRubricDimension]
+    hallucination_risk_options: list[str]
+    approve_reject_reason_options: list[str]
+    required_fields: list[str]
+    export_fields: list[str]
+
+
+class HumanEvaluationAnalyticsResponse(PersistenceModel):
+    total_reviews: int
+    approvals: int
+    rejections: int
+    edits: int
+    final_locked_approved_summaries: int
+    rejection_reasons_distribution: list[MetricCountItem]
+    reviewer_activity: list[MetricCountItem]
+    average_edit_distance: float | None
+    human_evaluation_count: int
+    human_evaluations_by_provider: list[MetricCountItem]
+    hallucination_risk_distribution: list[MetricCountItem]
+
+
+class HumanEvaluationExportRow(PersistenceModel):
+    evaluation_id: uuid.UUID
+    summary_id: uuid.UUID
+    patient_id: uuid.UUID
+    encounter_id: uuid.UUID | None = None
+    summary_status: str
+    final_locked: bool
+    model_provider: str | None = None
+    model_name: str | None = None
+    evaluator_id: str | None = None
+    evaluator_name: str | None = None
+    reviewer_signature: str | None = None
+    latest_review_action: str | None = None
+    latest_rejection_reason: str | None = None
+    factual_correctness_score: int
+    completeness_score: int
+    conciseness_score: int
+    readability_score: int
+    citation_usefulness_score: int
+    hallucination_risk: str
+    comments: str | None = None
+    citation_coverage: Decimal | None = None
+    unsupported_claim_count: int
+    conflict_count: int
+    edit_distance_score: Decimal | None = None
+    edit_diff_summary: dict[str, Any] = Field(default_factory=dict)
+    generated_summary_text: str | None = None
+    final_reviewed_summary_text: str | None = None
+    created_at: datetime
+
+
+class HumanEvaluationExportResponse(PersistenceModel):
+    export_version: str
+    row_count: int
+    include_text: bool
+    rows: list[HumanEvaluationExportRow]
+
+
 class SummaryGenerateOptions(PersistenceModel):
     require_citations: bool = True
     include_safety_check: bool = True
@@ -737,7 +817,13 @@ class BenchmarkFlowComparisonResponse(PersistenceModel):
 
 
 class ModelJobCreateRequest(PersistenceModel):
-    job_type: Literal["summarization_generation", "model_warmup"] = "model_warmup"
+    job_type: Literal[
+        "summarization_generation",
+        "summary_generation",
+        "model_warmup",
+        "provider_healthcheck",
+        "cache_readiness",
+    ] = "model_warmup"
     model_provider: str = Field(default="bart", min_length=1, max_length=100)
     model_name: str = Field(default="facebook/bart-large-cnn", min_length=1, max_length=255)
     timeout_seconds: int = Field(default=900, ge=1, le=24 * 60 * 60)
@@ -751,6 +837,7 @@ class ModelJobResponse(PersistenceModel):
     model_name: str
     status: Literal["queued", "running", "completed", "failed", "cancelled", "timed_out"]
     progress: float = Field(ge=0.0, le=1.0)
+    current_step: str | None = None
     created_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None
@@ -764,8 +851,11 @@ class ModelJobListResponse(PersistenceModel):
 
 
 class ModelReadinessResponse(PersistenceModel):
-    cache_paths: dict[str, str | None]
+    cache_paths: dict[str, Any]
     models: list[dict[str, Any]]
+    queue_backend: str = "in_process"
+    queue_name: str | None = None
+    queue_status: dict[str, Any] = Field(default_factory=dict)
 
 
 class SummaryGenerateRequest(PersistenceModel):
@@ -980,6 +1070,8 @@ class SummaryReviewActionResponse(PersistenceModel):
     final_locked: bool = False
     reviewer_signature: str | None = None
     audit_trail_ready: bool = True
+    edit_diff: list[dict[str, str | None]] = Field(default_factory=list)
+    edit_diff_summary: dict[str, Any] = Field(default_factory=dict)
 
 
 class SummaryReviewResponse(PersistenceModel):
@@ -997,6 +1089,8 @@ class SummaryReviewResponse(PersistenceModel):
     reviewed_at: datetime
     reviewer_signature: str | None = None
     audit_trail_ready: bool = True
+    edit_diff: list[dict[str, str | None]] = Field(default_factory=list)
+    edit_diff_summary: dict[str, Any] = Field(default_factory=dict)
 
 
 class SummaryReviewListResponse(PersistenceModel):

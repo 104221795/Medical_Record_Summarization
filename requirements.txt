@@ -13,6 +13,8 @@ psutil>=6,<8
 python-dotenv
 python-multipart>=0.0.18,<1
 qdrant-client>=1.12,<2
+redis>=5,<6
+rq>=1.16,<3
 sqlalchemy>=2.0,<3
 tiktoken
 tqdm>=4.66,<5

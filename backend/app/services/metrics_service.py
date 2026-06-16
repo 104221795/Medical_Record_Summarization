@@ -15,6 +15,7 @@ from ..persistence_schemas import (
     UsageMetricsResponse,
 )
 from ..repositories import MetricsRepository
+from .citation_scope import validate_summary_citation_scope
 
 
 METRICS_VIEW_ROLES = {"clinical_admin", "it_admin", "auditor", "ai_safety_reviewer"}
@@ -109,10 +110,27 @@ class MetricsService:
             if _requires_citation(claim.claim_type) and not claim.citations
         )
         critical_hallucination_proxy_count = _critical_hallucination_proxy_count(claims)
+        citation_scope_violations = [
+            violation
+            for summary in summaries
+            for violation in validate_summary_citation_scope(summary, self.repository.session)
+        ]
+        wrong_patient_retrieval_count = sum(
+            1
+            for violation in citation_scope_violations
+            if violation.violation_type == "wrong_patient"
+        )
+        wrong_encounter_citation_count = sum(
+            1
+            for violation in citation_scope_violations
+            if violation.violation_type == "wrong_encounter"
+        )
         safety_gate_status = self._safety_gate(
             summaries=summaries,
             citation_average=citation_average,
             critical_hallucination_proxy_count=critical_hallucination_proxy_count,
+            wrong_patient_retrieval_count=wrong_patient_retrieval_count,
+            wrong_encounter_citation_count=wrong_encounter_citation_count,
         )
         return SafetyMetricsResponse(
             citation_coverage_average=citation_average,
@@ -124,7 +142,7 @@ class MetricsService:
             weak_citation_count=weak_citation_count,
             missing_citation_count=missing_citation_count,
             critical_hallucination_proxy_count=critical_hallucination_proxy_count,
-            wrong_patient_retrieval_count="not_available",
+            wrong_patient_retrieval_count=wrong_patient_retrieval_count,
             safety_gate_status=safety_gate_status,
         )
 
@@ -223,6 +241,8 @@ class MetricsService:
         summaries: list[Summary],
         citation_average: float | None,
         critical_hallucination_proxy_count: int,
+        wrong_patient_retrieval_count: int,
+        wrong_encounter_citation_count: int,
     ) -> SafetyGateResponse:
         approved_without_doctor = sum(
             1
@@ -239,10 +259,17 @@ class MetricsService:
             ),
             SafetyGateItem(
                 name="wrong_patient_retrieval",
-                status="not_available",
-                value="not_available",
+                status="pass" if wrong_patient_retrieval_count == 0 else "fail",
+                value=wrong_patient_retrieval_count,
                 threshold=0,
-                explanation="Wrong-patient retrieval events are not tracked by the current MVP schema.",
+                explanation="Citation sources must belong to the same patient as the draft summary.",
+            ),
+            SafetyGateItem(
+                name="encounter_scope_enforcement",
+                status="pass" if wrong_encounter_citation_count == 0 else "fail",
+                value=wrong_encounter_citation_count,
+                threshold=0,
+                explanation="Encounter-specific citation sources must match the summary encounter.",
             ),
             _citation_gate(citation_average),
             audit_coverage,

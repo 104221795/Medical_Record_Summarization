@@ -1,5 +1,7 @@
 # Local configuration and generated experiment artifacts
 .env
+.env.*
+!.env.example
 .venv/
 __pycache__/
 *.py[cod]
@@ -16,6 +18,9 @@ build/
 *.log
 *.zip
 *.tar.gz
+*.pem
+*.key
+*.crt
 *.egg-info/
 *.egg
 *.cache
@@ -55,3 +60,13 @@ data/processed/mtsamples_clean/*.jsonl
 *.arrow
 
 data/processed/
+
+# Local model/vector caches must never be committed.
+hf_cache/
+ollama_models/
+qdrant_storage/
+.qdrant/
+
+# Deployment-generated local artifacts.
+railway.env
+docker-compose.override.yml

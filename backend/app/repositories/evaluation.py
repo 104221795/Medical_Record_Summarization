@@ -62,7 +62,10 @@ class EvaluationRepository:
         return self.session.scalar(
             select(Summary)
             .where(Summary.summary_id == summary_id)
-            .options(selectinload(Summary.model_run))
+            .options(
+                selectinload(Summary.model_run),
+                selectinload(Summary.reviews).selectinload(SummaryReview.reviewer),
+            )
         )
 
     def first_summary(self) -> Summary | None:
@@ -75,7 +78,14 @@ class EvaluationRepository:
     def human_evaluations(self) -> list[HumanEvaluation]:
         return list(
             self.session.scalars(
-                select(HumanEvaluation).order_by(HumanEvaluation.created_at.desc())
+                select(HumanEvaluation)
+                .options(
+                    selectinload(HumanEvaluation.summary).selectinload(Summary.model_run),
+                    selectinload(HumanEvaluation.summary)
+                    .selectinload(Summary.reviews)
+                    .selectinload(SummaryReview.reviewer),
+                )
+                .order_by(HumanEvaluation.created_at.desc())
             )
         )
 
@@ -84,7 +94,25 @@ class EvaluationRepository:
             self.session.scalars(
                 select(HumanEvaluation)
                 .where(HumanEvaluation.summary_id == summary_id)
+                .options(
+                    selectinload(HumanEvaluation.summary).selectinload(Summary.model_run),
+                    selectinload(HumanEvaluation.summary)
+                    .selectinload(Summary.reviews)
+                    .selectinload(SummaryReview.reviewer),
+                )
                 .order_by(HumanEvaluation.created_at.desc())
+            )
+        )
+
+    def summary_reviews(self) -> list[SummaryReview]:
+        return list(
+            self.session.scalars(
+                select(SummaryReview)
+                .options(
+                    selectinload(SummaryReview.summary),
+                    selectinload(SummaryReview.reviewer),
+                )
+                .order_by(SummaryReview.reviewed_at.desc(), SummaryReview.created_at.desc())
             )
         )
 

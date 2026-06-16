@@ -32,7 +32,7 @@ export default function SourceEvidencePanel({
   const evidence = citations.length
     ? citations.map((citation, index) => ({
       ...citation,
-      citationLabel: `C${index + 1}`,
+      citationLabel: citation.citation_label || `C${index + 1}`,
       category: evidenceCategory(citation),
       exactSpan: Boolean(citation.source_text_span),
       source_text_span: citation.source_text_span || citation.surrounding_context || "Exact span unavailable; showing source chunk.",
@@ -73,7 +73,7 @@ export default function SourceEvidencePanel({
                   onMouseLeave={() => onHoverCitation?.("")}
                   onFocus={() => onHoverCitation?.(citationId)}
                   onBlur={() => onHoverCitation?.("")}
-                  onClick={() => onSelectCitation(citationId, item.claim_id)}
+                  onClick={() => onSelectCitation?.(citationId, item.claim_id)}
                 >
                   <span className="evidence-card-top">
                     <Badge tone={item.claim_status === "supported" ? "success" : statusTone(item.claim_status)}>{item.citationLabel}</Badge>

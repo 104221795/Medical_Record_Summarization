@@ -62,6 +62,7 @@ export function extractClaims(summary) {
 }
 
 export function extractCitations(summary) {
+  let globalIndex = 0;
   return extractClaims(summary).flatMap((claim) =>
     (claim.citations || []).map((citation, index) => ({
       ...citation,
@@ -69,7 +70,7 @@ export function extractCitations(summary) {
       claim_text: claim.claim_text,
       claim_type: claim.claim_type,
       claim_status: claim.support_status,
-      citation_label: citation.citation_id ? `C${String(index + 1).padStart(2, "0")}` : "Citation",
+      citation_label: citation.citation_id ? `C${++globalIndex}` : `C${index + 1}`,
     })),
   );
 }

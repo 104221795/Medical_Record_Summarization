@@ -31,6 +31,12 @@ export default function CitationReviewPanel({
     if (unsupported.length && activeTab === "citations" && !citations.length) setActiveTab("unsupported");
   }, [activeTab, citations.length, unsupported.length]);
 
+  useEffect(() => {
+    if (activeClaimId && unsupported.some((claim) => claim.claim_id === activeClaimId)) {
+      setActiveTab("unsupported");
+    }
+  }, [activeClaimId, unsupported]);
+
   return (
     <Card title="Citation & Claim Review" className="citation-review-panel">
       <SelectedCitationDetail citation={selectedCitation} claim={selectedClaim} />
@@ -67,7 +73,7 @@ export default function CitationReviewPanel({
               onBlur={() => onHoverCitation?.("")}
               onClick={() => onSelectCitation(citation.citation_id, citation.claim_id)}
             >
-              <Badge tone="info">{`C${index + 1}`}</Badge>
+              <Badge tone="info">{citation.citation_label || `C${index + 1}`}</Badge>
               <strong>{citation.source_type || citation.source_record_type || "Source"}</strong>
               <span>{citation.claim_text || "Supported claim unavailable."}</span>
               <small>{citation.source_text_span || citation.surrounding_context || "Evidence excerpt unavailable."}</small>

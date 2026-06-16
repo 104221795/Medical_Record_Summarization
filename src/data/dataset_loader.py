@@ -28,9 +28,10 @@ def load_jsonl_dataset(
 
     records = []
     for row in _read_jsonl(Path(path)):
+        row_dataset = _dataset_for_row(row, requested_dataset=dataset)
         normalized = normalize_to_internal_schema(
             row,
-            dataset=dataset,
+            dataset=row_dataset,
             split=str(row.get("split") or split),
             require_reference=require_reference,
         )
@@ -39,6 +40,15 @@ def load_jsonl_dataset(
         if max_records and len(records) >= max_records:
             break
     return records
+
+
+def _dataset_for_row(row: dict[str, Any], *, requested_dataset: str) -> str:
+    """Preserve per-record dataset labels for mixed/diversity benchmark JSONL files."""
+
+    requested = str(requested_dataset or "").strip().lower().replace("-", "_")
+    if requested in {"auto", "row", "mixed", "diversity", "dataset_diversity", "mixed_diversity"}:
+        return str(row.get("dataset") or requested_dataset or "mock")
+    return requested_dataset
 
 
 def load_mimic_iv_note_dataset(

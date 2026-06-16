@@ -76,6 +76,8 @@ def test_edit_summary_preserves_original_and_records_review(
     body = response.json()
     assert body["status"] == "edited"
     assert body["edit_distance_score"] is not None
+    assert body["edit_diff"]
+    assert body["edit_diff_summary"]["changed_segments"] >= 1
     assert body["citation_revalidation_required"] is True
 
     detail = client.get(
@@ -267,6 +269,9 @@ def test_review_history_returns_actions_in_order_and_audits_view(
     assert response.status_code == 200, response.text
     actions = [review["review_action"] for review in response.json()["reviews"]]
     assert actions == ["start_review", "edit", "approve"]
+    edit_review = next(review for review in response.json()["reviews"] if review["review_action"] == "edit")
+    assert edit_review["edit_diff"]
+    assert edit_review["edit_diff_summary"]["changed_segments"] >= 1
 
     with session_factory() as session:
         assert (

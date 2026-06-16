@@ -16,15 +16,18 @@ INTERNAL_SCHEMA_FIELDS = (
 )
 SUPPORTED_DATASETS = {
     "mock",
+    "diversity",
     "multiclinsum",
     "mts_dialog",
     "mediqa_sum",
     "aci_bench",
     "mtsamples_clean",
+    "synthetic_structured_ehr",
+    "messy_formatting",
     "mimic_iv_note",
     "mimic_iv_ext_bhc",
 }
-SUPPORTED_SPLITS = {"train", "validation", "test", "test_1", "test_2"}
+SUPPORTED_SPLITS = {"train", "validation", "test", "test_1", "test_2", "demo", "stress", "unknown"}
 
 
 class DatasetValidationError(ValueError):
@@ -132,6 +135,8 @@ def _clean_dataset(value: str) -> str:
         "multi_clin_sum": "multiclinsum",
         "multi_clinsum": "multiclinsum",
         "multi_clinical_summarization": "multiclinsum",
+        "dataset_diversity": "diversity",
+        "mixed_diversity": "diversity",
         "mtsdialog": "mts_dialog",
         "mts_dialogue": "mts_dialog",
         "mediqasum": "mediqa_sum",
@@ -141,6 +146,10 @@ def _clean_dataset(value: str) -> str:
         "acibench": "aci_bench",
         "aci-bench": "aci_bench",
         "biomednlp_mtsamples_clean": "mtsamples_clean",
+        "synthetic_ehr": "synthetic_structured_ehr",
+        "synthetic_structured": "synthetic_structured_ehr",
+        "messy": "messy_formatting",
+        "formatting_stress": "messy_formatting",
     }
     normalized = aliases.get(normalized, normalized)
     if normalized not in SUPPORTED_DATASETS:

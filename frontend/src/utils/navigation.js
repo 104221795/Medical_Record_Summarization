@@ -16,6 +16,7 @@ export function getActiveNavKey(pathname) {
   if (cleanPath === "/admin/evaluation/rag-best-models") return "admin-rag-best-models";
   if (cleanPath === "/admin/evaluation/flow-comparison") return "admin-flow-comparison";
   if (cleanPath === "/admin/evaluation") return "admin-evaluation";
+  if (cleanPath === "/admin/jobs") return "admin-model-jobs";
   if (cleanPath === "/admin/audit") return "admin-audit";
   if (cleanPath === "/admin/settings") return "admin-settings";
   if (cleanPath === "/admin/guide") return "admin-guide";

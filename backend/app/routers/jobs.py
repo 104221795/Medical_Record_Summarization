@@ -31,15 +31,26 @@ def list_model_jobs(
 def model_readiness(
     _context: Annotated[RequestContext, Depends(get_request_context)],
     model: Annotated[list[str] | None, Query()] = None,
+    include_smoke: Annotated[bool, Query(description="Run live provider smoke checks when possible.")] = False,
 ) -> ModelReadinessResponse:
     model_names = model or [
         "facebook/bart-large-cnn",
         "google/pegasus-pubmed",
-        "google/pegasus-cnn_dailymail",
         "sentence-transformers/all-MiniLM-L6-v2",
         "roberta-large",
+        "ollama/qwen2.5:3b",
+        "ollama/llama3.2:3b",
+        "gemini/gemini-2.5-flash-lite",
     ]
-    return model_job_service.readiness(model_names)
+    return model_job_service.readiness(model_names, include_smoke=include_smoke)
+
+
+@router.post("/warmup-defaults", response_model=ModelJobListResponse, status_code=status.HTTP_202_ACCEPTED)
+def enqueue_default_model_warmups(
+    _context: Annotated[RequestContext, Depends(get_request_context)],
+    timeout_seconds: Annotated[int, Query(ge=1, le=24 * 60 * 60)] = 900,
+) -> ModelJobListResponse:
+    return model_job_service.enqueue_default_warmups(timeout_seconds=timeout_seconds)
 
 
 @router.get("/{job_id}", response_model=ModelJobResponse)

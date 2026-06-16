@@ -4,6 +4,7 @@ import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 from difflib import SequenceMatcher
+from typing import Any
 
 from ..models import (
     ClaimSupportStatus,
@@ -25,6 +26,7 @@ from ..persistence_schemas import (
 )
 from ..repositories import SummaryRepository
 from .audit_service import AuditService
+from .citation_scope import summarize_scope_violations, validate_summary_citation_scope
 from .persistence_common import PersistedResourceNotFoundError
 
 
@@ -38,6 +40,25 @@ MUTABLE_REVIEW_STATUSES = {
 START_REVIEW_STATUSES = {SummaryStatus.DRAFT, SummaryStatus.EDITED}
 LOCKED_STATUSES = {
     SummaryStatus.ARCHIVED,
+}
+APPROVAL_BLOCKING_CLAIM_TYPES = {
+    "diagnosis",
+    "medication",
+    "allergy",
+    "lab_result",
+    "vital_sign",
+    "procedure",
+    "imaging_finding",
+    "timeline_event",
+    "follow_up",
+    "encounter_context",
+}
+APPROVAL_BLOCKING_RISK_LEVELS = {"medium", "high", "critical"}
+APPROVAL_BLOCKING_STATUSES = {
+    ClaimSupportStatus.UNSUPPORTED,
+    ClaimSupportStatus.INSUFFICIENT_EVIDENCE,
+    ClaimSupportStatus.UNCHECKED,
+    ClaimSupportStatus.CONFLICTING,
 }
 
 
@@ -188,10 +209,19 @@ class ReviewService:
         previous = summary.status
         if previous not in MUTABLE_REVIEW_STATUSES:
             raise ReviewTransitionError(f"Cannot approve a summary in {previous.value} status.")
-        blocking_claims = _critical_unsupported_claims(summary)
+        scope_violations = validate_summary_citation_scope(
+            summary,
+            self.repository.session,
+        )
+        if scope_violations:
+            raise ReviewTransitionError(
+                "Approval blocked: citation source scope validation failed. "
+                + summarize_scope_violations(scope_violations)
+            )
+        blocking_claims = _approval_blocking_claims(summary)
         if blocking_claims:
             raise ReviewTransitionError(
-                "Approval blocked: critical unsupported or conflicting claims require resolution."
+                "Approval blocked: unsupported, unchecked, or conflicting clinical claims require resolution."
             )
 
         actor = self._resolve_actor(actor_external_id, role_code)
@@ -418,6 +448,8 @@ class ReviewService:
             final_locked=summary.status == SummaryStatus.APPROVED,
             reviewer_signature=_reviewer_signature(review.reviewer_id, review.reviewed_at),
             audit_trail_ready=True,
+            edit_diff=_edit_diff(summary.summary_text, review.edited_summary_text),
+            edit_diff_summary=_edit_diff_summary(summary.summary_text, review.edited_summary_text),
         )
 
 
@@ -437,12 +469,65 @@ def _review_response(review: SummaryReview) -> SummaryReviewResponse:
         reviewed_at=review.reviewed_at,
         reviewer_signature=_reviewer_signature(review.reviewer_id, review.reviewed_at),
         audit_trail_ready=True,
+        edit_diff=_edit_diff(review.summary.summary_text if review.summary else "", review.edited_summary_text),
+        edit_diff_summary=_edit_diff_summary(review.summary.summary_text if review.summary else "", review.edited_summary_text),
     )
 
 
 def _edit_distance_ratio(original: str, edited: str) -> Decimal:
     ratio = SequenceMatcher(None, original or "", edited or "").ratio()
     return Decimal(str(round(1 - ratio, 4)))
+
+
+def _edit_diff(original: str, edited: str | None, *, max_segments: int = 80) -> list[dict[str, str | None]]:
+    if edited is None:
+        return []
+    original_units = _diff_units(original)
+    edited_units = _diff_units(edited)
+    matcher = SequenceMatcher(None, original_units, edited_units)
+    segments: list[dict[str, str | None]] = []
+    for op, old_start, old_end, new_start, new_end in matcher.get_opcodes():
+        if op == "equal":
+            continue
+        segments.append(
+            {
+                "op": op,
+                "old_text": " ".join(original_units[old_start:old_end]) or None,
+                "new_text": " ".join(edited_units[new_start:new_end]) or None,
+            }
+        )
+        if len(segments) >= max_segments:
+            segments.append({"op": "truncated", "old_text": None, "new_text": "Diff truncated for response size."})
+            break
+    return segments
+
+
+def _edit_diff_summary(original: str, edited: str | None) -> dict[str, Any]:
+    if edited is None:
+        return {}
+    original_units = _diff_units(original)
+    edited_units = _diff_units(edited)
+    matcher = SequenceMatcher(None, original_units, edited_units)
+    counts = {"insert": 0, "delete": 0, "replace": 0}
+    for op, old_start, old_end, new_start, new_end in matcher.get_opcodes():
+        if op == "insert":
+            counts["insert"] += new_end - new_start
+        elif op == "delete":
+            counts["delete"] += old_end - old_start
+        elif op == "replace":
+            counts["replace"] += max(old_end - old_start, new_end - new_start)
+    return {
+        "changed_segments": sum(1 for value in counts.values() if value > 0),
+        "inserted_units": counts["insert"],
+        "deleted_units": counts["delete"],
+        "replaced_units": counts["replace"],
+        "original_units": len(original_units),
+        "edited_units": len(edited_units),
+    }
+
+
+def _diff_units(text: str | None) -> list[str]:
+    return [unit for unit in (text or "").replace("\r\n", "\n").splitlines() if unit.strip()]
 
 
 def _reviewer_signature(reviewer_id: uuid.UUID, reviewed_at: datetime) -> str:
@@ -455,6 +540,20 @@ def _critical_unsupported_claims(summary: Summary) -> list:
         for claim in summary.claims
         if claim.clinical_risk_level == "critical"
         and claim.support_status != ClaimSupportStatus.SUPPORTED
+    ]
+
+
+def _approval_blocking_claims(summary: Summary) -> list:
+    return [
+        claim
+        for claim in summary.claims
+        if claim.support_status in APPROVAL_BLOCKING_STATUSES
+        and (
+            claim.clinical_risk_level in APPROVAL_BLOCKING_RISK_LEVELS
+            or claim.support_status == ClaimSupportStatus.CONFLICTING
+            or claim.claim_type in APPROVAL_BLOCKING_CLAIM_TYPES
+            and claim.clinical_risk_level != "low"
+        )
     ]
 
 

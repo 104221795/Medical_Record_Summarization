@@ -359,6 +359,16 @@ class DeterministicSummaryService:
                 started=started,
             )
 
+        rag_metadata: dict[str, Any] | None = None
+        if self.rag_workflow is not None:
+            _evidence_pack, _citation_lookup, rag_metadata = self._build_generation_evidence_pack(
+                patient,
+                encounter,
+                context,
+                request,
+                tenant_id=tenant_id,
+            )
+
         sections = self._build_sections(patient, encounter, context)
         claims = [claim for section in sections for claim in section.claims]
         safety = self.safety_service.calculate(claims)
@@ -381,8 +391,11 @@ class DeterministicSummaryService:
             status="completed",
             run_metadata={
                 "llm_used": False,
+                "provider_path": "rag_doctor_workflow/deterministic" if rag_metadata else "baseline/deterministic",
                 "require_citations": request.options.require_citations,
                 "include_safety_check": request.options.include_safety_check,
+                "generation_flow": _generation_flow(rag_metadata),
+                "rag": rag_metadata,
             },
         )
         self.repository.add_model_run(model_run)

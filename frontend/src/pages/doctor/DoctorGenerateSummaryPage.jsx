@@ -56,8 +56,12 @@ export default function DoctorGenerateSummaryPage() {
             selectedPatient={workflow.selectedPatient}
             selectedEncounter={workflow.selectedEncounter}
             generating={workflow.generating}
+            generationStatus={workflow.generationStatus}
+            generationElapsedSeconds={workflow.generationElapsedSeconds}
+            generationJob={workflow.generationJob}
             generationError={workflow.generationError}
             onGenerate={generateDraft}
+            onCancelGeneration={workflow.cancelGeneration}
           />
         </div>
         <div className="generate-preview-panel">

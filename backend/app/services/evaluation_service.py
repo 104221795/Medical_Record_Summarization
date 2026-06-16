@@ -7,6 +7,7 @@ import subprocess
 import time
 import uuid
 from collections import Counter
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 from urllib import error as urlerror
@@ -24,6 +25,8 @@ from ..models import (
     ModelRun,
     Patient,
     Summary,
+    SummaryReview,
+    SummaryStatus,
 )
 from ..persistence_schemas import (
     BenchmarkFlowComparisonRecord,
@@ -39,8 +42,13 @@ from ..persistence_schemas import (
     FunctionalValidationCheck,
     FunctionalValidationResponse,
     HumanEvaluationCreateRequest,
+    HumanEvaluationAnalyticsResponse,
+    HumanEvaluationExportResponse,
+    HumanEvaluationExportRow,
     HumanEvaluationListResponse,
     HumanEvaluationResponse,
+    HumanEvaluationRubricDimension,
+    HumanEvaluationRubricResponse,
     HumanEvaluationSummaryResponse,
     MetricCountItem,
     SummaryApproveRequest,
@@ -153,6 +161,90 @@ REQUIRED_BENCHMARK_KEYS = {
     "dataset",
     "split",
 }
+RUBRIC_VERSION = "clinical_human_eval_rubric_v1"
+HUMAN_EVALUATION_RUBRIC = [
+    HumanEvaluationRubricDimension(
+        key="factual_correctness_score",
+        label="Factual correctness",
+        description="Clinical statements match the cited/source evidence without introducing unsupported facts.",
+        score_1="Major unsupported or incorrect clinical facts.",
+        score_3="Mostly correct but contains minor uncertainty or weak evidence linkage.",
+        score_5="All important clinical facts are supported and clinically precise.",
+    ),
+    HumanEvaluationRubricDimension(
+        key="completeness_score",
+        label="Clinical completeness",
+        description="Captures the important diagnosis, medication, timeline, diagnostics, assessment, and plan information.",
+        score_1="Misses critical clinical information.",
+        score_3="Covers the main point but misses one or more useful details.",
+        score_5="Captures all clinically important information needed for review.",
+    ),
+    HumanEvaluationRubricDimension(
+        key="conciseness_score",
+        label="Conciseness",
+        description="Avoids redundant or irrelevant text while preserving clinically important details.",
+        score_1="Too verbose, repetitive, or cluttered.",
+        score_3="Usable but could be shorter or better organized.",
+        score_5="Concise and clinically focused.",
+    ),
+    HumanEvaluationRubricDimension(
+        key="readability_score",
+        label="Readability",
+        description="Clear structure, readable wording, and useful sectioning for a clinician.",
+        score_1="Hard to read or poorly structured.",
+        score_3="Readable with some formatting or wording issues.",
+        score_5="Easy to scan, sectioned well, and clinically usable.",
+    ),
+    HumanEvaluationRubricDimension(
+        key="citation_usefulness_score",
+        label="Citation usefulness",
+        description="Citations make it easy to verify clinical claims and locate supporting source evidence.",
+        score_1="Citations missing, wrong, or not helpful.",
+        score_3="Some useful citations but incomplete coverage or weak linkage.",
+        score_5="Citations are specific, complete, and easy to audit.",
+    ),
+]
+HUMAN_EVALUATION_EXPORT_FIELDS = [
+    "evaluation_id",
+    "summary_id",
+    "patient_id",
+    "encounter_id",
+    "summary_status",
+    "final_locked",
+    "model_provider",
+    "model_name",
+    "evaluator_id",
+    "evaluator_name",
+    "reviewer_signature",
+    "latest_review_action",
+    "latest_rejection_reason",
+    "factual_correctness_score",
+    "completeness_score",
+    "conciseness_score",
+    "readability_score",
+    "citation_usefulness_score",
+    "hallucination_risk",
+    "comments",
+    "citation_coverage",
+    "unsupported_claim_count",
+    "conflict_count",
+    "edit_distance_score",
+    "edit_diff_summary",
+    "generated_summary_text",
+    "final_reviewed_summary_text",
+    "created_at",
+]
+REJECTION_REASON_OPTIONS = [
+    "unsupported_claim",
+    "wrong_citation",
+    "missing_critical_info",
+    "incorrect_clinical_fact",
+    "conflicting_evidence",
+    "poor_readability",
+    "too_generic",
+    "unsafe_output",
+    "other",
+]
 
 
 class EvaluationService:
@@ -532,6 +624,40 @@ class EvaluationService:
         return HumanEvaluationListResponse(
             summary_id=summary_id,
             evaluations=[_human_evaluation_response(item) for item in evaluations],
+        )
+
+    def human_rubric(self) -> HumanEvaluationRubricResponse:
+        return HumanEvaluationRubricResponse(
+            rubric_version=RUBRIC_VERSION,
+            scoring_scale="1=unsafe/poor, 3=usable with reservations, 5=clinically strong for review",
+            dimensions=HUMAN_EVALUATION_RUBRIC,
+            hallucination_risk_options=["low", "medium", "high"],
+            approve_reject_reason_options=REJECTION_REASON_OPTIONS,
+            required_fields=[
+                "summary_id",
+                "factual_correctness_score",
+                "completeness_score",
+                "conciseness_score",
+                "readability_score",
+                "citation_usefulness_score",
+                "hallucination_risk",
+            ],
+            export_fields=HUMAN_EVALUATION_EXPORT_FIELDS,
+        )
+
+    def human_analytics(self) -> HumanEvaluationAnalyticsResponse:
+        evaluations = self.repository.human_evaluations()
+        reviews = self.repository.summary_reviews()
+        return _human_analytics(evaluations, reviews)
+
+    def human_export(self, *, include_text: bool = False, limit: int = 500) -> HumanEvaluationExportResponse:
+        evaluations = self.repository.human_evaluations()[:limit]
+        rows = [_human_export_row(evaluation, include_text=include_text) for evaluation in evaluations]
+        return HumanEvaluationExportResponse(
+            export_version="human_evaluation_dataset_v1",
+            row_count=len(rows),
+            include_text=include_text,
+            rows=rows,
         )
 
     def provider_readiness(self) -> list[EvaluationProviderStatus]:
@@ -1167,6 +1293,129 @@ def _human_summary(evaluations: list[HumanEvaluation]) -> HumanEvaluationSummary
 
 def _human_evaluation_response(evaluation: HumanEvaluation) -> HumanEvaluationResponse:
     return HumanEvaluationResponse.model_validate(evaluation)
+
+
+def _human_analytics(
+    evaluations: list[HumanEvaluation],
+    reviews: list[SummaryReview],
+) -> HumanEvaluationAnalyticsResponse:
+    actions = Counter(str(review.action.value if review.action else "unknown") for review in reviews)
+    rejection_reasons = Counter(
+        str(review.rejection_reason)
+        for review in reviews
+        if review.rejection_reason
+    )
+    reviewer_activity = Counter(_reviewer_label(review) for review in reviews)
+    edit_distances = [
+        float(review.edit_distance_score)
+        for review in reviews
+        if review.edit_distance_score is not None
+    ]
+    locked_summary_ids = {
+        str(review.summary_id)
+        for review in reviews
+        if review.summary is not None and review.summary.status == SummaryStatus.APPROVED
+    }
+    providers = Counter(item.model_provider or "unknown" for item in evaluations)
+    risks = Counter(item.hallucination_risk for item in evaluations)
+    return HumanEvaluationAnalyticsResponse(
+        total_reviews=len(reviews),
+        approvals=actions.get("approve", 0),
+        rejections=actions.get("reject", 0),
+        edits=actions.get("edit", 0),
+        final_locked_approved_summaries=len(locked_summary_ids),
+        rejection_reasons_distribution=_metric_items(rejection_reasons),
+        reviewer_activity=_metric_items(reviewer_activity),
+        average_edit_distance=round(sum(edit_distances) / len(edit_distances), 4) if edit_distances else None,
+        human_evaluation_count=len(evaluations),
+        human_evaluations_by_provider=_metric_items(providers),
+        hallucination_risk_distribution=_metric_items(risks),
+    )
+
+
+def _human_export_row(evaluation: HumanEvaluation, *, include_text: bool) -> HumanEvaluationExportRow:
+    summary = evaluation.summary
+    if summary is None:  # Defensive; relationship should be present for persisted rows.
+        raise ValueError("Human evaluation is missing its linked summary.")
+    latest_review = _latest_review(summary.reviews)
+    latest_edit = _latest_edit(summary.reviews)
+    model_run = summary.model_run
+    final_text = latest_edit.edited_summary_text if latest_edit and latest_edit.edited_summary_text else summary.summary_text
+    return HumanEvaluationExportRow(
+        evaluation_id=evaluation.evaluation_id,
+        summary_id=evaluation.summary_id,
+        patient_id=summary.patient_id,
+        encounter_id=summary.encounter_id,
+        summary_status=summary.status.value if summary.status else "unknown",
+        final_locked=summary.status == SummaryStatus.APPROVED,
+        model_provider=evaluation.model_provider or _provider_label(model_run.provider if model_run else None),
+        model_name=model_run.model_name if model_run else None,
+        evaluator_id=evaluation.evaluator_id,
+        evaluator_name=evaluation.evaluator_name,
+        reviewer_signature=_reviewer_signature(latest_review) if latest_review else None,
+        latest_review_action=latest_review.action.value if latest_review and latest_review.action else None,
+        latest_rejection_reason=latest_review.rejection_reason if latest_review else None,
+        factual_correctness_score=evaluation.factual_correctness_score,
+        completeness_score=evaluation.completeness_score,
+        conciseness_score=evaluation.conciseness_score,
+        readability_score=evaluation.readability_score,
+        citation_usefulness_score=evaluation.citation_usefulness_score,
+        hallucination_risk=evaluation.hallucination_risk,
+        comments=evaluation.comments,
+        citation_coverage=summary.citation_coverage,
+        unsupported_claim_count=summary.unsupported_claim_count,
+        conflict_count=summary.conflict_count,
+        edit_distance_score=latest_edit.edit_distance_score if latest_edit else None,
+        edit_diff_summary=_export_edit_diff_summary(summary.summary_text, latest_edit.edited_summary_text if latest_edit else None),
+        generated_summary_text=summary.summary_text if include_text else None,
+        final_reviewed_summary_text=final_text if include_text else None,
+        created_at=evaluation.created_at,
+    )
+
+
+def _latest_review(reviews: list[SummaryReview]) -> SummaryReview | None:
+    if not reviews:
+        return None
+    return max(reviews, key=lambda item: (item.reviewed_at, item.created_at))
+
+
+def _latest_edit(reviews: list[SummaryReview]) -> SummaryReview | None:
+    edit_reviews = [review for review in reviews if review.edited_summary_text]
+    return _latest_review(edit_reviews)
+
+
+def _reviewer_signature(review: SummaryReview) -> str:
+    return f"reviewer:{review.reviewer_id}|signed_at:{review.reviewed_at.isoformat(timespec='seconds')}"
+
+
+def _export_edit_diff_summary(original: str, edited: str | None) -> dict[str, Any]:
+    if not edited:
+        return {}
+    original_lines = [line for line in (original or "").splitlines() if line.strip()]
+    edited_lines = [line for line in edited.splitlines() if line.strip()]
+    matcher = SequenceMatcher(None, original_lines, edited_lines)
+    counts = Counter(op for op, *_ in matcher.get_opcodes() if op != "equal")
+    return {
+        "changed_segments": sum(counts.values()),
+        "insert_segments": counts.get("insert", 0),
+        "delete_segments": counts.get("delete", 0),
+        "replace_segments": counts.get("replace", 0),
+        "original_lines": len(original_lines),
+        "edited_lines": len(edited_lines),
+    }
+
+
+def _reviewer_label(review: SummaryReview) -> str:
+    if review.reviewer is None:
+        return str(review.reviewer_id)
+    return review.reviewer.external_user_id or review.reviewer.full_name or str(review.reviewer_id)
+
+
+def _metric_items(counter: Counter) -> list[MetricCountItem]:
+    return [
+        MetricCountItem(key=str(key), count=int(count))
+        for key, count in counter.most_common()
+    ]
 
 
 def _average(values: list[int]) -> float | None:

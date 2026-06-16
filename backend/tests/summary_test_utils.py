@@ -22,6 +22,7 @@ def api_client(tmp_path: Path) -> tuple[TestClient, sessionmaker[Session]]:
         environment="test",
         database_url=f"sqlite+pysqlite:///{tmp_path / 'phase3.db'}",
         qdrant_path=tmp_path / "qdrant",
+        embedding_provider="hashing",
     )
     engine = create_db_engine(settings.database_url)
     Base.metadata.create_all(engine)

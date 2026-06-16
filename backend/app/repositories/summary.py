@@ -74,7 +74,7 @@ class SummaryRepository:
             self.session.scalars(
                 select(SummaryReview)
                 .where(SummaryReview.summary_id == summary_id)
-                .options(selectinload(SummaryReview.reviewer))
+                .options(selectinload(SummaryReview.reviewer), selectinload(SummaryReview.summary))
                 .order_by(SummaryReview.reviewed_at, SummaryReview.created_at)
             )
         )

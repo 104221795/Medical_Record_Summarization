@@ -132,12 +132,14 @@ def test_usage_safety_and_review_metrics_from_seeded_workflow(
     safety_body = safety.json()
     assert safety_body["citation_coverage_average"] is not None
     assert safety_body["unsupported_claim_total"] >= 1
-    assert safety_body["wrong_patient_retrieval_count"] == "not_available"
+    assert safety_body["wrong_patient_retrieval_count"] == 0
     gate_names = {
         gate["name"]: gate
         for gate in safety_body["safety_gate_status"]["gates"]
     }
     assert gate_names["citation_coverage"]["threshold"] == 0.9
+    assert gate_names["wrong_patient_retrieval"]["status"] == "pass"
+    assert gate_names["encounter_scope_enforcement"]["status"] == "pass"
     assert gate_names["no_summary_auto_approval"]["status"] == "pass"
 
     assert review.status_code == 200, review.text

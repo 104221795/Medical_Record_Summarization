@@ -9,6 +9,7 @@ from ..dependencies import (
     get_summary_service,
 )
 from ..persistence_schemas import (
+    ModelJobResponse,
     SummaryApproveRequest,
     SummaryDetailResponse,
     SummaryEditRequest,
@@ -21,6 +22,7 @@ from ..persistence_schemas import (
     SummaryReviewListResponse,
     SummaryReviewStartResponse,
 )
+from ..services.background_jobs import model_job_service
 from ..services.deterministic_summary_service import (
     DeterministicSummaryService,
     SummaryGenerationError,
@@ -58,6 +60,27 @@ def generate_patient_summary(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except SummaryGenerationError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+
+
+@router.post(
+    "/patients/{patient_id}/summaries/generate-async",
+    response_model=ModelJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def generate_patient_summary_async(
+    patient_id: Annotated[str, Path(min_length=1, max_length=128)],
+    payload: SummaryGenerateRequest,
+    context: Annotated[RequestContext, Depends(get_request_context)],
+) -> ModelJobResponse:
+    selected_provider = str(payload.model_provider or payload.provider or "deterministic")
+    return model_job_service.enqueue_summary_generation(
+        patient_id=patient_id,
+        request_payload=payload.model_dump(mode="json"),
+        tenant_id=context.tenant_id,
+        actor_external_id=context.user_id,
+        model_provider=selected_provider,
+        timeout_seconds=_generation_timeout_seconds(selected_provider),
+    )
 
 
 @router.get("/summaries/{summary_id}", response_model=SummaryDetailResponse)
@@ -224,3 +247,11 @@ def get_summary_reviews(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ReviewPermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+
+
+def _generation_timeout_seconds(provider: str) -> int:
+    if provider in {"qwen2.5", "llama3.2", "gemini2.5_flash_lite"}:
+        return 240
+    if provider in {"bart", "pegasus", "pegasus_pubmed", "pegasus_cnn_dailymail", "pegasus_xsum"}:
+        return 900
+    return 120

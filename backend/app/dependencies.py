@@ -1,7 +1,7 @@
 import re
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Callable
 
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -63,6 +63,22 @@ def get_request_context(
                 detail=f"{label} contains invalid characters.",
             )
     return RequestContext(tenant_id=x_tenant_id, user_id=x_user_id, role_code=x_role_code)
+
+
+def require_roles(*allowed_roles: str) -> Callable[[RequestContext], RequestContext]:
+    allowed = set(allowed_roles)
+
+    def dependency(
+        context: Annotated[RequestContext, Depends(get_request_context)],
+    ) -> RequestContext:
+        if context.role_code not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This role is not allowed to access this clinical safety endpoint.",
+            )
+        return context
+
+    return dependency
 
 
 def get_rag_service(request: Request) -> RagService:

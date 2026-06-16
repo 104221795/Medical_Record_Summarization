@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import {
   BarChart3,
   BrainCircuit,
+  Activity,
   ClipboardCheck,
   FileClock,
   Gauge,
@@ -36,6 +37,7 @@ const adminNav = [
   { key: "admin-benchmark", label: "Benchmark Results", path: "/admin/evaluation/benchmark", icon: Gauge },
   { key: "admin-rag-best-models", label: "RAG Best Models", path: "/admin/evaluation/rag-best-models", icon: BrainCircuit },
   { key: "admin-flow-comparison", label: "Flow Comparison", path: "/admin/evaluation/flow-comparison", icon: GitCompareArrows },
+  { key: "admin-model-jobs", label: "Model Jobs", path: "/admin/jobs", icon: Activity },
   { key: "admin-audit", label: "Audit Logs", path: "/admin/audit", icon: ScrollText },
   { key: "admin-settings", label: "Settings", path: "/admin/settings", icon: Settings },
   { key: "admin-guide", label: "User Guide", path: "/admin/guide", icon: NotebookTabs },

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 const AuthContext = createContext(null);
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const API_PREFIX = import.meta.env.VITE_API_PREFIX || "/api/v1";
 const SESSION_KEY = "clinSummReactSession";
 const LEGACY_ROLE_KEY = "clinSummRole";
@@ -24,7 +25,7 @@ export function AuthProvider({ children }) {
         return;
       }
       try {
-        const response = await fetch(`${API_PREFIX}/auth/me`, {
+        const response = await fetch(`${API_BASE_URL}${API_PREFIX}/auth/me`, {
           headers: {
             "Content-Type": "application/json",
             "X-Tenant-ID": current.tenantId || "sandbox",

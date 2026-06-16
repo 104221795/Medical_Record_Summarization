@@ -18,6 +18,10 @@ export const summaryApi = {
     method: "POST",
     body: JSON.stringify(payload),
   }),
+  generateAsync: (patientId, payload) => apiClient(`/patients/${patientId}/summaries/generate-async`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  }),
   detail: (summaryId) => apiClient(`/summaries/${summaryId}`),
   startReview: (summaryId) => apiClient(`/summaries/${summaryId}/review/start`, { method: "POST", body: "{}" }),
   edit: (summaryId, payload) => apiClient(`/summaries/${summaryId}/edit`, { method: "PATCH", body: JSON.stringify(payload) }),

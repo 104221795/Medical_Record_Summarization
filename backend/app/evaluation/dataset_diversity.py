@@ -8,9 +8,22 @@ from pathlib import Path
 from typing import Any
 
 
-DIAGNOSIS_TERMS = re.compile(r"\b(diagnos\w*|assessment|impression|cancer|diabetes|hypertension|infection|failure|disease)\b", re.I)
-MEDICATION_TERMS = re.compile(r"\b(medication|medicine|drug|dose|mg|mcg|tablet|insulin|antibiotic|metformin|aspirin|tamsulosin)\b", re.I)
-TIMELINE_TERMS = re.compile(r"\b(day|week|month|year|follow[- ]?up|discharg\w*|admission|after|before|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b", re.I)
+DIAGNOSIS_TERMS = re.compile(
+    r"\b(diagnos\w*|condition|problem|assessment|impression|cancer|tumou?r|diabetes|"
+    r"hypertension|infection|sepsis|failure|disease|injury|fracture|stroke|infarct)\b",
+    re.I,
+)
+MEDICATION_TERMS = re.compile(
+    r"\b(medication|medicine|drug|dose|dosage|mg|mcg|gtt|tablet|capsule|insulin|"
+    r"antibiotic|metformin|aspirin|tamsulosin|vancomycin|ciprofloxacin|heparin|warfarin)\b",
+    re.I,
+)
+TIMELINE_TERMS = re.compile(
+    r"\b(day|week|month|year|hour|follow[- ]?up|discharg\w*|admission|admitted|"
+    r"presented|after|before|prior|then|subsequent|post[- ]?op|pre[- ]?op|"
+    r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b",
+    re.I,
+)
 
 
 @dataclass(frozen=True)
@@ -49,19 +62,30 @@ def profile_records(records: list[dict[str, Any]]) -> list[RecordProfile]:
         medication = len(MEDICATION_TERMS.findall(text))
         timeline = len(TIMELINE_TERMS.findall(text))
         length_bucket = _length_bucket(token_count)
-        strata = [length_bucket]
+        dataset = str(record.get("dataset") or "unknown")
+        strata = [length_bucket, f"dataset_{_safe_stratum(dataset)}"]
         if diagnosis >= 3:
             strata.append("diagnosis_heavy")
+        if diagnosis >= 6:
+            strata.append("diagnosis_dense_extreme")
         if medication >= 3:
             strata.append("medication_heavy")
+        if medication >= 6:
+            strata.append("medication_dense_extreme")
         if timeline >= 4:
             strata.append("timeline_heavy")
+        if timeline >= 8:
+            strata.append("timeline_complex_extreme")
         if _messy_formatting(text):
             strata.append("messy_formatting")
+        if diagnosis >= 3 and medication >= 3:
+            strata.append("diagnosis_medication_combo")
+        if diagnosis >= 3 and timeline >= 4:
+            strata.append("diagnosis_timeline_combo")
         profiles.append(
             RecordProfile(
                 note_id=str(record.get("note_id") or record.get("id") or f"record_{index}"),
-                dataset=str(record.get("dataset") or "unknown"),
+                dataset=dataset,
                 token_count=token_count,
                 length_bucket=length_bucket,
                 diagnosis_density=round(diagnosis / max(1, token_count), 6),
@@ -199,12 +223,20 @@ def _length_bucket(token_count: int) -> str:
         return "short"
     if token_count < 650:
         return "medium"
-    return "long"
+    if token_count < 1400:
+        return "long"
+    return "very_long"
 
 
 def _messy_formatting(text: str) -> bool:
     if not text.strip():
         return True
     long_lines = sum(1 for line in text.splitlines() if len(line) > 220)
+    dense_whitespace = bool(re.search(r"[ \t]{4,}", text))
+    odd_headers = bool(re.search(r"\b[A-Z][A-Z_/ -]{8,}:{2,}", text))
     uppercase_ratio = sum(1 for char in text if char.isupper()) / max(1, sum(1 for char in text if char.isalpha()))
-    return long_lines >= 2 or uppercase_ratio > 0.55
+    return long_lines >= 2 or uppercase_ratio > 0.55 or dense_whitespace or odd_headers
+
+
+def _safe_stratum(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", value.strip().casefold()).strip("_") or "unknown"

@@ -14,6 +14,7 @@ from sqlalchemy import (
     DateTime,
     Enum as SAEnum,
     ForeignKey,
+    Float,
     Index,
     Integer,
     Numeric,
@@ -320,6 +321,24 @@ class ModelRun(Base, CreatedAtMixin):
     run_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON)
 
 
+class ModelJobRecord(Base, TimestampMixin):
+    __tablename__ = "model_jobs"
+
+    job_id: Mapped[uuid.UUID] = _uuid_pk()
+    job_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    model_provider: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    model_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="queued", index=True)
+    progress: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    current_step: Mapped[str | None] = mapped_column(String(100))
+    timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=900)
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class Summary(Base, TimestampMixin):
     __tablename__ = "summaries"
 
@@ -567,3 +586,4 @@ class AuditLog(Base):
 
 Index("idx_summaries_patient_status", Summary.patient_id, Summary.status)
 Index("idx_audit_logs_timestamp", AuditLog.timestamp)
+Index("idx_model_jobs_created_status", ModelJobRecord.created_at, ModelJobRecord.status)

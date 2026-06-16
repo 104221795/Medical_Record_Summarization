@@ -2,11 +2,18 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from dotenv import load_dotenv
 from pydantic import AliasChoices, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
+ENV_FILE = ROOT_DIR / ".env"
+
+# Pydantic can read values from .env, but Hugging Face, Ollama, LiteLLM,
+# and a few local scripts read directly from os.environ. Loading the file here
+# keeps one persistent local runtime config instead of long PowerShell env blocks.
+load_dotenv(ENV_FILE, override=False)
 
 
 class Settings(BaseSettings):
@@ -16,17 +23,55 @@ class Settings(BaseSettings):
         env_file=ROOT_DIR / ".env",
         env_prefix="RAG_",
         extra="ignore",
+        populate_by_name=True,
     )
 
     app_name: str = "Medical Record Summarization RAG API"
-    environment: Literal["development", "test", "production"] = "development"
+    environment: Literal["development", "test", "staging", "production"] = "development"
     api_prefix: str = "/api/v1"
+    cors_origins: str = Field(
+        default="http://127.0.0.1:5173,http://localhost:5173",
+        validation_alias=AliasChoices("RAG_CORS_ORIGINS", "CORS_ORIGINS"),
+    )
+    evaluation_artifact_root: Path | None = Field(
+        default=None,
+        validation_alias=AliasChoices("RAG_EVALUATION_ARTIFACT_ROOT", "EVALUATION_ARTIFACT_ROOT"),
+    )
 
     database_url: str = Field(
         default="sqlite:///./var/clin_summ.db",
         validation_alias=AliasChoices("RAG_DATABASE_URL", "DATABASE_URL"),
     )
     database_echo: bool = False
+
+    job_backend: Literal["in_process", "rq"] = Field(
+        default="in_process",
+        validation_alias=AliasChoices("RAG_JOB_BACKEND", "JOB_BACKEND"),
+    )
+    redis_url: str = Field(
+        default="redis://localhost:6379/0",
+        validation_alias=AliasChoices("RAG_REDIS_URL", "REDIS_URL"),
+    )
+    job_fallback_to_in_process: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("RAG_JOB_FALLBACK_TO_IN_PROCESS", "JOB_FALLBACK_TO_IN_PROCESS"),
+    )
+    rq_queue_name: str = Field(
+        default="clin_summ_jobs",
+        validation_alias=AliasChoices("RAG_RQ_QUEUE_NAME", "RQ_QUEUE_NAME"),
+    )
+    rq_require_live_worker: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("RAG_RQ_REQUIRE_LIVE_WORKER", "RQ_REQUIRE_LIVE_WORKER"),
+    )
+    rq_result_ttl_seconds: int = Field(
+        default=24 * 60 * 60,
+        validation_alias=AliasChoices("RAG_RQ_RESULT_TTL_SECONDS", "RQ_RESULT_TTL_SECONDS"),
+    )
+    rq_failure_ttl_seconds: int = Field(
+        default=7 * 24 * 60 * 60,
+        validation_alias=AliasChoices("RAG_RQ_FAILURE_TTL_SECONDS", "RQ_FAILURE_TTL_SECONDS"),
+    )
 
     qdrant_url: str | None = None
     qdrant_api_key: SecretStr | None = None

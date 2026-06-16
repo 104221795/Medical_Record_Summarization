@@ -157,8 +157,6 @@ function ClinicalSectionRenderer({
                   key={claim.claim_id}
                   ref={(node) => { if (node) claimRefs.current[claim.claim_id] = node; }}
                   className={`summary-claim-block ${claim.support_status !== "supported" ? "needs-review" : ""} ${active ? "selected" : ""}`}
-                  onMouseEnter={() => onSelectClaim?.(claim.claim_id)}
-                  onFocus={() => onSelectClaim?.(claim.claim_id)}
                 >
                   <button type="button" className="summary-claim-text" onClick={() => onSelectClaim?.(claim.claim_id)}>
                     <FormattedClinicalText text={claim.claim_text} />
@@ -173,7 +171,7 @@ function ClinicalSectionRenderer({
                       <CitationChip
                         key={citation.citation_id}
                         citation={{ ...citation, claim_text: claim.claim_text, claim_status: claim.support_status, claim_type: claim.claim_type }}
-                        label={`C${index + 1}`}
+                        label={citation.citation_label || `C${index + 1}`}
                         active={(activeCitationId || hoveredCitationId || selectedCitationId) === citation.citation_id}
                         onClick={() => onSelectCitation(citation.citation_id, claim.claim_id)}
                         onHover={(citationId) => onHoverCitation?.(citationId)}

@@ -15,13 +15,15 @@ const FLOW_2_1_PROVIDERS = ["qwen2.5", "llama3.2", "gemini2.5_flash_lite"];
 
 export default function EvaluationDashboard() {
   const { data, error, loading, reload } = useApi(async () => {
-    const [status, benchmarkStatus, humanSummary, latestBenchmark] = await Promise.all([
+    const [status, benchmarkStatus, humanSummary, humanRubric, humanAnalytics, latestBenchmark] = await Promise.all([
       evaluationApi.status(),
       evaluationApi.benchmarkStatus(),
       evaluationApi.humanSummary(),
+      evaluationApi.humanRubric(),
+      evaluationApi.humanAnalytics(),
       evaluationApi.benchmarkResults(),
     ]);
-    return { status, benchmarkStatus, humanSummary, latestBenchmark };
+    return { status, benchmarkStatus, humanSummary, humanRubric, humanAnalytics, latestBenchmark };
   }, []);
 
   if (loading) return <LoadingState label="Loading evaluation readiness..." />;
@@ -29,6 +31,8 @@ export default function EvaluationDashboard() {
 
   const readiness = data?.status || {};
   const human = data?.humanSummary || {};
+  const humanRubric = data?.humanRubric || {};
+  const humanAnalytics = data?.humanAnalytics || {};
   const benchmark = data?.benchmarkStatus || {};
   const latest = data?.latestBenchmark || {};
   const ragGate = readiness.rag_readiness_gate || {};
@@ -148,6 +152,29 @@ export default function EvaluationDashboard() {
           </div>
         </Card>
 
+        <Card title="Human Evaluation At Scale" actions={<Badge tone="success">{humanRubric.rubric_version || "rubric"}</Badge>}>
+          <div className="metric-list">
+            <div><span>Total reviews</span><strong>{humanAnalytics.total_reviews ?? 0}</strong></div>
+            <div><span>Approved locks</span><strong>{humanAnalytics.final_locked_approved_summaries ?? 0}</strong></div>
+            <div><span>Approvals / rejections</span><strong>{humanAnalytics.approvals ?? 0} / {humanAnalytics.rejections ?? 0}</strong></div>
+            <div><span>Average edit distance</span><strong>{humanAnalytics.average_edit_distance ?? "n/a"}</strong></div>
+          </div>
+          <div className="evaluation-purpose-list compact">
+            {(humanRubric.dimensions || []).slice(0, 3).map((dimension) => (
+              <PurposeItem key={dimension.key} icon={ClipboardCheck} title={dimension.label} text={dimension.description} />
+            ))}
+          </div>
+          <div className="review-risk-list">
+            {(humanAnalytics.rejection_reasons_distribution || []).length ? humanAnalytics.rejection_reasons_distribution.map((item) => (
+              <span key={item.key}><strong>{humanize(item.key)}</strong>{item.count}</span>
+            )) : <p className="muted">No rejection reasons have been recorded yet.</p>}
+          </div>
+          <p className="muted">Export endpoint: <code>/api/v1/evaluation/human/export?include_text=false</code></p>
+        </Card>
+
+      </div>
+
+      <div className="grid-two">
         <Card title="Benchmark Governance Snapshot">
           <div className="metric-list">
             <div><span>Runner</span><strong>{benchmark.benchmark_runner_exists ? "available" : "missing"}</strong></div>

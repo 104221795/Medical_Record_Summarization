@@ -1,12 +1,13 @@
 import { getStoredSession, getStoredRole } from "../hooks/useRole.js";
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const API_PREFIX = import.meta.env.VITE_API_PREFIX || "/api/v1";
 
 export async function apiClient(path, options = {}) {
   const session = getStoredSession();
   const role = getStoredRole();
   const userId = String(session.userId || session.email || "doctor-demo").trim();
-  const response = await fetch(`${API_PREFIX}${path}`, {
+  const response = await fetch(`${API_BASE_URL}${API_PREFIX}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",

@@ -28,6 +28,35 @@ def test_load_mock_dataset() -> None:
     assert records[0]["reference_summary"]
 
 
+def test_load_diversity_dataset_preserves_per_record_dataset_and_internal_splits(tmp_path: Path) -> None:
+    path = tmp_path / "diversity.jsonl"
+    path.write_text(
+        "\n".join(
+            [
+                (
+                    '{"note_id":"syn_001","patient_id":"p1","encounter_id":"e1",'
+                    '"source_note":"Diagnosis sepsis. Medication vancomycin.",'
+                    '"reference_summary":"Sepsis treated with vancomycin.",'
+                    '"dataset":"synthetic_structured_ehr","split":"demo"}'
+                ),
+                (
+                    '{"note_id":"messy_001","patient_id":"p2","encounter_id":"e2",'
+                    '"source_note":"ASSESSMENT/PLAN::: condition noted.   follow-up after discharge.",'
+                    '"reference_summary":"Condition with follow-up.",'
+                    '"dataset":"messy_formatting","split":"stress"}'
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    records = load_jsonl_dataset(path, dataset="diversity")
+
+    assert [record["dataset"] for record in records] == ["synthetic_structured_ehr", "messy_formatting"]
+    assert [record["split"] for record in records] == ["demo", "stress"]
+
+
 def test_normalize_dataset_preserves_ids() -> None:
     normalized = normalize_to_internal_schema(
         {
