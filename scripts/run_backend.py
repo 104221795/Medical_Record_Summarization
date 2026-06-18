@@ -2,12 +2,8 @@ from __future__ import annotations
 
 import argparse
 import os
-from pathlib import Path
 
-from dotenv import load_dotenv
-
-
-ROOT_DIR = Path(__file__).resolve().parents[1]
+from backend.app.runtime_env import load_runtime_env
 
 
 def parse_args() -> argparse.Namespace:
@@ -39,8 +35,11 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    load_dotenv(ROOT_DIR / ".env", override=False)
-    _apply_dev_defaults(args)
+    load_runtime_env(
+        enable_model_defaults=args.all_models,
+        job_backend=args.job_backend,
+        strict_rq=args.strict_rq,
+    )
 
     from backend.app.config import get_settings
     import uvicorn
@@ -62,36 +61,6 @@ def main() -> None:
         port=args.port,
         reload=args.reload,
     )
-
-
-def _apply_dev_defaults(args: argparse.Namespace) -> None:
-    os.environ.setdefault("HF_HOME", "D:\\hf_cache")
-    os.environ.setdefault("HF_HUB_CACHE", "D:\\hf_cache\\hub")
-    os.environ.setdefault("HF_DATASETS_CACHE", "D:\\hf_cache\\datasets")
-    os.environ.setdefault("TRANSFORMERS_CACHE", "D:\\hf_cache\\hub")
-    os.environ.setdefault("OLLAMA_MODELS", "D:\\ollama_models")
-    os.environ.setdefault("OLLAMA_API_BASE", "http://127.0.0.1:11434")
-    os.environ.setdefault("RAG_EMBEDDING_PROVIDER", "sentence_transformers")
-    os.environ.setdefault("RAG_SENTENCE_TRANSFORMERS_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
-    os.environ.setdefault("RAG_SENTENCE_TRANSFORMERS_LOCAL_FILES_ONLY", "true")
-    os.environ.setdefault("RAG_REDIS_URL", "redis://127.0.0.1:6379/0")
-    os.environ.setdefault("RAG_RQ_QUEUE_NAME", "clin_summ_jobs")
-    os.environ.setdefault("RAG_JOB_FALLBACK_TO_IN_PROCESS", "true")
-    os.environ.setdefault("RAG_RQ_REQUIRE_LIVE_WORKER", "true")
-    if args.job_backend != "env":
-        os.environ["RAG_JOB_BACKEND"] = args.job_backend
-    if args.strict_rq:
-        os.environ["RAG_JOB_FALLBACK_TO_IN_PROCESS"] = "false"
-        os.environ["RAG_RQ_REQUIRE_LIVE_WORKER"] = "true"
-    if args.all_models:
-        os.environ.setdefault("RUN_REAL_BASELINES", "1")
-        os.environ.setdefault("RAG_RUN_REAL_BASELINES", "1")
-        os.environ.setdefault("LLM_GATEWAY_MODE", "litellm")
-        os.environ.setdefault("LLM_GATEWAY_TIMEOUT_SECONDS", "180")
-        os.environ.setdefault("LLM_GATEWAY_TEMPERATURE", "0.1")
-        os.environ.setdefault("LLM_GATEWAY_MAX_TOKENS", "384")
-        os.environ.setdefault("LLM_GATEWAY_LOCAL_NUM_CTX", "8192")
-
 
 if __name__ == "__main__":
     main()

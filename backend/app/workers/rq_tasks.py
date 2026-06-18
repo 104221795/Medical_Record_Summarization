@@ -7,6 +7,7 @@ import uuid
 from ..config import get_settings
 from ..db.session import build_engine_from_settings, create_session_factory
 from ..models import ModelJobRecord
+from ..runtime_env import load_runtime_env
 from ..services.background_jobs import ModelJobService
 from ..services.rag import build_rag_service
 
@@ -20,6 +21,7 @@ def run_model_job(job_id: str) -> dict[str, Any]:
     ``model_jobs`` table.
     """
 
+    load_runtime_env(enable_model_defaults=True, job_backend="rq")
     settings = get_settings()
     session_factory = create_session_factory(build_engine_from_settings(settings))
     _mark_worker_initializing(session_factory, job_id)

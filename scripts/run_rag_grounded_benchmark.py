@@ -174,6 +174,29 @@ def main() -> None:
     model_rows: dict[str, list[dict[str, Any]]] = {}
     for provider in parse_models(args.models):
         rows = run_provider(provider, records, context_by_note, args, log_path)
+
+        # Validate provider outputs: ensure predictions correspond to the input note_ids.
+        expected_note_ids = [record["note_id"] for record in records]
+        expected_set = set(expected_note_ids)
+        provider_note_ids = [row.get("note_id") for row in rows]
+        unexpected = [nid for nid in provider_note_ids if nid not in expected_set]
+        if unexpected:
+            log(log_path, f"{provider}: unexpected prediction note_ids detected: {unexpected}")
+            if getattr(args, "fail_on_unexpected_predictions", False):
+                raise RuntimeError(f"{provider}: unexpected prediction note_ids found: {unexpected}")
+            if getattr(args, "drop_unexpected_predictions", False):
+                # Rebuild rows so the output contains exactly one row per input record in input order.
+                row_map = {row.get("note_id"): row for row in rows}
+                rebuilt: list[dict[str, Any]] = []
+                for record in records:
+                    nid = record["note_id"]
+                    if nid in row_map:
+                        rebuilt.append(row_map[nid])
+                    else:
+                        # create a failed placeholder row to preserve ordering and counts
+                        rebuilt.append(failed_prediction_row(record, context_by_note.get(nid, {}), provider, model_checkpoint(provider), "missing_prediction_filtered"))
+                rows = rebuilt
+
         model_rows[provider] = rows
         all_predictions.extend(rows)
         write_jsonl(output_dir / f"{provider}_predictions.jsonl", rows)
@@ -1402,6 +1425,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--terminal-smoke-records", type=int, default=1, help="Number of records to print in the terminal smoke report.")
     parser.add_argument("--skip-latest-pointer", action="store_true", help="Do not update D:/clin_summ_outputs/latest_rag_best_models.json for UI discovery.")
     parser.add_argument("--disable-retrieval-gate", action="store_true", help="Force summarization even when retrieval quality gate says review retrieval first.")
+    parser.add_argument(
+        "--drop-unexpected-predictions",
+        action="store_true",
+        help=(
+            "Drop prediction rows whose `note_id` is not present in the input dataset. "
+            "This prevents provider outputs from substituting unexpected records."
+        ),
+    )
+    parser.add_argument(
+        "--fail-on-unexpected-predictions",
+        action="store_true",
+        help=(
+            "Raise an error if provider predictions contain `note_id`s not in the input dataset. "
+            "Useful for detecting accidental replacement behavior."
+        ),
+    )
     args = parser.parse_args()
     args.local_files_only = not args.allow_model_downloads
     return args

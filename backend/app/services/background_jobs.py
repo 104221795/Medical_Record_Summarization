@@ -221,6 +221,7 @@ class ModelJobService:
         with self._lock:
             job = self._jobs.get(job_id)
             if job:
+                self._expire_job_if_timed_out(job)
                 return self._response(job)
         return self._persisted_response(job_id)
 
@@ -230,6 +231,8 @@ class ModelJobService:
             return ModelJobListResponse(jobs=persisted)
         with self._lock:
             jobs = sorted(self._jobs.values(), key=lambda item: item.created_at, reverse=True)
+            for job in jobs:
+                self._expire_job_if_timed_out(job)
             return ModelJobListResponse(jobs=[self._response(job) for job in jobs])
 
     def cancel(self, job_id: str) -> ModelJobResponse | None:
@@ -332,7 +335,8 @@ class ModelJobService:
                     for worker in workers
                     for worker_queue in worker.queues
                 }
-                if self._rq_queue_name() not in worker_queues:
+                windows_worker_count = _windows_worker_count(redis_connection, self._rq_queue_name())
+                if self._rq_queue_name() not in worker_queues and windows_worker_count == 0:
                     raise RuntimeError(
                         f"No live RQ worker is registered for queue '{self._rq_queue_name()}'. "
                         "Start one with: python -m scripts.run_rq_worker"
@@ -413,8 +417,18 @@ class ModelJobService:
             queue = Queue(self._rq_queue_name(), connection=redis_connection)
             status["redis_reachable"] = True
             status["queued_count"] = len(queue)
-            status["worker_count"] = len(Worker.all(connection=redis_connection))
-            status["message"] = "Redis/RQ backend is reachable."
+            rq_worker_count = len(Worker.all(connection=redis_connection))
+            windows_worker_count = _windows_worker_count(redis_connection, self._rq_queue_name())
+            status["rq_worker_count"] = rq_worker_count
+            status["windows_worker_count"] = windows_worker_count
+            status["worker_count"] = rq_worker_count + windows_worker_count
+            if status["worker_count"] == 0:
+                status["message"] = (
+                    "Redis is reachable, but no RQ worker is registered. "
+                    "Start one with: python -m scripts.run_rq_worker"
+                )
+            else:
+                status["message"] = "Redis/RQ backend is reachable."
         except Exception as exc:
             status["message"] = f"Redis/RQ backend is not reachable: {type(exc).__name__}: {exc}"
         return status
@@ -574,12 +588,22 @@ class ModelJobService:
             self._set_progress(job_id, 0.38, "clinical_context_builder")
             self._check_cancel_or_timeout(job_id, started)
             self._set_progress(job_id, 0.54, "provider_generation")
-            generated = service.generate(
-                patient_id,
-                request,
-                tenant_id=tenant_id,
-                actor_external_id=actor_external_id,
-            )
+            previous_gateway_timeout = os.environ.get("LLM_GATEWAY_TIMEOUT_SECONDS")
+            remaining_timeout = max(5.0, min(float(job.timeout_seconds), self._remaining_timeout(job_id, started) - 2.0))
+            os.environ["LLM_GATEWAY_TIMEOUT_SECONDS"] = str(int(remaining_timeout))
+            try:
+                generated = service.generate(
+                    patient_id,
+                    request,
+                    tenant_id=tenant_id,
+                    actor_external_id=actor_external_id,
+                )
+            finally:
+                if previous_gateway_timeout is None:
+                    os.environ.pop("LLM_GATEWAY_TIMEOUT_SECONDS", None)
+                else:
+                    os.environ["LLM_GATEWAY_TIMEOUT_SECONDS"] = previous_gateway_timeout
+            self._check_cancel_or_timeout(job_id, started)
             self._set_progress(job_id, 0.86, "citation_validation")
             session.commit()
             self._set_progress(job_id, 0.94, "draft_ready")
@@ -874,6 +898,8 @@ class ModelJobService:
             session = self._db_session_factory()
             try:
                 record = session.get(ModelJobRecord, uuid.UUID(job_id))
+                if record is not None:
+                    self._expire_record_if_timed_out(session, record)
                 return self._response_from_record(record) if record else None
             finally:
                 session.close()
@@ -906,6 +932,11 @@ class ModelJobService:
                 rows = session.scalars(
                     select(ModelJobRecord).order_by(ModelJobRecord.created_at.desc()).limit(200)
                 ).all()
+                changed = False
+                for row in rows:
+                    changed = self._expire_record_if_timed_out(session, row, commit=False) or changed
+                if changed:
+                    session.commit()
                 return [self._response_from_record(row) for row in rows]
             finally:
                 session.close()
@@ -966,6 +997,45 @@ class ModelJobService:
             return
 
     @staticmethod
+    def _job_timeout_anchor(job: ModelJob) -> datetime:
+        return _ensure_aware_utc(job.started_at or job.created_at)
+
+    def _expire_job_if_timed_out(self, job: ModelJob) -> bool:
+        if job.status in {"completed", "failed", "cancelled", "timed_out"}:
+            return False
+        elapsed = (datetime.now(UTC) - self._job_timeout_anchor(job)).total_seconds()
+        if elapsed <= job.timeout_seconds:
+            return False
+        job.status = "timed_out"
+        job.finished_at = datetime.now(UTC)
+        job.current_step = "timed_out"
+        job.error_message = (
+            f"Job timed out after exceeding timeout_seconds={job.timeout_seconds}. "
+            "The provider call may still be shutting down; re-enqueue after checking provider readiness."
+        )
+        self._persist_job(job)
+        return True
+
+    @staticmethod
+    def _expire_record_if_timed_out(session: Any, record: Any, *, commit: bool = True) -> bool:
+        if record.status in {"completed", "failed", "cancelled", "timed_out"}:
+            return False
+        anchor = _ensure_aware_utc(record.started_at or record.created_at)
+        elapsed = (datetime.now(UTC) - anchor).total_seconds()
+        if elapsed <= int(record.timeout_seconds or 900):
+            return False
+        record.status = "timed_out"
+        record.finished_at = datetime.now(UTC)
+        record.current_step = "timed_out"
+        record.error_message = (
+            f"Job timed out after exceeding timeout_seconds={int(record.timeout_seconds or 900)}. "
+            "The provider call may still be shutting down; re-enqueue after checking provider readiness."
+        )
+        if commit:
+            session.commit()
+        return True
+
+    @staticmethod
     def _response_from_record(record: Any) -> ModelJobResponse:
         return ModelJobResponse(
             job_id=str(record.job_id),
@@ -1014,6 +1084,17 @@ def _cache_path_report() -> dict[str, Any]:
             "points_to_c_drive": bool(raw_value and raw_value.lower().startswith("c:")),
         }
     return report
+
+
+def _ensure_aware_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _windows_worker_count(redis_connection: Any, queue_name: str) -> int:
+    pattern = f"clin_summ:windows_worker:{queue_name}:*"
+    return sum(1 for _key in redis_connection.scan_iter(match=pattern, count=100))
 
 
 def _catalog_item_for(model_name: str) -> ModelCatalogItem:

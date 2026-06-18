@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import uuid
 import time
+from datetime import UTC, datetime, timedelta
 
+from backend.app.models import ModelJobRecord
 from backend.app.services.background_jobs import model_job_service
 from backend.tests.summary_test_utils import HEADERS, api_client as api_client, import_patient
 
@@ -131,6 +134,40 @@ def test_job_timeout_is_reported(api_client) -> None:
     completed = _wait_for_terminal_job(client, job_id, timeout_seconds=3.0)
     assert completed["status"] == "timed_out"
     assert "timed out" in completed["error_message"].lower()
+
+
+def test_stale_persisted_running_job_is_marked_timed_out(api_client) -> None:
+    client, session_factory = api_client
+    model_job_service.reset_for_tests()
+    job_id = uuid.uuid4()
+    session = session_factory()
+    try:
+        session.add(
+            ModelJobRecord(
+                job_id=job_id,
+                job_type="summary_generation",
+                model_provider="qwen2.5",
+                model_name="qwen2.5",
+                status="running",
+                progress=0.54,
+                current_step="provider_generation",
+                timeout_seconds=1,
+                payload={},
+                created_at=datetime.now(UTC) - timedelta(minutes=5),
+                started_at=datetime.now(UTC) - timedelta(minutes=5),
+            )
+        )
+        session.commit()
+    finally:
+        session.close()
+
+    response = client.get(f"/api/v1/jobs/{job_id}", headers=ADMIN_HEADERS)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "timed_out"
+    assert body["current_step"] == "timed_out"
+    assert "timeout_seconds=1" in body["error_message"]
 
 
 def test_async_summary_generation_job_creates_draft(api_client) -> None:
