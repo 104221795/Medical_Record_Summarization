@@ -1,8 +1,15 @@
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 from sqlalchemy.orm import Session, sessionmaker
 
+from backend.app.config import Settings
+from backend.app.db.base import Base
+from backend.app.db.session import create_db_engine, create_session_factory
+from backend.app.main import create_app
+from backend.app.services.llm_gateway import SummaryProviderGateway
+from backend.app.services.rag import build_rag_service
 from backend.tests.summary_test_utils import (
     HEADERS,
     api_client,
@@ -69,3 +76,97 @@ def test_admin_artifact_and_audit_endpoints_are_graceful(
     assert "status" in benchmark.json()
     assert audit_export.status_code == 200, audit_export.text
     assert audit_export.json()["phi_safe"] is True
+
+
+def test_railway_provider_selectability_is_deployment_aware() -> None:
+    settings = Settings(
+        environment="staging",
+        deployment_mode="railway",
+        auth_secret_key=SecretStr("staging-test-secret-with-sufficient-entropy"),
+        cors_origins="https://example-staging.up.railway.app",
+        job_backend="rq",
+        redis_required=True,
+        primary_provider="gemini2.5_flash_lite",
+        local_ollama_enabled=False,
+    ).model_copy(update={"gemini_api_key": None})
+
+    providers = {
+        item.provider_name: item
+        for item in SummaryProviderGateway(settings).list_providers().providers
+    }
+
+    assert providers["deterministic"].selectable is True
+    assert providers["deterministic"].deployment_role == "smoke_fallback"
+    assert providers["gemini2.5_flash_lite"].selectable is False
+    assert providers["gemini2.5_flash_lite"].status == "configuration_required"
+    assert providers["qwen2.5"].selectable is False
+    assert providers["qwen2.5"].status == "local_only"
+
+
+def test_railway_gemini_is_selectable_when_server_secret_is_configured() -> None:
+    settings = Settings(
+        environment="staging",
+        deployment_mode="railway",
+        auth_secret_key=SecretStr("staging-test-secret-with-sufficient-entropy"),
+        cors_origins="https://example-staging.up.railway.app",
+        job_backend="rq",
+        redis_required=True,
+        primary_provider="gemini2.5_flash_lite",
+        gemini_api_key=SecretStr("test-gemini-key-placeholder"),
+    )
+
+    gemini = next(
+        item
+        for item in SummaryProviderGateway(settings).list_providers().providers
+        if item.provider_name == "gemini2.5_flash_lite"
+    )
+
+    assert gemini.selectable is True
+    assert gemini.status == "ready"
+    assert gemini.deployment_role == "deployment_primary"
+
+
+def test_staging_rejects_role_header_impersonation_and_admin_signup(tmp_path) -> None:
+    settings = Settings(
+        environment="staging",
+        deployment_mode="railway",
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'staging-auth.db'}",
+        auth_secret_key=SecretStr("staging-test-secret-with-sufficient-entropy"),
+        cors_origins="https://example-staging.up.railway.app",
+        job_backend="rq",
+        redis_required=True,
+        embedding_provider="hashing",
+    )
+    engine = create_db_engine(settings.database_url)
+    Base.metadata.create_all(engine)
+    session_factory = create_session_factory(engine)
+    app = create_app(
+        settings=settings,
+        rag_service=build_rag_service(settings),
+        db_session_factory=session_factory,
+    )
+
+    with TestClient(app) as client:
+        impersonation = client.get(
+            "/api/v1/audit/export",
+            headers={
+                "X-Tenant-ID": "sandbox",
+                "X-User-ID": "attacker",
+                "X-Role-Code": "clinical_admin",
+            },
+        )
+        signup = client.post(
+            "/api/v1/auth/signup",
+            json={
+                "full_name": "Unauthorized Admin",
+                "email": "unauthorized-admin@example.com",
+                "password": "StrongPass!123",
+                "confirm_password": "StrongPass!123",
+                "role": "admin",
+                "tenant_id": "sandbox",
+            },
+        )
+
+    assert impersonation.status_code == 401
+    assert signup.status_code == 403
+    engine.dispose()

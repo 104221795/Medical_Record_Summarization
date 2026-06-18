@@ -1,42 +1,5 @@
-# Canonical dependency file for local development, tests, docs smoke checks, and Docker builds.
-# Keep optional-heavy research dependencies here too so new contributors install one file only.
-
-# Core API/runtime
-alembic>=1.14,<2
-fastapi>=0.115,<1
-httpx>=0.27,<1
-google-auth>=2.29,<3
-numpy>=1.26,<3
-psycopg[binary]>=3.2,<4
-pydantic-settings>=2.6,<3
-psutil>=6,<8
-python-dotenv
-python-multipart>=0.0.18,<1
-qdrant-client>=1.12,<2
-redis>=5,<6
-rq>=1.16,<3
-sqlalchemy>=2.0,<3
-tiktoken
-tqdm>=4.66,<5
-uvicorn[standard]>=0.30,<1
-
-# RAG, embeddings, guardrails, and multimodal helpers
-fastembed>=0.6,<1
-sentence-transformers>=5.1,<6
-onnxruntime>=1.20,<2
-pillow>=11,<13
-
-# Baseline summarization and evaluation
-accelerate>=1.0,<2
-bert-score>=0.3,<1
-datasets>=2.20,<4
-evaluate>=0.4,<1
-mlflow>=3.0,<4
-pandas>=2.2,<3
-rouge-score>=0.1.2,<1
-sentencepiece>=0.2,<1
-torch>=2.4,<3
-transformers>=4.48,<6
-
-# Test runner
-pytest>=8,<10
+# Full local development/research environment.
+# Railway/Docker installs requirements-runtime.txt only.
+-r requirements-runtime.txt
+-r requirements-ml.txt
+-r requirements-test.txt

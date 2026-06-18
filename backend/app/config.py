@@ -28,6 +28,14 @@ class Settings(BaseSettings):
 
     app_name: str = "Medical Record Summarization RAG API"
     environment: Literal["development", "test", "staging", "production"] = "development"
+    deployment_mode: Literal["local", "railway"] = Field(
+        default="local",
+        validation_alias=AliasChoices("RAG_DEPLOYMENT_MODE", "DEPLOYMENT_MODE"),
+    )
+    primary_provider: str = Field(
+        default="deterministic",
+        validation_alias=AliasChoices("RAG_PRIMARY_PROVIDER", "PRIMARY_PROVIDER"),
+    )
     api_prefix: str = "/api/v1"
     cors_origins: str = Field(
         default="http://127.0.0.1:5173,http://localhost:5173",
@@ -35,7 +43,11 @@ class Settings(BaseSettings):
     )
     evaluation_artifact_root: Path | None = Field(
         default=None,
-        validation_alias=AliasChoices("RAG_EVALUATION_ARTIFACT_ROOT", "EVALUATION_ARTIFACT_ROOT"),
+        validation_alias=AliasChoices(
+            "RAG_EVALUATION_ARTIFACT_ROOT",
+            "EVALUATION_ARTIFACT_ROOT",
+            "BENCHMARK_SNAPSHOT_DIR",
+        ),
     )
 
     database_url: str = Field(
@@ -72,6 +84,27 @@ class Settings(BaseSettings):
         default=7 * 24 * 60 * 60,
         validation_alias=AliasChoices("RAG_RQ_FAILURE_TTL_SECONDS", "RQ_FAILURE_TTL_SECONDS"),
     )
+    rq_max_retries: int = Field(
+        default=2,
+        ge=0,
+        le=10,
+        validation_alias=AliasChoices("RAG_RQ_MAX_RETRIES", "RQ_MAX_RETRIES"),
+    )
+    rq_worker_heartbeat_seconds: int = Field(
+        default=5,
+        ge=1,
+        le=60,
+        validation_alias=AliasChoices(
+            "RAG_RQ_WORKER_HEARTBEAT_SECONDS",
+            "RQ_WORKER_HEARTBEAT_SECONDS",
+        ),
+    )
+    rq_worker_stale_seconds: int = Field(
+        default=20,
+        ge=5,
+        le=10 * 60,
+        validation_alias=AliasChoices("RAG_RQ_WORKER_STALE_SECONDS", "RQ_WORKER_STALE_SECONDS"),
+    )
 
     qdrant_url: str | None = None
     qdrant_api_key: SecretStr | None = None
@@ -102,6 +135,48 @@ class Settings(BaseSettings):
     )
     auth_secret_key: SecretStr = Field(default=SecretStr("dev-change-me-auth-secret"))
     auth_token_ttl_minutes: int = 60 * 12
+    allow_demo_header_auth: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "RAG_ALLOW_DEMO_HEADER_AUTH",
+            "ALLOW_DEMO_HEADER_AUTH",
+        ),
+    )
+    maximum_request_bytes: int = Field(
+        default=25 * 1024 * 1024,
+        ge=1024,
+        validation_alias=AliasChoices(
+            "RAG_MAXIMUM_REQUEST_BYTES",
+            "MAXIMUM_REQUEST_BYTES",
+        ),
+    )
+
+    local_ollama_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "RAG_LOCAL_OLLAMA_ENABLED",
+            "LOCAL_OLLAMA_ENABLED",
+        ),
+    )
+    ollama_base_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "RAG_OLLAMA_BASE_URL",
+            "OLLAMA_BASE_URL",
+            "OLLAMA_API_BASE",
+        ),
+    )
+    background_jobs_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "RAG_BACKGROUND_JOBS_ENABLED",
+            "BACKGROUND_JOBS_ENABLED",
+        ),
+    )
+    redis_required: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("RAG_REDIS_REQUIRED", "REDIS_REQUIRED"),
+    )
 
     llm_provider: Literal["mock", "deterministic", "local", "external", "gemini"] = "deterministic"
     llm_mock_behavior: Literal["normal", "invalid_json", "unsupported_claim"] = "normal"
@@ -139,6 +214,28 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def enforce_production_safety(self) -> "Settings":
+        if self.database_url.startswith("postgresql://"):
+            self.database_url = self.database_url.replace(
+                "postgresql://",
+                "postgresql+psycopg://",
+                1,
+            )
+        if self.environment in {"staging", "production"}:
+            if self.auth_secret_key.get_secret_value() == "dev-change-me-auth-secret":
+                raise ValueError(
+                    "Staging/production requires RAG_AUTH_SECRET_KEY or AUTH_SECRET_KEY "
+                    "to be set to a non-default secret."
+                )
+            if self.allow_demo_header_auth:
+                raise ValueError(
+                    "Demo header authentication must be disabled in staging/production."
+                )
+            if "*" in {origin.strip() for origin in self.cors_origins.split(",")}:
+                raise ValueError("Wildcard CORS is not allowed in staging/production.")
+        if self.deployment_mode == "railway" and self.job_backend != "rq":
+            raise ValueError("Railway deployment requires RAG_JOB_BACKEND=rq.")
+        if self.deployment_mode == "railway" and not self.redis_required:
+            raise ValueError("Railway deployment requires REDIS_REQUIRED=true.")
         if self.environment == "production" and self.embedding_provider == "hashing":
             raise ValueError(
                 "Hashing embeddings are development-only; configure "

@@ -235,7 +235,7 @@ def test_real_bart_provider_is_disabled_without_explicit_env(
                 },
             )
 
-            assert response.status_code == 422
+            assert response.status_code == 409
             assert "RUN_REAL_BASELINES=1" in response.json()["detail"]
     finally:
         engine.dispose()

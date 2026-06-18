@@ -1,15 +1,27 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Badge from "../common/Badge.jsx";
 
-export default function ProviderSelector({ providers = [], value, onChange, loading, error }) {
+export default function ProviderSelector({
+  providers = [],
+  value,
+  onChange,
+  loading,
+  error,
+  collapseAfterGeneration = false,
+}) {
   const [showDisabled, setShowDisabled] = useState(true);
   const [activeGroupKey, setActiveGroupKey] = useState("recommended");
+  const [expanded, setExpanded] = useState(!collapseAfterGeneration);
   const groups = groupProviders(providers);
   const selected = providers.find((provider) => provider.provider_name === value);
   const activeGroup = groups.find((group) => group.key === activeGroupKey) || groups[0];
 
+  useEffect(() => {
+    setExpanded(!collapseAfterGeneration);
+  }, [collapseAfterGeneration]);
+
   return (
-    <div className="provider-panel">
+    <div className={`provider-panel ${expanded ? "expanded" : "collapsed"}`}>
       <div className="section-title">
         <h3>Summary Provider</h3>
         {loading && <span className="muted">Checking provider status...</span>}
@@ -20,60 +32,76 @@ export default function ProviderSelector({ providers = [], value, onChange, load
           <span>Selected</span>
           <strong>{selected.display_name}</strong>
           <Badge tone={providerTone(selected.status)}>{readableStatus(selected.status)}</Badge>
+          {collapseAfterGeneration && (
+            <button
+              type="button"
+              className="provider-change-button"
+              onClick={() => setExpanded((current) => !current)}
+              aria-expanded={expanded}
+            >
+              {expanded ? "Hide" : "Change"}
+            </button>
+          )}
         </div>
       )}
-      <div className="provider-group-tabs" role="tablist" aria-label="Provider groups">
-        {groups.map((group) => (
-          <button
-            type="button"
-            key={group.key}
-            className={group.key === activeGroup?.key ? "active" : ""}
-            onClick={() => setActiveGroupKey(group.key)}
-          >
-            <span>{group.shortTitle}</span>
-            <Badge tone="info">{group.items.length}</Badge>
-          </button>
-        ))}
-      </div>
-      <div className="provider-group-list compact">
-        {activeGroup && (
-          <section className="provider-group" key={activeGroup.key}>
-            <div className="provider-group-title">
-              <strong>{activeGroup.title}</strong>
-              <span>{activeGroup.description}</span>
-            </div>
-            <div className="provider-radio-list">
-              {visibleProviders(activeGroup, showDisabled).map((provider) => {
-                const active = provider.provider_name === value;
-                return (
-                  <button
-                    type="button"
-                    className={`provider-radio-option ${active ? "active" : ""} ${isDisabledProvider(provider) ? "disabled-provider" : ""}`}
-                    key={provider.provider_name}
-                    disabled={isDisabledProvider(provider)}
-                    onClick={() => {
-                      if (!isDisabledProvider(provider)) onChange(provider.provider_name);
-                    }}
-                  >
-                    <span className="provider-radio-dot" aria-hidden="true" />
-                    <span className="provider-card-head">
-                      <strong>{provider.display_name}</strong>
-                      <Badge tone={providerTone(provider.status)}>{readableStatus(provider.status)}</Badge>
-                    </span>
-                    <span className="provider-domain">{provider.domain_fit || provider.description}</span>
-                    <span className="provider-kind">{providerKind(provider)} - <code>{provider.provider_name}</code></span>
-                  </button>
-                );
-              })}
-            </div>
-            {activeGroup.items.some(isDisabledProvider) && (
-              <button type="button" className="provider-collapse-button" onClick={() => setShowDisabled((value) => !value)}>
-                {showDisabled ? "Hide disabled providers" : `Show ${activeGroup.items.filter(isDisabledProvider).length} disabled provider(s)`}
+      {expanded && (
+        <>
+          <div className="provider-group-tabs" role="tablist" aria-label="Provider groups">
+            {groups.map((group) => (
+              <button
+                type="button"
+                key={group.key}
+                className={group.key === activeGroup?.key ? "active" : ""}
+                onClick={() => setActiveGroupKey(group.key)}
+              >
+                <span>{group.shortTitle}</span>
+                <Badge tone="info">{group.items.length}</Badge>
               </button>
+            ))}
+          </div>
+          <div className="provider-group-list compact">
+            {activeGroup && (
+              <section className="provider-group" key={activeGroup.key}>
+                <div className="provider-group-title">
+                  <strong>{activeGroup.title}</strong>
+                  <span>{activeGroup.description}</span>
+                </div>
+                <div className="provider-radio-list">
+                  {visibleProviders(activeGroup, showDisabled).map((provider) => {
+                    const active = provider.provider_name === value;
+                    return (
+                      <button
+                        type="button"
+                        className={`provider-radio-option ${active ? "active" : ""} ${isDisabledProvider(provider) ? "disabled-provider" : ""}`}
+                        key={provider.provider_name}
+                        disabled={isDisabledProvider(provider)}
+                        title={provider.disabled_reason || provider.description}
+                        onClick={() => {
+                          if (!isDisabledProvider(provider)) onChange(provider.provider_name);
+                        }}
+                      >
+                        <span className="provider-radio-dot" aria-hidden="true" />
+                        <span className="provider-card-head">
+                          <strong>{provider.display_name}</strong>
+                          <Badge tone={providerTone(provider.status)}>{readableStatus(provider.status)}</Badge>
+                        </span>
+                        <span className="provider-domain">{provider.domain_fit || provider.description}</span>
+                        {provider.disabled_reason && <span className="provider-disabled-reason">{provider.disabled_reason}</span>}
+                        <span className="provider-kind">{providerKind(provider)} - <code>{provider.provider_name}</code></span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {activeGroup.items.some(isDisabledProvider) && (
+                  <button type="button" className="provider-collapse-button" onClick={() => setShowDisabled((value) => !value)}>
+                    {showDisabled ? "Hide disabled providers" : `Show ${activeGroup.items.filter(isDisabledProvider).length} disabled provider(s)`}
+                  </button>
+                )}
+              </section>
             )}
-          </section>
-        )}
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -144,12 +172,5 @@ function visibleProviders(group, showDisabled) {
 }
 
 function isDisabledProvider(provider) {
-  const status = readableStatus(provider.status);
-  return (
-    status.includes("disabled")
-    || status.includes("cache issue")
-    || status.includes("needs config")
-    || status.includes("misconfigured")
-    || status.includes("governance")
-  );
+  return provider.selectable !== true;
 }

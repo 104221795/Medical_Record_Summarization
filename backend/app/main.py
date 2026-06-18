@@ -36,6 +36,9 @@ from .services.clinical_pipeline import ClinicalSummaryPipelineService
 from .services.fhir_mapper import FhirMapperService
 from .services.multimodal import MultimodalService
 from .services.rag import RagService, build_rag_service
+from .services.llm_gateway import SummaryProviderGateway
+from .models import ModelJobRecord
+from sqlalchemy import func, select
 
 
 CITATION_UI_DIR = Path(__file__).resolve().parents[1] / "ui" / "citation"
@@ -74,6 +77,25 @@ def create_app(
             allow_methods=["*"],
             allow_headers=["*"],
         )
+
+    @app.middleware("http")
+    async def enforce_request_size(request: Request, call_next):
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                too_large = int(content_length) > configured_settings.maximum_request_bytes
+            except ValueError:
+                too_large = False
+            if too_large:
+                return JSONResponse(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    content={
+                        "detail": (
+                            "Request body exceeds the configured staging size limit."
+                        )
+                    },
+                )
+        return await call_next(request)
     app.state.db_session_factory = db_session_factory or create_session_factory(
         build_engine_from_settings(configured_settings)
     )
@@ -216,23 +238,32 @@ def _log_registered_auth_routes(app: FastAPI) -> None:
 
 def _readiness_report(app: FastAPI) -> dict[str, Any]:
     settings = app.state.settings
+    job_readiness = model_job_service.readiness(include_smoke=False)
+    provider_readiness = SummaryProviderGateway(settings).list_providers()
     checks: dict[str, dict[str, Any]] = {
         "database": _database_check(app.state.db_session_factory),
         "vector_store": _vector_store_check(settings),
         "artifacts": _artifact_check(settings),
-        "providers": _provider_catalog_check(),
+        "providers": _provider_catalog_check(settings, provider_readiness.providers),
+        "jobs": _job_system_check(
+            app.state.db_session_factory,
+            settings,
+            job_readiness.queue_status,
+        ),
         "configuration": _configuration_check(settings),
     }
+    critical_names = ["database", "configuration"]
+    if settings.redis_required or settings.deployment_mode == "railway":
+        critical_names.append("jobs")
     critical_failures = [
-        name
-        for name in ("database", "configuration")
-        if checks[name]["status"] == "fail"
+        name for name in critical_names if checks[name]["status"] == "fail"
     ]
     degraded = any(item["status"] in {"warning", "fail"} for item in checks.values())
     return {
         "status": "not_ready" if critical_failures else ("degraded" if degraded else "ready"),
         "service": settings.app_name,
         "environment": settings.environment,
+        "deployment_mode": settings.deployment_mode,
         "api_prefix": settings.api_prefix,
         "checks": checks,
         "clinical_use": "staging_demo_only",
@@ -294,27 +325,97 @@ def _artifact_check(settings: Settings) -> dict[str, Any]:
     }
 
 
-def _provider_catalog_check() -> dict[str, Any]:
+def _provider_catalog_check(settings: Settings, providers: list[Any]) -> dict[str, Any]:
+    primary = next(
+        (item for item in providers if item.provider_name == settings.primary_provider),
+        None,
+    )
+    ready_count = sum(1 for item in providers if item.selectable)
+    primary_ready = bool(primary and primary.selectable)
+    return {
+        "status": "pass" if primary_ready else "warning",
+        "provider_count": len(providers),
+        "selectable_count": ready_count,
+        "primary_provider": settings.primary_provider,
+        "primary_ready": primary_ready,
+        "primary_status": primary.status if primary else "unregistered",
+        "primary_disabled_reason": primary.disabled_reason if primary else "Provider is not registered.",
+        "providers": [item.model_dump(mode="json") for item in providers],
+        "message": (
+            "Primary provider is selectable."
+            if primary_ready
+            else "Primary provider is unavailable; deterministic smoke fallback may remain available."
+        ),
+    }
+
+
+def _job_system_check(
+    factory: sessionmaker[Session],
+    settings: Settings,
+    queue_status: dict[str, Any],
+) -> dict[str, Any]:
+    active_jobs = 0
     try:
-        catalog = model_job_service.readiness(include_smoke=False)
-        return {
-            "status": "pass",
-            "provider_count": len(catalog.models),
-            "queue_backend": catalog.queue_backend,
-            "message": "Provider catalog loaded. Optional providers may still require cache/API configuration.",
-        }
-    except Exception as exc:
-        return {
-            "status": "warning",
-            "message": "Provider catalog readiness could not be fully evaluated.",
-            "error": f"{type(exc).__name__}: {exc}",
-        }
+        session = factory()
+        try:
+            active_jobs = int(
+                session.scalar(
+                    select(func.count())
+                    .select_from(ModelJobRecord)
+                    .where(ModelJobRecord.status.in_(["queued", "running"]))
+                )
+                or 0
+            )
+        finally:
+            session.close()
+    except Exception:
+        active_jobs = -1
+    redis_reachable = bool(queue_status.get("redis_reachable"))
+    worker_count = int(queue_status.get("worker_count") or 0)
+    required = settings.redis_required or settings.deployment_mode == "railway"
+    ready = (
+        settings.background_jobs_enabled
+        and settings.job_backend == "rq"
+        and redis_reachable
+        and worker_count >= 1
+    )
+    if not settings.background_jobs_enabled:
+        state = "fail" if required else "warning"
+        message = "Background jobs are disabled."
+    elif settings.job_backend != "rq":
+        state = "fail" if required else "warning"
+        message = "Background jobs are not configured for Redis/RQ."
+    elif not redis_reachable:
+        state = "fail" if required else "warning"
+        message = "Redis is unavailable."
+    elif worker_count < 1:
+        state = "fail" if required else "warning"
+        message = "Redis is reachable, but no live worker is registered."
+    else:
+        state = "pass"
+        message = "Redis queue and worker are ready."
+    return {
+        "status": state,
+        "required": required,
+        "ready": ready,
+        "backend": settings.job_backend,
+        "redis_reachable": redis_reachable,
+        "worker_count": worker_count,
+        "workers": [
+            *(queue_status.get("rq_workers") or []),
+            *(queue_status.get("windows_workers") or []),
+        ],
+        "queued_count": queue_status.get("queued_count"),
+        "active_job_count": active_jobs,
+        "queue_name": queue_status.get("queue_name"),
+        "message": message,
+    }
 
 
 def _configuration_check(settings: Settings) -> dict[str, Any]:
     warnings: list[str] = []
-    if settings.environment in {"staging", "production"} and settings.auth_secret_key.get_secret_value() == "dev-change-me-auth-secret":
-        warnings.append("Set RAG_AUTH_SECRET_KEY to a non-default Railway secret.")
+    if settings.deployment_mode == "railway" and settings.cors_origins.startswith("http://"):
+        warnings.append("Set CORS_ORIGINS to the deployed HTTPS frontend domain.")
     if settings.environment == "production":
         warnings.append("Production clinical deployment is not supported by this PoC; use staging/demo only.")
     return {

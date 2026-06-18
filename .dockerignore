@@ -28,6 +28,8 @@ dist
 build
 
 api
+data
+evaluation
 data/raw
 data/raw_*
 data/credentialed
@@ -44,6 +46,7 @@ models_tuned
 output
 outputs
 results
+clin_summ_outputs
 var
 backend/var
 
@@ -51,3 +54,9 @@ hf_cache
 ollama_models
 qdrant_storage
 .qdrant
+*.bin
+*.safetensors
+*.gguf
+*.onnx
+*.pt
+*.pth

@@ -175,6 +175,13 @@ class ModelJobService:
         model_provider: str,
         timeout_seconds: int = 900,
     ) -> ModelJobResponse:
+        existing = self._find_active_summary_job(
+            patient_id=patient_id,
+            encounter_id=str(request_payload.get("encounter_id") or ""),
+            model_provider=model_provider,
+        )
+        if existing is not None:
+            return existing
         job = ModelJob(
             job_id=str(uuid.uuid4()),
             job_type="summary_generation",
@@ -198,6 +205,43 @@ class ModelJobService:
             self._persist_job(job)
         self._executor.submit(self._run_job, job.job_id)
         return self._response(job)
+
+    def _find_active_summary_job(
+        self,
+        *,
+        patient_id: str,
+        encounter_id: str,
+        model_provider: str,
+    ) -> ModelJobResponse | None:
+        if self._db_session_factory is None:
+            return None
+        try:
+            from ..models import ModelJobRecord
+
+            session = self._db_session_factory()
+            try:
+                rows = session.scalars(
+                    select(ModelJobRecord)
+                    .where(
+                        ModelJobRecord.job_type == "summary_generation",
+                        ModelJobRecord.status.in_(["queued", "running"]),
+                    )
+                    .order_by(ModelJobRecord.created_at.desc())
+                ).all()
+                for record in rows:
+                    payload = dict(record.payload or {})
+                    request_payload = dict(payload.get("request") or {})
+                    if (
+                        str(payload.get("patient_id") or "") == patient_id
+                        and str(request_payload.get("encounter_id") or "") == encounter_id
+                        and str(record.model_provider or "") == model_provider
+                    ):
+                        return self._response_from_record(record)
+            finally:
+                session.close()
+        except Exception:
+            return None
+        return None
 
     def enqueue_default_warmups(self, *, timeout_seconds: int = 900) -> ModelJobListResponse:
         responses: list[ModelJobResponse] = []
@@ -417,10 +461,37 @@ class ModelJobService:
             queue = Queue(self._rq_queue_name(), connection=redis_connection)
             status["redis_reachable"] = True
             status["queued_count"] = len(queue)
-            rq_worker_count = len(Worker.all(connection=redis_connection))
-            windows_worker_count = _windows_worker_count(redis_connection, self._rq_queue_name())
+            rq_workers = Worker.all(connection=redis_connection)
+            rq_worker_status = []
+            now = datetime.now(UTC)
+            for worker in rq_workers:
+                heartbeat = getattr(worker, "last_heartbeat", None)
+                heartbeat_age = None
+                if heartbeat is not None:
+                    heartbeat_age = max(
+                        0.0,
+                        (now - _ensure_aware_utc(heartbeat)).total_seconds(),
+                    )
+                rq_worker_status.append(
+                    {
+                        "worker_id": getattr(worker, "name", None),
+                        "state": str(getattr(worker, "state", "unknown")),
+                        "heartbeat_age_seconds": (
+                            round(heartbeat_age, 3) if heartbeat_age is not None else None
+                        ),
+                    }
+                )
+            rq_worker_count = len(rq_workers)
+            windows_workers = _windows_worker_status(
+                redis_connection,
+                self._rq_queue_name(),
+                stale_seconds=int(getattr(self._settings, "rq_worker_stale_seconds", 20)),
+            )
+            windows_worker_count = len(windows_workers)
             status["rq_worker_count"] = rq_worker_count
+            status["rq_workers"] = rq_worker_status
             status["windows_worker_count"] = windows_worker_count
+            status["windows_workers"] = windows_workers
             status["worker_count"] = rq_worker_count + windows_worker_count
             if status["worker_count"] == 0:
                 status["message"] = (
@@ -504,9 +575,9 @@ class ModelJobService:
                 self._persist_job(job)
                 return
             job.status = "running"
-            job.started_at = datetime.now(UTC)
+            job.started_at = job.started_at or datetime.now(UTC)
             job.progress = 0.05
-            job.current_step = "starting"
+            job.current_step = job.current_step or "worker_initializing"
             self._persist_job(job)
         started = time.perf_counter()
         try:
@@ -810,8 +881,11 @@ class ModelJobService:
     def _check_cancel_or_timeout(self, job_id: str, started: float) -> None:
         with self._lock:
             job = self._jobs[job_id]
+            if self._persisted_job_cancelled(job_id):
+                job.cancel_requested = True
             if job.cancel_requested:
                 job.status = "cancelled"
+                job.current_step = "cancelled"
                 job.finished_at = datetime.now(UTC)
                 self._persist_job(job)
                 raise RuntimeError("Job cancelled.")
@@ -824,13 +898,32 @@ class ModelJobService:
     def _set_progress(self, job_id: str, progress: float, current_step: str) -> None:
         with self._lock:
             job = self._jobs[job_id]
+            if self._persisted_job_cancelled(job_id):
+                job.cancel_requested = True
             if job.cancel_requested:
                 job.status = "cancelled"
+                job.current_step = "cancelled"
                 job.finished_at = datetime.now(UTC)
+                self._persist_job(job)
                 raise RuntimeError("Job cancelled.")
             job.progress = max(0.0, min(1.0, progress))
             job.current_step = current_step
             self._persist_job(job)
+
+    def _persisted_job_cancelled(self, job_id: str) -> bool:
+        if self._db_session_factory is None:
+            return False
+        try:
+            from ..models import ModelJobRecord
+
+            session = self._db_session_factory()
+            try:
+                record = session.get(ModelJobRecord, uuid.UUID(job_id))
+                return bool(record and record.status == "cancelled")
+            finally:
+                session.close()
+        except Exception:
+            return False
 
     def _remaining_timeout(self, job_id: str, started: float) -> float:
         with self._lock:
@@ -868,6 +961,10 @@ class ModelJobService:
                 if record is None:
                     record = ModelJobRecord(job_id=job_uuid)
                     session.add(record)
+                elif record.status == "cancelled" and job.status != "cancelled":
+                    job.status = "cancelled"
+                    job.current_step = "cancelled"
+                    job.finished_at = record.finished_at or datetime.now(UTC)
                 record.job_type = job.job_type
                 record.model_provider = job.model_provider
                 record.model_name = job.model_name
@@ -1093,8 +1190,41 @@ def _ensure_aware_utc(value: datetime) -> datetime:
 
 
 def _windows_worker_count(redis_connection: Any, queue_name: str) -> int:
+    return len(_windows_worker_status(redis_connection, queue_name, stale_seconds=20))
+
+
+def _windows_worker_status(
+    redis_connection: Any,
+    queue_name: str,
+    *,
+    stale_seconds: int,
+) -> list[dict[str, Any]]:
     pattern = f"clin_summ:windows_worker:{queue_name}:*"
-    return sum(1 for _key in redis_connection.scan_iter(match=pattern, count=100))
+    now = time.time()
+    workers: list[dict[str, Any]] = []
+    for key in redis_connection.scan_iter(match=pattern, count=100):
+        raw_payload = redis_connection.get(key)
+        if not raw_payload:
+            continue
+        try:
+            payload = json.loads(
+                raw_payload.decode("utf-8") if isinstance(raw_payload, bytes) else str(raw_payload)
+            )
+            heartbeat_at = float(payload.get("heartbeat_at") or 0.0)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+        age_seconds = max(0.0, now - heartbeat_at)
+        if heartbeat_at <= 0.0 or age_seconds > stale_seconds:
+            continue
+        workers.append(
+            {
+                "worker_id": payload.get("worker_id"),
+                "state": payload.get("state"),
+                "job_id": payload.get("job_id"),
+                "heartbeat_age_seconds": round(age_seconds, 3),
+            }
+        )
+    return workers
 
 
 def _catalog_item_for(model_name: str) -> ModelCatalogItem:

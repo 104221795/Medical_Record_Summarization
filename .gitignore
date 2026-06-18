@@ -7,6 +7,7 @@ __pycache__/
 *.py[cod]
 output/
 outputs/
+clin_summ_outputs/
 results/
 models_tuned/
 backend/var/
@@ -18,6 +19,12 @@ build/
 *.log
 *.zip
 *.tar.gz
+*.bin
+*.safetensors
+*.gguf
+*.onnx
+*.pt
+*.pth
 *.pem
 *.key
 *.crt

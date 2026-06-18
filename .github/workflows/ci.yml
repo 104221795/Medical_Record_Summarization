@@ -27,10 +27,25 @@ jobs:
       - name: Install backend dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-runtime.txt -r requirements-test.txt
+      - name: Compile deployment entrypoints
+        run: |
+          python -m py_compile backend/app/main.py backend/app/services/background_jobs.py backend/app/runtime_env.py backend/app/workers/rq_tasks.py scripts/run_rq_worker.py
+      - name: Validate migrations on clean SQLite
+        run: python -m alembic -c alembic.ini upgrade head
       - name: Run lightweight backend tests
         run: |
-          python -m pytest backend/tests/test_deployment_smoke.py backend/tests/test_clinical_safety_layer.py -q
+          python -m pytest backend/tests/test_deployment_smoke.py backend/tests/test_clinical_safety_layer.py backend/tests/test_background_jobs.py -q
+
+  secret-scan:
+    name: Secret pattern scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject common committed secret formats
+        shell: bash
+        run: |
+          ! git grep -nE 'AIza[0-9A-Za-z_-]{20,}|sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{20,}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----'
 
   frontend:
     name: Frontend build
@@ -51,3 +66,16 @@ jobs:
           VITE_API_PREFIX: /api/v1
           VITE_API_BASE_URL: ""
         run: npm run build
+
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build deployment image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: clin-summ:ci

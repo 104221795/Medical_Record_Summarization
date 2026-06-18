@@ -15,6 +15,7 @@ const preferredProviders = [
   "pegasus_cnn_dailymail",
   "pegasus_xsum",
 ];
+const ACTIVE_JOB_STORAGE_KEY = "clinSummActiveGeneration";
 
 export function useSummaryGeneration(initialPatientId = "") {
   const { providers, loading: providersLoading, error: providersError } = useProviders();
@@ -35,6 +36,8 @@ export function useSummaryGeneration(initialPatientId = "") {
   const [generationStatus, setGenerationStatus] = useState(null);
   const [generationJob, setGenerationJob] = useState(null);
   const [generationError, setGenerationError] = useState(null);
+  const [jobReadiness, setJobReadiness] = useState(null);
+  const [jobReadinessError, setJobReadinessError] = useState(null);
 
   useEffect(() => {
     if (!generating || !generationStartedAt) return undefined;
@@ -45,6 +48,75 @@ export function useSummaryGeneration(initialPatientId = "") {
     }, 750);
     return () => window.clearInterval(timer);
   }, [generating, generationStartedAt, provider, generationJob]);
+
+  useEffect(() => {
+    let alive = true;
+    jobsApi.readiness()
+      .then((data) => {
+        if (alive) setJobReadiness(data);
+      })
+      .catch((error) => {
+        if (alive) setJobReadinessError(error);
+      });
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    const stored = readActiveJob();
+    if (!stored?.jobId) return undefined;
+    let alive = true;
+    const restore = async () => {
+      try {
+        const existing = await jobsApi.get(stored.jobId);
+        if (!alive) return;
+        setSelectedPatientId(stored.patientId || "");
+        setProvider(stored.provider || "deterministic");
+        setGenerationJob(existing);
+        const startedAt = Number(stored.startedAt || Date.now());
+        setGenerationStartedAt(startedAt);
+        setGenerationElapsedSeconds(Math.max(0, Math.round((Date.now() - startedAt) / 1000)));
+        if (["failed", "cancelled", "timed_out"].includes(existing.status)) {
+          clearActiveJob();
+          setGenerationStatus(buildGenerationStatus(stored.provider, 0, "failed", existing));
+          return;
+        }
+        if (existing.status === "completed") {
+          clearActiveJob();
+          const summaryId = existing.result?.summary_id;
+          if (summaryId) setGeneratedSummary(await summaryApi.detail(summaryId));
+          setGenerationStatus(buildGenerationStatus(stored.provider, 0, "completed", existing));
+          return;
+        }
+        setGenerating(true);
+        const completed = await pollGenerationJob(existing.job_id, {
+          provider: stored.provider,
+          startedAt,
+          onUpdate: (job) => {
+            if (!alive) return;
+            setGenerationJob(job);
+            const elapsed = Math.max(0, Math.round((Date.now() - startedAt) / 1000));
+            setGenerationElapsedSeconds(elapsed);
+            setGenerationStatus(buildGenerationStatus(stored.provider, elapsed, "", job));
+          },
+        });
+        clearActiveJob();
+        if (!alive) return;
+        const summaryId = completed.result?.summary_id;
+        if (summaryId) setGeneratedSummary(await summaryApi.detail(summaryId));
+        setGenerationStatus(buildGenerationStatus(stored.provider, 0, "completed", completed));
+      } catch (error) {
+        clearActiveJob();
+        if (alive) {
+          setGenerationError(error);
+          setGenerationStatus(buildGenerationStatus(stored.provider, 0, "failed"));
+        }
+      } finally {
+        if (alive) setGenerating(false);
+      }
+    };
+    restore();
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -114,8 +186,22 @@ export function useSummaryGeneration(initialPatientId = "") {
   const selectedPatient = patientContext?.patient || patients.find((item) => item.patient_id === selectedPatientId) || null;
   const selectedEncounter = patientContext?.encounters?.find((item) => item.encounter_id === encounterId) || null;
 
+  useEffect(() => {
+    if (!filteredProviders.length || providersLoading) return;
+    const current = filteredProviders.find((item) => item.provider_name === provider);
+    if (current?.selectable) return;
+    const deploymentPrimary = filteredProviders.find(
+      (item) => item.deployment_role === "deployment_primary" && item.selectable,
+    );
+    const fallback = deploymentPrimary || filteredProviders.find((item) => item.selectable);
+    if (fallback) setProvider(fallback.provider_name);
+  }, [filteredProviders, provider, providersLoading]);
+
   const generateDraft = async () => {
     if (!selectedPatientId) throw new Error("Select a patient before generating a summary.");
+    if (!selectedProvider?.selectable) {
+      throw new Error(selectedProvider?.disabled_reason || "Selected provider is unavailable.");
+    }
     setGenerating(true);
     const startedAt = Date.now();
     setGenerationStartedAt(startedAt);
@@ -133,6 +219,13 @@ export function useSummaryGeneration(initialPatientId = "") {
       };
       const createdJob = await summaryApi.generateAsync(selectedPatientId, payload);
       latestJob = createdJob;
+      storeActiveJob({
+        jobId: createdJob.job_id,
+        patientId: selectedPatientId,
+        encounterId,
+        provider,
+        startedAt,
+      });
       setGenerationJob(createdJob);
       setGenerationStatus(buildGenerationStatus(provider, 0, "", createdJob));
       const completedJob = await pollGenerationJob(createdJob.job_id, {
@@ -151,12 +244,16 @@ export function useSummaryGeneration(initialPatientId = "") {
         throw new Error("Generation job completed without a summary_id.");
       }
       const detail = await summaryApi.detail(summaryId);
+      clearActiveJob();
       setGeneratedSummary(detail);
       const elapsed = Math.max(0, Math.round((Date.now() - startedAt) / 1000));
       setGenerationElapsedSeconds(elapsed);
       setGenerationStatus(buildGenerationStatus(provider, elapsed, "completed", completedJob));
       return detail;
     } catch (err) {
+      if (latestJob?.status && ["failed", "cancelled", "timed_out"].includes(latestJob.status)) {
+        clearActiveJob();
+      }
       setGenerationError(err);
       const elapsed = Math.max(0, Math.round((Date.now() - startedAt) / 1000));
       setGenerationStatus(buildGenerationStatus(provider, elapsed, "failed", latestJob));
@@ -170,6 +267,7 @@ export function useSummaryGeneration(initialPatientId = "") {
     if (!generationJob?.job_id) return;
     try {
       const cancelled = await jobsApi.cancel(generationJob.job_id);
+      clearActiveJob();
       setGenerationJob(cancelled);
       setGenerationStatus(buildGenerationStatus(provider, generationElapsedSeconds, "cancelled", cancelled));
       setGenerating(false);
@@ -205,6 +303,8 @@ export function useSummaryGeneration(initialPatientId = "") {
     generationElapsedSeconds,
     generationJob,
     generationError,
+    jobReadiness,
+    jobReadinessError,
     generateDraft,
     cancelGeneration,
   };
@@ -358,5 +458,25 @@ function fallbackProvider(providerName) {
     provider_type: providerName.includes("gemini") ? "api" : "local",
     local_model: !providerName.includes("gemini"),
     description,
+    selectable: providerName === "deterministic",
+    disabled_reason: providerName === "deterministic" ? null : "Provider readiness metadata is unavailable.",
+    deployment_role: providerName === "deterministic" ? "smoke_fallback" : "optional",
+    readiness_source: providerName === "deterministic" ? "built_in" : "local",
   };
+}
+
+function storeActiveJob(value) {
+  localStorage.setItem(ACTIVE_JOB_STORAGE_KEY, JSON.stringify(value));
+}
+
+function readActiveJob() {
+  try {
+    return JSON.parse(localStorage.getItem(ACTIVE_JOB_STORAGE_KEY));
+  } catch {
+    return null;
+  }
+}
+
+function clearActiveJob() {
+  localStorage.removeItem(ACTIVE_JOB_STORAGE_KEY);
 }

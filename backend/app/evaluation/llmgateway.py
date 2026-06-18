@@ -122,6 +122,8 @@ def _generate_via_litellm(
     messages: list[dict[str, str]],
     config: GatewayConfig,
 ) -> str:
+    if provider == "gemini2.5_flash_lite":
+        return _generate_via_gemini_rest(model_name, messages, config)
     try:
         from litellm import completion
     except ImportError as exc:
@@ -142,6 +144,56 @@ def _generate_via_litellm(
         kwargs["api_key"] = os.environ["GEMINI_API_KEY"]
     response = completion(**kwargs)
     return str(response.choices[0].message.content or "")
+
+
+def _generate_via_gemini_rest(
+    model_name: str,
+    messages: list[dict[str, str]],
+    config: GatewayConfig,
+) -> str:
+    api_key = (os.environ.get("GEMINI_API_KEY") or os.environ.get("RAG_GEMINI_API_KEY") or "").strip()
+    if not api_key:
+        raise LLMGatewayError("Gemini API key is not configured.")
+    clean_model = model_name.removeprefix("gemini/")
+    system_parts = [
+        {"text": message["content"]}
+        for message in messages
+        if message.get("role") == "system"
+    ]
+    contents = [
+        {
+            "role": "model" if message.get("role") == "assistant" else "user",
+            "parts": [{"text": message.get("content") or ""}],
+        }
+        for message in messages
+        if message.get("role") != "system"
+    ]
+    payload: dict[str, Any] = {
+        "contents": contents,
+        "generationConfig": {
+            "temperature": config.temperature,
+            "maxOutputTokens": config.max_tokens,
+        },
+    }
+    if system_parts:
+        payload["systemInstruction"] = {"parts": system_parts}
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{clean_model}:generateContent?key={api_key}"
+    )
+    response = _post_json(url, payload, config)
+    candidates = response.get("candidates")
+    if not isinstance(candidates, list) or not candidates:
+        raise LLMGatewayError("Gemini response did not include candidates.")
+    content = candidates[0].get("content") if isinstance(candidates[0], dict) else None
+    parts = content.get("parts") if isinstance(content, dict) else None
+    if not isinstance(parts, list):
+        raise LLMGatewayError("Gemini response did not include content parts.")
+    return "\n".join(
+        str(part.get("text") or "")
+        for part in parts
+        if isinstance(part, dict) and part.get("text")
+    )
 
 
 def _generate_via_ollama_native(

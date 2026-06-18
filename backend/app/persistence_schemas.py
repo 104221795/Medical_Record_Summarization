@@ -730,6 +730,21 @@ class ProviderInfo(PersistenceModel):
     local_model: bool
     domain_fit: str
     description: str
+    selectable: bool = False
+    disabled_reason: str | None = None
+    deployment_role: Literal[
+        "deployment_primary",
+        "smoke_fallback",
+        "local_benchmark_only",
+        "optional",
+    ] = "optional"
+    readiness_source: Literal[
+        "railway",
+        "local",
+        "external",
+        "cache",
+        "built_in",
+    ] = "local"
 
 
 class ProviderListResponse(PersistenceModel):

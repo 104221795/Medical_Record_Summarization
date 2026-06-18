@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import json
+from urllib import request as urlrequest
 from dataclasses import dataclass
 
 from ..config import Settings
@@ -122,20 +124,44 @@ class SummaryProviderGateway:
     def _provider_info(self, metadata: ProviderMetadata) -> ProviderInfo:
         status = metadata.default_status
         description = metadata.description
-        if metadata.provider_name == "gemini":
-            status, description = self._gemini_governed_status(metadata.description)
-        elif metadata.provider_name == "gemini2.5_flash_lite" and not self.settings.gemini_api_key:
-            status = "configuration_required"
-            description = (
-                f"{metadata.description} Configure GEMINI_API_KEY or RAG_GEMINI_API_KEY "
-                "before using this gateway provider."
+        selectable = False
+        disabled_reason: str | None = None
+        deployment_role = self._deployment_role(metadata.provider_name)
+        readiness_source = "local"
+
+        if metadata.provider_name == "deterministic":
+            status = "ready"
+            selectable = True
+            readiness_source = "built_in"
+        elif metadata.provider_name == "gemini2.5_flash_lite":
+            readiness_source = "external"
+            if not self.settings.gemini_api_key:
+                status = "configuration_required"
+                disabled_reason = "Configure GEMINI_API_KEY before using Gemini."
+            else:
+                status = "ready"
+                selectable = True
+        elif metadata.provider_name in {"qwen2.5", "llama3.2"}:
+            readiness_source = (
+                "railway" if self.settings.deployment_mode == "railway" else "local"
             )
-        if metadata.provider_type == "local_huggingface_seq2seq":
+            status, disabled_reason = self._ollama_status(metadata)
+            selectable = status == "ready"
+        elif metadata.provider_type == "local_huggingface_seq2seq":
+            readiness_source = "cache"
             cache_error = _cache_status_error()
             if cache_error:
-                status = cache_error
+                status = "unavailable"
+                disabled_reason = cache_error
             elif not _real_baselines_enabled():
-                status = "disabled_until_RUN_REAL_BASELINES_1"
+                status = "local_only"
+                disabled_reason = "Enable RUN_REAL_BASELINES=1 in a runtime with the model cache."
+            else:
+                status = "ready"
+                selectable = self.settings.deployment_mode != "railway"
+                if not selectable:
+                    status = "local_only"
+                    disabled_reason = "This provider is reserved for local/offline benchmark runs."
         return ProviderInfo(
             provider_name=metadata.provider_name,
             display_name=metadata.display_name,
@@ -146,24 +172,60 @@ class SummaryProviderGateway:
             local_model=metadata.local_model,
             domain_fit=metadata.domain_fit,
             description=description,
+            selectable=selectable,
+            disabled_reason=disabled_reason,
+            deployment_role=deployment_role,
+            readiness_source=readiness_source,
         )
 
-    def _gemini_governed_status(self, base_description: str) -> tuple[str, str]:
-        missing: list[str] = []
-        if self.settings.llm_provider != "gemini":
-            missing.append("RAG_LLM_PROVIDER=gemini")
-        if not self.settings.llm_external_enabled:
-            missing.append("RAG_LLM_EXTERNAL_ENABLED=true")
-        if not self.settings.llm_allow_phi_external:
-            missing.append("RAG_LLM_ALLOW_PHI_EXTERNAL=true")
-        if not self.settings.gemini_api_key:
-            missing.append("RAG_GEMINI_API_KEY or GEMINI_API_KEY")
-        if missing:
+    def _deployment_role(self, provider_name: str) -> str:
+        if provider_name == self.settings.primary_provider:
+            return "deployment_primary"
+        if provider_name == "deterministic":
+            return "smoke_fallback"
+        if provider_name in {
+            "qwen2.5",
+            "llama3.2",
+            "bart",
+            "pegasus_pubmed",
+            "pegasus_cnn_dailymail",
+            "pegasus_xsum",
+        }:
+            return "local_benchmark_only"
+        return "optional"
+
+    def _ollama_status(
+        self,
+        metadata: ProviderMetadata,
+    ) -> tuple[str, str | None]:
+        if not self.settings.local_ollama_enabled:
+            return (
+                "local_only",
+                "Ollama providers are disabled. Set LOCAL_OLLAMA_ENABLED=true to enable them.",
+            )
+        base_url = (self.settings.ollama_base_url or "").rstrip("/")
+        if not base_url:
             return (
                 "configuration_required",
-                f"{base_description} Missing governed Gemini setting(s): {', '.join(missing)}.",
+                "Configure OLLAMA_BASE_URL for the Ollama service.",
             )
-        return "available", base_description
+        try:
+            with urlrequest.urlopen(f"{base_url}/api/tags", timeout=2.0) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except Exception as exc:
+            return (
+                "unavailable",
+                f"Ollama readiness check failed: {type(exc).__name__}.",
+            )
+        model_name = metadata.model_name.removeprefix("ollama/")
+        available = {
+            str(item.get("name") or "")
+            for item in payload.get("models", [])
+            if isinstance(item, dict)
+        }
+        if model_name not in available:
+            return ("unavailable", f"Ollama model '{model_name}' is not installed.")
+        return ("ready", None)
 
 
 def _real_baselines_enabled() -> bool:

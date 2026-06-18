@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import uuid
 import time
+import json
 from datetime import UTC, datetime, timedelta
 
 from backend.app.models import ModelJobRecord
-from backend.app.services.background_jobs import model_job_service
+from backend.app.services.background_jobs import _windows_worker_status, model_job_service
+from backend.app.workers.rq_tasks import _claim_job, _is_transient_error
 from backend.tests.summary_test_utils import HEADERS, api_client as api_client, import_patient
 
 
@@ -168,6 +170,76 @@ def test_stale_persisted_running_job_is_marked_timed_out(api_client) -> None:
     assert body["status"] == "timed_out"
     assert body["current_step"] == "timed_out"
     assert "timeout_seconds=1" in body["error_message"]
+
+
+def test_persisted_job_claim_is_atomic(api_client) -> None:
+    _client, session_factory = api_client
+    job_id = uuid.uuid4()
+    session = session_factory()
+    try:
+        session.add(
+            ModelJobRecord(
+                job_id=job_id,
+                job_type="summary_generation",
+                model_provider="deterministic",
+                model_name="deterministic",
+                status="queued",
+                progress=0.0,
+                current_step="queued",
+                timeout_seconds=30,
+                payload={},
+            )
+        )
+        session.commit()
+    finally:
+        session.close()
+
+    first_claim = _claim_job(session_factory, str(job_id), worker_id="worker-a", attempt=0)
+    duplicate_claim = _claim_job(session_factory, str(job_id), worker_id="worker-b", attempt=0)
+
+    assert first_claim is True
+    assert duplicate_claim is False
+    session = session_factory()
+    try:
+        record = session.get(ModelJobRecord, job_id)
+        assert record is not None
+        assert record.status == "running"
+        assert record.current_step == "worker_initializing"
+        assert record.payload["_job_runtime"]["worker_id"] == "worker-a"
+    finally:
+        session.close()
+
+
+def test_windows_worker_status_ignores_stale_heartbeats(monkeypatch) -> None:
+    now = time.time()
+
+    class FakeRedis:
+        values = {
+            b"live": json.dumps(
+                {"worker_id": "live", "state": "idle", "job_id": None, "heartbeat_at": now - 2}
+            ).encode(),
+            b"stale": json.dumps(
+                {"worker_id": "stale", "state": "busy", "job_id": "job", "heartbeat_at": now - 60}
+            ).encode(),
+        }
+
+        def scan_iter(self, **_kwargs):
+            return iter(self.values)
+
+        def get(self, key):
+            return self.values.get(key)
+
+    monkeypatch.setattr(time, "time", lambda: now)
+    workers = _windows_worker_status(FakeRedis(), "queue", stale_seconds=20)
+
+    assert [worker["worker_id"] for worker in workers] == ["live"]
+    assert workers[0]["heartbeat_age_seconds"] == 2.0
+
+
+def test_transient_provider_error_classification_is_bounded() -> None:
+    assert _is_transient_error("Connection refused by Ollama") is True
+    assert _is_transient_error("Provider timeout after 30 seconds") is True
+    assert _is_transient_error("Retrieval quality gate failed") is False
 
 
 def test_async_summary_generation_job_creates_draft(api_client) -> None:

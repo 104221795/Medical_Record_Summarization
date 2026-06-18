@@ -17,19 +17,30 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PORT=8080 \
-    RAG_ENVIRONMENT=staging
+    RAG_EMBEDDING_PROVIDER=hashing \
+    RAG_SENTENCE_TRANSFORMERS_LOCAL_FILES_ONLY=false \
+    RUN_REAL_BASELINES=0 \
+    RAG_RUN_REAL_BASELINES=0 \
+    LOCAL_OLLAMA_ENABLED=false \
+    HF_HOME=/tmp/hf_cache \
+    HF_HUB_CACHE=/tmp/hf_cache/hub \
+    HF_DATASETS_CACHE=/tmp/hf_cache/datasets \
+    TRANSFORMERS_CACHE=/tmp/hf_cache/hub
 
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ffmpeg libgomp1 \
+    && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt ./
+COPY requirements-runtime.txt ./
 RUN python -m pip install --upgrade pip \
-    && python -m pip install -r requirements.txt
+    && python -m pip install -r requirements-runtime.txt
 
-RUN groupadd --system app && useradd --system --gid app --create-home app
+RUN groupadd --system app \
+    && useradd --system --gid app --create-home app \
+    && mkdir -p /app/var /app/artifacts \
+    && chown -R app:app /app/var /app/artifacts
 
 COPY --chown=app:app alembic.ini ./
 COPY --chown=app:app backend ./backend

@@ -6452,6 +6452,20 @@ tbody tr:last-child td {
   line-height: 1.25;
 }
 
+.provider-disabled-reason {
+  grid-column: 2;
+  color: var(--danger, #b91c1c);
+  font-size: 0.68rem;
+  font-weight: 750;
+  line-height: 1.3;
+}
+
+.generation-readiness-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .setup-summary.compact {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
@@ -6541,7 +6555,7 @@ tbody tr:last-child td {
 
 .generation-job-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(120px, auto) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, auto);
   gap: 8px;
   align-items: center;
   min-width: 0;
@@ -7531,6 +7545,82 @@ tbody tr:last-child td {
   .summary-zone .summary-editor-panel .card-body,
   .evidence-zone .card-body {
     max-height: none;
+  }
+}
+
+/* Generate Summary: keep the provider picker usable when job results expand. */
+.compact-generation-panel .card-body {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+
+.compact-generation-panel .generation-setup {
+  grid-template-rows: auto auto auto;
+  height: auto;
+  min-height: 100%;
+  align-content: start;
+}
+
+.compact-generation-panel .provider-panel {
+  grid-template-rows: auto auto auto auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.compact-generation-panel .provider-group-list.compact {
+  min-height: 118px;
+  max-height: clamp(118px, 24vh, 230px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.compact-generation-panel .provider-panel.collapsed {
+  grid-template-rows: auto auto;
+}
+
+.provider-change-button {
+  min-height: 26px;
+  padding: 3px 8px;
+  border: 1px solid rgba(14, 116, 144, 0.24);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--primary, #0e7490);
+  cursor: pointer;
+  font-size: 0.66rem;
+  font-weight: 900;
+}
+
+.provider-change-button:hover,
+.provider-change-button:focus-visible {
+  border-color: rgba(14, 116, 144, 0.55);
+  background: rgba(236, 254, 255, 0.9);
+}
+
+.selected-provider-strip:has(.provider-change-button) {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
+@media (max-width: 760px) {
+  .compact-generation-panel,
+  .compact-generation-panel .card-body {
+    height: auto;
+    overflow: visible;
+  }
+
+  .compact-generation-panel .provider-group-list.compact {
+    max-height: 260px;
+  }
+
+  .selected-provider-strip:has(.provider-change-button) {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .selected-provider-strip .provider-change-button {
+    grid-column: 1 / -1;
+    justify-self: end;
   }
 }
 

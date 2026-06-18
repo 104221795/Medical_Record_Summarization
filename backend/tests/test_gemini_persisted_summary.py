@@ -317,8 +317,8 @@ def test_endpoint_rejects_gemini_when_provider_is_not_enabled(api_client) -> Non
         },
     )
 
-    assert response.status_code == 422
-    assert "RAG_LLM_PROVIDER=gemini" in response.json()["detail"]
+    assert response.status_code == 409
+    assert "Provider 'gemini' is unavailable" in response.json()["detail"]
 
 
 def test_gemini_generation_persists_draft_claims_citations_model_run_and_audit(

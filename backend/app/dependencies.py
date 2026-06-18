@@ -1,9 +1,10 @@
 import re
+from typing import Annotated, Callable
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Annotated, Callable
 
 from fastapi import Depends, Header, HTTPException, Request, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .repositories import (
@@ -32,6 +33,8 @@ from .services.patient_service import PatientService
 from .services.rag import RagService
 from .services.review_service import ReviewService
 from .services.safety_service import SafetyService
+from .services.auth_tokens import bearer_token, decode_session_token
+from .models import User
 
 
 TENANT_RE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
@@ -47,9 +50,55 @@ class RequestContext:
 
 
 def get_request_context(
-    x_tenant_id: Annotated[str, Header(alias="X-Tenant-ID")],
-    x_user_id: Annotated[str, Header(alias="X-User-ID")],
-    x_role_code: Annotated[str, Header(alias="X-Role-Code")] = "doctor",
+    request: Request,
+    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+    x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
+    x_user_id: Annotated[str | None, Header(alias="X-User-ID")] = None,
+    x_role_code: Annotated[str | None, Header(alias="X-Role-Code")] = None,
+) -> RequestContext:
+    settings = request.app.state.settings
+    if settings.environment == "test" or (
+        settings.environment == "development" and settings.allow_demo_header_auth
+    ):
+        return _validated_header_context(
+            x_tenant_id or "sandbox",
+            x_user_id or "doctor-demo",
+            x_role_code or "doctor",
+        )
+
+    claims = decode_session_token(bearer_token(authorization), settings)
+    subject = str(claims.get("sub") or "").strip()
+    if not subject:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session token is missing a subject.",
+        )
+    factory = request.app.state.db_session_factory
+    session = factory()
+    try:
+        user = session.scalar(
+            select(User).where(
+                (User.email == subject) | (User.external_user_id == subject)
+            )
+        )
+    finally:
+        session.close()
+    if user is None or user.status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session user is no longer active.",
+        )
+    return RequestContext(
+        tenant_id=str(claims.get("tenant_id") or "sandbox"),
+        user_id=str(user.external_user_id or user.email),
+        role_code=user.role_code,
+    )
+
+
+def _validated_header_context(
+    x_tenant_id: str,
+    x_user_id: str,
+    x_role_code: str,
 ) -> RequestContext:
     validators = (
         ("X-Tenant-ID", x_tenant_id, TENANT_RE),

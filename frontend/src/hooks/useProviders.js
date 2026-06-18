@@ -8,6 +8,10 @@ const fallbackProviders = SUMMARY_PROVIDERS.map((provider) => ({
   status: "fallback",
   domain_fit: "Unknown",
   description: "Backend provider metadata is unavailable.",
+  selectable: false,
+  disabled_reason: "Provider readiness could not be loaded.",
+  deployment_role: "optional",
+  readiness_source: "local",
 }));
 
 export function useProviders() {

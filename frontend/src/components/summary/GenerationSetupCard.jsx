@@ -18,10 +18,19 @@ export default function GenerationSetupCard({
   generationElapsedSeconds,
   generationJob,
   generationError,
+  jobReadiness,
+  jobReadinessError,
   onGenerate,
   onCancelGeneration,
 }) {
-  const canGenerate = Boolean(selectedPatient?.patient_id) && !generating;
+  const queueStatus = jobReadiness?.queue_status;
+  const workerRequired = jobReadiness?.queue_backend === "rq";
+  const workerAvailable = !workerRequired
+    || (queueStatus?.redis_reachable && Number(queueStatus?.worker_count || 0) > 0);
+  const canGenerate = Boolean(selectedPatient?.patient_id)
+    && Boolean(selectedProvider?.selectable)
+    && workerAvailable
+    && !generating;
   return (
     <Card title="Provider" className="golden-card compact-generation-panel">
       <div className="generation-setup">
@@ -31,6 +40,7 @@ export default function GenerationSetupCard({
           error={providersError}
           value={provider}
           onChange={setProvider}
+          collapseAfterGeneration={Boolean(generationJob)}
         />
         <div className="setup-summary compact">
           <div>
@@ -52,6 +62,29 @@ export default function GenerationSetupCard({
         </div>
         <div className="generate-sticky-action">
           <p className="muted">Draft only. Review evidence before approval.</p>
+          <div className="generation-readiness-row">
+            <Badge tone={selectedProvider?.selectable ? "success" : "danger"}>
+              Provider {selectedProvider?.selectable ? "ready" : "unavailable"}
+            </Badge>
+            <Badge tone={workerAvailable ? "success" : "danger"}>
+              Worker {workerAvailable ? "ready" : "unavailable"}
+            </Badge>
+          </div>
+          {jobReadinessError && (
+            <p className="warning-line">Worker readiness could not be verified.</p>
+          )}
+          {!workerAvailable && (
+            <p className="warning-line">
+              {queueStatus?.redis_reachable
+                ? "Redis is reachable, but no background worker is available."
+                : "Redis is unavailable. Generation is temporarily disabled."}
+            </p>
+          )}
+          {!selectedProvider?.selectable && (
+            <p className="warning-line">
+              {selectedProvider?.disabled_reason || "Selected provider is unavailable."}
+            </p>
+          )}
           <GenerationProgress
             generating={generating}
             status={generationStatus}
@@ -74,7 +107,6 @@ function GenerationProgress({ generating, status, elapsedSeconds, job, onCancel 
   const activeIndex = Number(status?.activeIndex || 0);
   const stages = status?.stages || [];
   const state = status?.state || (generating ? "running" : "idle");
-  const percent = Math.round(Number(status?.progress ?? job?.progress ?? 0) * 100);
   return (
     <div className={`generation-progress-panel ${state}`}>
       <div className="generation-progress-header">
@@ -90,12 +122,6 @@ function GenerationProgress({ generating, status, elapsedSeconds, job, onCancel 
         <div className="generation-job-row">
           <span>Job {compactId(job.job_id)}</span>
           <span>{job.current_step || job.status}</span>
-          <span>{percent}%</span>
-        </div>
-      )}
-      {job && (
-        <div className="generation-job-progress" aria-label={`${percent}% complete`}>
-          <span style={{ width: `${Math.max(4, percent)}%` }} />
         </div>
       )}
       <p>{status?.message || "Preparing the clinical draft."}</p>

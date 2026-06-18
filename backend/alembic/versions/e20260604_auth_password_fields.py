@@ -22,7 +22,8 @@ def upgrade() -> None:
         sa.Column("auth_provider", sa.String(length=50), nullable=False, server_default="password"),
     )
     op.add_column("users", sa.Column("last_login_at", sa.DateTime(timezone=True), nullable=True))
-    op.alter_column("users", "auth_provider", server_default=None)
+    with op.batch_alter_table("users") as batch_op:
+        batch_op.alter_column("auth_provider", server_default=None)
 
 
 def downgrade() -> None:

@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
 
 from ..dependencies import (
     RequestContext,
@@ -33,6 +33,7 @@ from ..services.review_service import (
     ReviewService,
     ReviewTransitionError,
 )
+from ..services.llm_gateway import SummaryProviderGateway
 
 
 router = APIRouter(tags=["Summaries"])
@@ -44,12 +45,15 @@ router = APIRouter(tags=["Summaries"])
     status_code=status.HTTP_201_CREATED,
 )
 def generate_patient_summary(
+    request: Request,
     patient_id: Annotated[str, Path(min_length=1, max_length=128)],
     payload: SummaryGenerateRequest,
     context: Annotated[RequestContext, Depends(get_request_context)],
     service: Annotated[DeterministicSummaryService, Depends(get_summary_service)],
 ) -> SummaryGenerateResponse:
     try:
+        selected_provider = str(payload.model_provider or payload.provider or "deterministic")
+        _require_selectable_provider(request, selected_provider)
         return service.generate(
             patient_id,
             payload,
@@ -68,11 +72,13 @@ def generate_patient_summary(
     status_code=status.HTTP_202_ACCEPTED,
 )
 def generate_patient_summary_async(
+    request: Request,
     patient_id: Annotated[str, Path(min_length=1, max_length=128)],
     payload: SummaryGenerateRequest,
     context: Annotated[RequestContext, Depends(get_request_context)],
 ) -> ModelJobResponse:
     selected_provider = str(payload.model_provider or payload.provider or "deterministic")
+    _require_selectable_provider(request, selected_provider)
     return model_job_service.enqueue_summary_generation(
         patient_id=patient_id,
         request_payload=payload.model_dump(mode="json"),
@@ -81,6 +87,34 @@ def generate_patient_summary_async(
         model_provider=selected_provider,
         timeout_seconds=_generation_timeout_seconds(selected_provider),
     )
+
+
+def _require_selectable_provider(request: Request, selected_provider: str) -> None:
+    settings = request.app.state.settings
+    if settings.environment == "test":
+        injected = getattr(request.app.state, "summary_model_providers", {})
+        if selected_provider in injected:
+            return
+        if (
+            selected_provider == "gemini"
+            and settings.llm_provider == "gemini"
+            and getattr(request.app.state, "gemini_json_client", None) is not None
+        ):
+            return
+    provider = next(
+        (
+            item
+            for item in SummaryProviderGateway(settings).list_providers().providers
+            if item.provider_name == selected_provider
+        ),
+        None,
+    )
+    if provider is None or not provider.selectable:
+        reason = provider.disabled_reason if provider else "Provider is not registered."
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Provider '{selected_provider}' is unavailable: {reason}",
+        )
 
 
 @router.get("/summaries/{summary_id}", response_model=SummaryDetailResponse)

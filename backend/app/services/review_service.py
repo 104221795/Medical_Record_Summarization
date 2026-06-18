@@ -416,7 +416,7 @@ class ReviewService:
             metadata={
                 "tenant_id": tenant_id,
                 "actor_external_id": actor_external_id,
-                "auth_mode": "mock_header_rbac",
+                "auth_mode": "server_validated_rbac",
                 **_summary_audit_metadata(summary),
                 **metadata,
             },

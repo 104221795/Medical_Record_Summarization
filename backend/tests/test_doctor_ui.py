@@ -34,6 +34,7 @@ def test_doctor_golden_path_ui_is_served(tmp_path: Path) -> None:
 def test_demo_seed_initializes_schema_and_patient_records(tmp_path: Path) -> None:
     settings = Settings(
         environment="development",
+        allow_demo_header_auth=True,
         database_url=f"sqlite+pysqlite:///{tmp_path / 'fresh-demo.db'}",
         qdrant_path=tmp_path / "qdrant",
     )
@@ -81,4 +82,4 @@ def test_demo_seed_disabled_in_production(tmp_path: Path) -> None:
         headers={"X-Tenant-ID": "sandbox", "X-User-ID": "doctor-demo"},
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 401

@@ -7,7 +7,7 @@ from pathlib import Path
 from backend.app.persistence_schemas import SummaryGenerateRequest
 from backend.app.services import evaluation_service
 from backend.app.config import Settings
-from backend.app.dependencies import get_request_context
+from backend.app.dependencies import _validated_header_context
 from backend.app.main import create_app
 from backend.app.routers.auth import _hash_password, _verify_password, logout
 from backend.app.persistence_schemas import AuthGoogleLoginRequest, AuthSignupRequest
@@ -31,7 +31,14 @@ def test_new_provider_names_are_accepted() -> None:
 def test_provider_gateway_lists_required_providers() -> None:
     response = SummaryProviderGateway(Settings()).list_providers()
     names = {provider.provider_name for provider in response.providers}
-    assert {"deterministic", "gemini", "bart", "pegasus_pubmed", "pegasus_cnn_dailymail", "pegasus_xsum"} <= names
+    assert {
+        "deterministic",
+        "gemini2.5_flash_lite",
+        "bart",
+        "pegasus_pubmed",
+        "pegasus_cnn_dailymail",
+        "pegasus_xsum",
+    } <= names
     assert next(provider for provider in response.providers if provider.provider_name == "pegasus_pubmed").domain_fit
 
 
@@ -73,7 +80,7 @@ def test_database_url_accepts_unprefixed_alias(monkeypatch) -> None:
 
 
 def test_request_context_accepts_email_user_header() -> None:
-    context = get_request_context("sandbox", "doctor.demo@example.org", "doctor")
+    context = _validated_header_context("sandbox", "doctor.demo@example.org", "doctor")
     assert context.user_id == "doctor.demo@example.org"
 
 

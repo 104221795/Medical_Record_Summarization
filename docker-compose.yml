@@ -5,14 +5,21 @@ services:
       dockerfile: Dockerfile
     environment:
       RAG_ENVIRONMENT: staging
+      DEPLOYMENT_MODE: railway
+      PRIMARY_PROVIDER: deterministic
       RAG_DATABASE_URL: postgresql+psycopg://clin_summ:clin_summ_dev@db:5432/clin_summ
       RAG_AUTH_SECRET_KEY: local-compose-change-me
+      RAG_ALLOW_DEMO_HEADER_AUTH: "false"
       RAG_CORS_ORIGINS: http://127.0.0.1:8080,http://localhost:8080
       RAG_EMBEDDING_PROVIDER: hashing
       RAG_QDRANT_COLLECTION: clinical_record_chunks
-      RAG_JOB_BACKEND: in_process
+      RAG_JOB_BACKEND: rq
+      RAG_JOB_FALLBACK_TO_IN_PROCESS: "false"
       RAG_REDIS_URL: redis://redis:6379/0
-      RAG_RQ_REQUIRE_LIVE_WORKER: "false"
+      RAG_RQ_REQUIRE_LIVE_WORKER: "true"
+      BACKGROUND_JOBS_ENABLED: "true"
+      REDIS_REQUIRED: "true"
+      LOCAL_OLLAMA_ENABLED: "false"
       RAG_EVALUATION_ARTIFACT_ROOT: /app/artifacts
       HF_HOME: /tmp/hf_cache
       HF_HUB_CACHE: /tmp/hf_cache/hub
@@ -32,6 +39,41 @@ services:
         condition: service_started
     volumes:
       - app_artifacts:/app/artifacts
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    healthcheck:
+      disable: true
+    environment:
+      RAG_ENVIRONMENT: staging
+      DEPLOYMENT_MODE: railway
+      PRIMARY_PROVIDER: deterministic
+      RAG_DATABASE_URL: postgresql+psycopg://clin_summ:clin_summ_dev@db:5432/clin_summ
+      RAG_AUTH_SECRET_KEY: local-compose-change-me
+      RAG_ALLOW_DEMO_HEADER_AUTH: "false"
+      RAG_CORS_ORIGINS: http://127.0.0.1:8080,http://localhost:8080
+      RAG_EMBEDDING_PROVIDER: hashing
+      RAG_JOB_BACKEND: rq
+      RAG_JOB_FALLBACK_TO_IN_PROCESS: "false"
+      RAG_REDIS_URL: redis://redis:6379/0
+      RAG_RQ_REQUIRE_LIVE_WORKER: "true"
+      BACKGROUND_JOBS_ENABLED: "true"
+      REDIS_REQUIRED: "true"
+      LOCAL_OLLAMA_ENABLED: "false"
+      HF_HOME: /tmp/hf_cache
+      HF_HUB_CACHE: /tmp/hf_cache/hub
+      HF_DATASETS_CACHE: /tmp/hf_cache/datasets
+      TRANSFORMERS_CACHE: /tmp/hf_cache/hub
+    command: python -m scripts.run_rq_worker --worker-class default
+    depends_on:
+      app:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
   db:
     image: postgres:16-alpine

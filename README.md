@@ -135,6 +135,21 @@ when using `LLM_GATEWAY_MODE=proxy`.
 
 ### 1. Install
 
+Choose the dependency set for the work you intend to run:
+
+```powershell
+# Railway-equivalent web/worker runtime; excludes local ML and benchmark stacks.
+python -m pip install -r requirements-runtime.txt
+
+# Full local research/development environment, including ML and tests.
+python -m pip install -r requirements.txt
+```
+
+The root `requirements.txt` composes `requirements-runtime.txt`,
+`requirements-ml.txt`, and `requirements-test.txt`. The Railway Docker image
+installs only `requirements-runtime.txt`, so it does not install Torch,
+Transformers, sentence-transformers, BERTScore, MLflow, or CUDA/NVIDIA wheels.
+
 ```powershell
 Set-Location "D:\MyNewDesktop\clin-summ"
 python -m venv .venv
@@ -239,6 +254,20 @@ http://127.0.0.1:8080
 ### 8. Railway Staging
 
 Railway uses `railway.json`, the root `Dockerfile`, and the Railway-provided `PORT`.
+The image uses the hashing retrieval path to keep the staging web/worker runtime
+small and independent of local Hugging Face model execution. This is a runtime
+feasibility choice for the de-identified staging PoC, not a clinical-performance
+claim.
+
+Railway provider strategy:
+
+- Gemini is the primary Railway provider when its API key is configured and
+  external use is approved for the de-identified staging data.
+- Deterministic is the smoke-test fallback.
+- Qwen/Llama through Ollama remain local benchmark providers unless a reachable
+  external `OLLAMA_BASE_URL` is explicitly configured and readiness succeeds.
+- BART/Pegasus remain local/offline benchmark providers and are not installed in
+  the Railway runtime image.
 
 Detailed deployment guide:
 

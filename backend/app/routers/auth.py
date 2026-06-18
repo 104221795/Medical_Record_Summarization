@@ -3,18 +3,18 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
-import json
 import secrets
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..config import Settings, get_settings
+from ..config import Settings
 from ..dependencies import get_db_session
 from ..models import Role, User
+from ..services.auth_tokens import bearer_token, decode_session_token, encode_session_token
 from ..persistence_schemas import (
     AuthConfigResponse,
     AuthGoogleLoginRequest,
@@ -29,12 +29,16 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 PASSWORD_SCHEME = "pbkdf2_sha256"
 
 
+def get_auth_settings(request: Request) -> Settings:
+    return request.app.state.settings
+
+
 @router.get("/config", response_model=AuthConfigResponse)
-def auth_config(settings: Annotated[Settings, Depends(get_settings)]) -> AuthConfigResponse:
+def auth_config(settings: Annotated[Settings, Depends(get_auth_settings)]) -> AuthConfigResponse:
     return AuthConfigResponse(
         google_client_id_configured=bool(settings.google_client_id),
         google_client_id=settings.google_client_id,
-        auth_mode="password_with_signed_demo_token",
+        auth_mode="password_with_signed_bearer_session",
     )
 
 
@@ -42,13 +46,13 @@ def auth_config(settings: Annotated[Settings, Depends(get_settings)]) -> AuthCon
 def signup(
     payload: AuthSignupRequest,
     session: Annotated[Session, Depends(get_db_session)],
-    settings: Annotated[Settings, Depends(get_settings)],
+    settings: Annotated[Settings, Depends(get_auth_settings)],
 ) -> AuthSessionResponse:
     existing = _find_user(session, payload.email)
     if existing is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this email already exists.")
 
-    role_code = _role_code(payload.role)
+    role_code = _requested_role_code(payload.role, settings)
     _ensure_role(session, role_code)
     user = User(
         external_user_id=payload.email,
@@ -68,7 +72,7 @@ def signup(
 def login(
     payload: AuthLoginRequest,
     session: Annotated[Session, Depends(get_db_session)],
-    settings: Annotated[Settings, Depends(get_settings)],
+    settings: Annotated[Settings, Depends(get_auth_settings)],
 ) -> AuthSessionResponse:
     identifier = payload.user_id or payload.email
     if not identifier:
@@ -89,7 +93,7 @@ def login(
 def google_login(
     payload: AuthGoogleLoginRequest,
     session: Annotated[Session, Depends(get_db_session)],
-    settings: Annotated[Settings, Depends(get_settings)],
+    settings: Annotated[Settings, Depends(get_auth_settings)],
 ) -> AuthSessionResponse:
     if not settings.google_client_id:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="GOOGLE_CLIENT_ID is not configured.")
@@ -103,7 +107,7 @@ def google_login(
 
     user = _find_user(session, email)
     if user is None:
-        role_code = _role_code(payload.role)
+        role_code = _requested_role_code(payload.role, settings)
         _ensure_role(session, role_code)
         user = User(
             external_user_id=email,
@@ -135,10 +139,10 @@ def logout() -> AuthLogoutResponse:
 def me(
     authorization: Annotated[str | None, Header(alias="Authorization")] = None,
     session: Annotated[Session, Depends(get_db_session)] = None,
-    settings: Annotated[Settings, Depends(get_settings)] = None,
+    settings: Annotated[Settings, Depends(get_auth_settings)] = None,
 ) -> AuthSessionResponse:
-    token = _bearer_token(authorization)
-    claims = _decode_token(token, settings)
+    token = bearer_token(authorization)
+    claims = decode_session_token(token, settings)
     user = _find_user(session, str(claims["sub"]))
     if user is None or user.status != "active":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session user is no longer active.")
@@ -148,7 +152,7 @@ def me(
 def _session_response(user: User, tenant_id: str, settings: Settings, *, message: str) -> AuthSessionResponse:
     role = _public_role(user.role_code)
     role_code = _role_code(role)
-    token = _encode_token(
+    token = encode_session_token(
         {
             "sub": user.email,
             "name": user.full_name,
@@ -213,51 +217,6 @@ def _verify_google_credential(credential: str, google_client_id: str) -> dict[st
     return claims
 
 
-def _encode_token(payload: dict[str, Any], settings: Settings) -> str:
-    now = datetime.now(UTC)
-    claims = {
-        **payload,
-        "iat": int(now.timestamp()),
-        "exp": int((now + timedelta(minutes=settings.auth_token_ttl_minutes)).timestamp()),
-        "auth_mode": "signed_password_session",
-    }
-    body = _b64(json.dumps(claims, separators=(",", ":")).encode("utf-8"))
-    signature = _signature(body, settings)
-    return f"{body}.{signature}"
-
-
-def _decode_token(token: str, settings: Settings) -> dict[str, Any]:
-    try:
-        body, signature = token.split(".", 1)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token.") from exc
-    if not hmac.compare_digest(_signature(body, settings), signature):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token.")
-    claims = json.loads(base64.urlsafe_b64decode(_pad_b64(body)).decode("utf-8"))
-    if int(claims.get("exp", 0)) < int(datetime.now(UTC).timestamp()):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session token expired.")
-    return claims
-
-
-def _signature(body: str, settings: Settings) -> str:
-    key = settings.auth_secret_key.get_secret_value().encode("utf-8")
-    return _b64(hmac.new(key, body.encode("ascii"), hashlib.sha256).digest())
-
-
-def _b64(raw: bytes) -> str:
-    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
-
-
-def _pad_b64(value: str) -> bytes:
-    return (value + "=" * (-len(value) % 4)).encode("ascii")
-
-
-def _bearer_token(authorization: str | None) -> str:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token.")
-    return authorization.removeprefix("Bearer ").strip()
-
-
 def _find_user(session: Session, identifier: str) -> User | None:
     return session.scalar(
         select(User).where((User.email == identifier) | (User.external_user_id == identifier))
@@ -279,6 +238,15 @@ def _ensure_role(session: Session, role_code: str) -> Role:
 
 def _role_code(role: str) -> str:
     return "clinical_admin" if role == "admin" else "doctor"
+
+
+def _requested_role_code(role: str, settings: Settings) -> str:
+    if role == "admin" and settings.environment not in {"development", "test"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Public admin self-registration is disabled in staging.",
+        )
+    return _role_code(role)
 
 
 def _public_role(role_code: str) -> str:

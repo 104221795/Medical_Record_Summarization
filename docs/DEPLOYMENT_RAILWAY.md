@@ -1,143 +1,168 @@
-# Railway Deployment Guide
+# Railway Staging Deployment
 
-Target state:
+Target:
 
 > Railway-ready staging deployment for a de-identified, clinician-review-only Medical Record Summarization PoC.
 
-This guide does not cover production clinical deployment or real EHR integration.
+This is not a production clinical system, a clinical decision system, or evidence of clinical safety/effectiveness. AI output remains a draft until clinician review.
 
-## Recommended Railway Topology
+## Dependency and Image Boundary
 
-Use a single Railway web service from this repository:
+The Dockerfile installs `requirements-runtime.txt` only. That file contains the
+FastAPI web/worker, database, Redis/RQ, provider API, readiness, and lightweight
+retrieval dependencies needed by Railway.
 
-- Dockerfile builds the React frontend.
-- FastAPI serves `/api/v1/*` and the React SPA.
-- Railway PostgreSQL provides persistence.
-- Redis is optional for RQ jobs. The default staging mode can use `in_process`.
+The root `requirements.txt` is the full local research/development install. It
+also includes `requirements-ml.txt` and `requirements-test.txt`, so it is not
+used by the Railway image. Local ML and benchmark packages—including Torch,
+Transformers, sentence-transformers, BERTScore, datasets, evaluate, MLflow, and
+sentencepiece—remain outside the Railway runtime.
 
-Local Ollama providers such as Qwen2.5 and Llama3.2 are not assumed to run on Railway. Keep them as local benchmark/testing providers unless you attach a separate model service.
+```bash
+# Railway-equivalent runtime
+python -m pip install -r requirements-runtime.txt
 
-## Railway Project Setup
+# Full local research/development environment
+python -m pip install -r requirements.txt
+```
 
-1. Create a Railway project.
-2. Connect the GitHub repository.
-3. Add a PostgreSQL service.
-4. Optional: add Redis if testing RQ background jobs.
-5. Set the web service builder to Dockerfile or allow Railway to detect `railway.json`.
-6. Deploy from `main` after CI passes.
+## Required Railway Topology
+
+- Web service: Dockerfile, FastAPI, compiled React SPA.
+- Worker service: same Docker image, separate start command.
+- PostgreSQL service.
+- Redis service.
+- Optional persistent volume mounted at `/app/artifacts` for a prepared benchmark snapshot.
+
+Web start command:
+
+```bash
+python -m alembic -c alembic.ini upgrade head && python -m uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8080}
+```
+
+Worker start command:
+
+```bash
+python -m scripts.run_rq_worker --worker-class default
+```
+
+Do not use the Windows worker class on Railway.
 
 ## Required Variables
 
-Set these in the Railway web service:
+Configure the same runtime variables on web and worker services unless noted:
 
 ```text
 RAG_ENVIRONMENT=staging
-RAG_DATABASE_URL=${{Postgres.DATABASE_URL}}
-RAG_AUTH_SECRET_KEY=<long-random-secret>
-RAG_CORS_ORIGINS=https://<your-railway-domain>
-RAG_JOB_BACKEND=in_process
-RAG_RQ_REQUIRE_LIVE_WORKER=false
-RAG_EVALUATION_ARTIFACT_ROOT=/app/artifacts
-PORT=<provided by Railway>
-```
-
-Optional provider/model variables:
-
-```text
-RAG_EMBEDDING_PROVIDER=sentence_transformers
-RAG_SENTENCE_TRANSFORMERS_MODEL=sentence-transformers/all-MiniLM-L6-v2
-RAG_SENTENCE_TRANSFORMERS_LOCAL_FILES_ONLY=false
+DEPLOYMENT_MODE=railway
+PRIMARY_PROVIDER=gemini2.5_flash_lite
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+REDIS_URL=${{Redis.REDIS_URL}}
+RAG_JOB_BACKEND=rq
+RAG_JOB_FALLBACK_TO_IN_PROCESS=false
+RAG_RQ_REQUIRE_LIVE_WORKER=true
+BACKGROUND_JOBS_ENABLED=true
+REDIS_REQUIRED=true
+RAG_ALLOW_DEMO_HEADER_AUTH=false
+RAG_AUTH_SECRET_KEY=<long random Railway secret>
+CORS_ORIGINS=https://<your-web-service-domain>
+RAG_EMBEDDING_PROVIDER=hashing
+LOCAL_OLLAMA_ENABLED=false
+OLLAMA_BASE_URL=
+GEMINI_API_KEY=<Railway secret>
 HF_HOME=/tmp/hf_cache
 HF_HUB_CACHE=/tmp/hf_cache/hub
 HF_DATASETS_CACHE=/tmp/hf_cache/datasets
 TRANSFORMERS_CACHE=/tmp/hf_cache/hub
+RAG_EVALUATION_ARTIFACT_ROOT=/app/artifacts
+BENCHMARK_SNAPSHOT_DIR=/app/artifacts
 ```
 
-For the lightest staging deployment, you may use:
+Railway injects `PORT` into the web service. The worker does not need a public port.
+
+## Provider Strategy
+
+- Gemini 2.5 Flash Lite: deployment primary; selectable only when its API key is configured.
+- Deterministic: lightweight deployment smoke fallback.
+- Qwen2.5/Llama3.2: disabled on Railway unless `LOCAL_OLLAMA_ENABLED=true`, `OLLAMA_BASE_URL` points to a reachable Ollama service, and the requested model is present.
+- BART/Pegasus: local/offline benchmark providers; not required for Railway startup.
+
+The deployment image intentionally uses hashing-based retrieval so the Railway
+staging runtime does not require sentence-transformers, Torch, local model
+caches, or Hugging Face downloads. This validates deployment feasibility and
+the clinician-review workflow only; it is not a clinical-performance,
+effectiveness, or safety claim.
+
+The application must start when optional providers are unavailable. Provider unavailability is surfaced through `/api/v1/providers`, `/ready`, and the doctor selector.
+
+## Authentication and CORS
+
+- Staging protected routes require a signed bearer token.
+- Client-controlled role headers are ignored in staging.
+- Public admin self-registration is disabled.
+- `RAG_AUTH_SECRET_KEY` must not use the development default.
+- Wildcard CORS is rejected in staging.
+- Configure only the deployed HTTPS frontend origin.
+
+## Health and Readiness
 
 ```text
-RAG_EMBEDDING_PROVIDER=hashing
+GET /health
+GET /ready
 ```
 
-This is easier to deploy but is not the recommended retrieval setting for serious benchmark work.
+`/health` proves the web process is alive.
 
-Gemini optional:
+`/ready` reports:
 
-```text
-GEMINI_API_KEY=<set only if intentionally enabled>
-RAG_LLM_PROVIDER=deterministic
-RAG_LLM_EXTERNAL_ENABLED=false
-RAG_LLM_ALLOW_PHI_EXTERNAL=false
-```
+- database connectivity;
+- Redis reachability;
+- queue depth;
+- active persisted jobs;
+- live RQ/Windows worker count and Windows heartbeat age where applicable;
+- provider selectability and primary-provider status;
+- vector-store mode;
+- benchmark artifact availability;
+- staging configuration warnings.
 
-Do not set `RAG_LLM_ALLOW_PHI_EXTERNAL=true` unless governance has approved external provider use.
+In Railway mode, missing database, Redis, or worker readiness returns HTTP 503. Optional local providers do not make the service unavailable.
 
-## Start Command
+## Deployment Sequence
 
-`railway.json` uses:
+1. Provision PostgreSQL and Redis.
+2. Create the web service from this repository.
+3. Create a second service from the same repository for the worker.
+4. Apply the variables above to both services.
+5. Override the worker start command.
+6. Deploy web; migrations run before Uvicorn starts.
+7. Deploy worker.
+8. Confirm `/health` returns 200.
+9. Confirm `/ready` returns 200 and reports at least one worker.
+10. Run a deterministic draft smoke.
+11. Run a Gemini draft smoke with de-identified/demo data.
 
-```bash
-python -m alembic -c alembic.ini upgrade head && python -m uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT}
-```
+## Post-Deploy QA
 
-The app must bind to Railway `PORT`. Do not hardcode `8080` in Railway.
-
-## Healthcheck
-
-Railway healthcheck path:
-
-```text
-/health
-```
-
-Readiness endpoint:
-
-```text
-/ready
-```
-
-`/ready` checks database/configuration and reports vector/artifact/provider readiness. Optional providers such as Gemini or Ollama should not block the app unless explicitly required.
-
-## Local Docker Staging
-
-```powershell
-Set-Location "D:\MyNewDesktop\clin-summ"
-docker compose up --build
-```
-
-Then open:
-
-```text
-http://127.0.0.1:8080
-http://127.0.0.1:8080/health
-http://127.0.0.1:8080/ready
-```
-
-The compose file uses a lightweight retrieval setting by default so the container starts reliably from a clean clone.
-
-## Post-Deploy Verification
-
-1. Open `/health`.
-2. Open `/ready`.
-3. Log in with demo credentials/account.
-4. Open Doctor Dashboard.
-5. Generate a draft from demo/de-identified patient data.
-6. Open Review & Evidence.
-7. Inspect citation/evidence links.
-8. Confirm unsupported claims remain visible.
-9. Start review and reject/request revision or approve only if safety gates allow it.
-10. Open Admin Evaluation and Jobs & Readiness.
-11. Export audit logs from `/api/v1/audit/export` as an admin/auditor.
+- Log in with a seeded/approved account.
+- Confirm changing `X-Role-Code` cannot elevate privileges.
+- Select a de-identified patient and encounter.
+- Confirm unavailable providers are disabled with a reason.
+- Generate a draft through the background worker.
+- Refresh during generation and verify persisted job state remains queryable.
+- Open Review & Evidence.
+- Verify citations, unsupported claims, conflicts, and missing evidence remain visible.
+- Verify approval remains blocked for safety-critical unsupported claims.
+- Confirm audit export is PHI-safe.
+- Confirm Admin Evaluation loads a prepared snapshot or shows a graceful empty state.
 
 ## Rollback
 
-Use Railway deployment history to roll back to the previous successful deploy. If a migration has already changed the database schema, verify rollback compatibility before switching traffic.
+Use Railway deployment history to roll back web and worker to the previous successful image. Database migrations in this PoC are forward-oriented; verify schema compatibility before rolling application code back.
 
-## Known Limitations
+## Local Compose
 
-- This is staging/demo only.
-- No real EHR writeback.
-- No real PHI.
-- No clinical safety/effectiveness claims.
-- Ollama local models are not part of the default Railway runtime.
-- Heavy benchmarks should run manually/local, not in Railway deploy or CI.
+```powershell
+docker compose up --build
+```
+
+Compose starts web, worker, PostgreSQL, and Redis with deterministic/hash-based smoke settings. It does not validate Gemini or Ollama.

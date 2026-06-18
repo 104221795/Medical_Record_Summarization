@@ -143,7 +143,14 @@ def _run_worker_burst(redis_url: str, queue_name: str, worker_class: str) -> Non
     if worker_class == "windows":
         from scripts.run_rq_worker import _run_windows_worker
 
-        _run_windows_worker(queue, redis_connection, burst=True)
+        settings = get_settings().model_copy(
+            update={
+                "job_backend": "rq",
+                "rq_queue_name": queue_name,
+                "redis_url": redis_url,
+            }
+        )
+        _run_windows_worker(queue, redis_connection, burst=True, settings=settings)
         return
     worker_cls = {"simple": SimpleWorker, "spawn": SpawnWorker, "default": Worker}[worker_class]
     worker = worker_cls([queue], connection=redis_connection)

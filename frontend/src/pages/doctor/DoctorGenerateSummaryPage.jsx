@@ -60,6 +60,8 @@ export default function DoctorGenerateSummaryPage() {
             generationElapsedSeconds={workflow.generationElapsedSeconds}
             generationJob={workflow.generationJob}
             generationError={workflow.generationError}
+            jobReadiness={workflow.jobReadiness}
+            jobReadinessError={workflow.jobReadinessError}
             onGenerate={generateDraft}
             onCancelGeneration={workflow.cancelGeneration}
           />
