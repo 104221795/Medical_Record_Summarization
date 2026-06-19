@@ -100,6 +100,37 @@ def test_benchmark_csv_reader_parses_rows(tmp_path: Path) -> None:
     assert rows[0].rougeL == 0.2
 
 
+def test_latest_rag_best_models_pointer_selects_completed_flow_2_1_run(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    output_dir = tmp_path / "rag_best_models_benchmark_50_no_gate"
+    output_dir.mkdir()
+    (output_dir / "model_comparison.csv").write_text(
+        "\n".join(
+            [
+                "model_provider,model_name,status,record_count,completed_count,failed_count,skipped_count,rouge1,rouge2,rougeL",
+                "deterministic,deterministic_context_baseline,completed,50,50,0,0,0.2973,0.1263,0.1737",
+                "bart,facebook/bart-large-cnn,completed,50,50,0,0,0.0986,0.0127,0.0757",
+                "pegasus,google/pegasus-cnn_dailymail,completed,50,50,0,0,0.1986,0.0748,0.1495",
+                "qwen2.5,ollama/qwen2.5:3b,completed,50,50,0,0,0.3353,0.1429,0.2122",
+                "llama3.2,ollama/llama3.2:3b,completed,50,50,0,0,0.3002,0.1281,0.1863",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    pointer = tmp_path / "latest_rag_best_models.json"
+    pointer.write_text(
+        json.dumps({"selected_output_dir": str(output_dir)}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(evaluation_service, "RAG_BEST_MODELS_POINTER_PATH", pointer)
+
+    selected = evaluation_service._latest_rag_best_models_output_dir()
+
+    assert selected == output_dir
+
+
 def test_benchmark_results_merge_pegasus_pubmed_prediction_rows(tmp_path: Path) -> None:
     prediction_path = tmp_path / "pegasus_pubmed_predictions.jsonl"
     records = [

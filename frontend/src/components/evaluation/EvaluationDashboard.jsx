@@ -21,7 +21,7 @@ export default function EvaluationDashboard() {
       evaluationApi.humanSummary(),
       evaluationApi.humanRubric(),
       evaluationApi.humanAnalytics(),
-      evaluationApi.benchmarkResults(),
+      evaluationApi.benchmarkResults("rag_best_models"),
     ]);
     return { status, benchmarkStatus, humanSummary, humanRubric, humanAnalytics, latestBenchmark };
   }, []);

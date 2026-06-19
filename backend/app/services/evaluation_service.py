@@ -85,6 +85,7 @@ CLINICAL_CONTEXT_OUTPUT_DIR = Path("D:/clin_summ_outputs/clinical_context_benchm
 RAG_GROUNDED_OUTPUT_DIR = Path("D:/clin_summ_outputs/rag_grounded_benchmark")
 RAG_BEST_MODELS_OUTPUT_DIR = Path("D:/clin_summ_outputs/rag_best_models_benchmark")
 PREFERRED_RAG_BEST_MODELS_OUTPUT_DIR = Path("D:/clin_summ_outputs/rag_best_models_benchmark_no_gemini_ui")
+RAG_BEST_MODELS_POINTER_PATH = Path("D:/clin_summ_outputs/latest_rag_best_models.json")
 MEDIUM_BENCHMARK_COMPARISON_PATH = MEDIUM_BENCHMARK_OUTPUT_DIR / "model_comparison.csv"
 MEDIUM_BENCHMARK_REPORT_PATH = MEDIUM_BENCHMARK_OUTPUT_DIR / "EVALUATION_REPORT.md"
 MEDIUM_BENCHMARK_FAILURE_PATH = MEDIUM_BENCHMARK_OUTPUT_DIR / "failure_analysis.md"
@@ -426,28 +427,21 @@ class EvaluationService:
         # Prefer an explicit latest pointer for Flow 2.1 if present and valid.
         selected_dir, discovered = _select_benchmark_output_dir(BENCHMARK_DISCOVERY_DIRS, benchmark_type)
         if benchmark_type == "rag_best_models":
-            pointer = Path("D:/clin_summ_outputs/latest_rag_best_models.json")
-            if pointer.exists():
-                try:
-                    payload = json.loads(pointer.read_text(encoding="utf-8"))
-                    sel = Path(str(payload.get("selected_output_dir") or ""))
-                    if sel.exists() and (sel / "model_comparison.csv").exists():
-                        selected_dir = sel
-                        # ensure discovered includes the selected dir and mark it selected
-                        found = False
-                        for item in discovered:
-                            if item.get("path") == str(selected_dir):
-                                item["selected"] = True
-                                found = True
-                            else:
-                                item["selected"] = False
-                        if not found:
-                            di = _folder_info(selected_dir)
-                            di["selected"] = True
-                            discovered.append(di)
-                except Exception:
-                    # ignore pointer parse errors and fall back to discovery
-                    pass
+            pointer_dir = _latest_rag_best_models_output_dir()
+            if pointer_dir is not None:
+                selected_dir = pointer_dir
+                # Ensure discovery metadata reflects the same run used by the API.
+                found = False
+                for item in discovered:
+                    if item.get("path") == str(selected_dir):
+                        item["selected"] = True
+                        found = True
+                    else:
+                        item["selected"] = False
+                if not found:
+                    folder = _folder_info(selected_dir)
+                    folder["selected"] = True
+                    discovered.append(folder)
         comparison_path = selected_dir / "model_comparison.csv"
         report_path = selected_dir / "EVALUATION_REPORT.md"
         failure_path = selected_dir / "failure_analysis.md"
@@ -775,6 +769,9 @@ class EvaluationService:
 
     def _rag_readiness_gate(self) -> dict[str, Any]:
         selected_dir, _discovered = _select_benchmark_output_dir(BENCHMARK_DISCOVERY_DIRS, "rag_best_models")
+        pointer_dir = _latest_rag_best_models_output_dir()
+        if pointer_dir is not None:
+            selected_dir = pointer_dir
         retrieval_path = selected_dir / "retrieval_metrics.csv"
         comparison_path = selected_dir / "model_comparison.csv"
         if not selected_dir.exists() or not retrieval_path.exists():
@@ -1443,6 +1440,19 @@ def _read_model_comparison(path: Path) -> list[BenchmarkResultRow]:
     with path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
         return [_benchmark_row(row) for row in reader]
+
+
+def _latest_rag_best_models_output_dir() -> Path | None:
+    if not RAG_BEST_MODELS_POINTER_PATH.exists():
+        return None
+    try:
+        payload = json.loads(RAG_BEST_MODELS_POINTER_PATH.read_text(encoding="utf-8-sig"))
+        selected = Path(str(payload.get("selected_output_dir") or ""))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+    if selected.exists() and (selected / "model_comparison.csv").exists():
+        return selected
+    return None
 
 
 def _select_benchmark_output_dir(

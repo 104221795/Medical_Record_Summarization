@@ -21,7 +21,7 @@ import {
 import { ClinicalMetricPanel, PerRecordFailureDashboard, UseCaseRecommendationPanel } from "./ClinicalEvaluationPanels.jsx";
 import ModelComparisonTable from "./ModelComparisonTable.jsx";
 
-const TARGET_PROVIDERS = ["bart", "pegasus", "qwen2.5", "llama3.2", "gemini2.5_flash_lite"];
+const TARGET_PROVIDERS = ["deterministic", "bart", "pegasus", "qwen2.5", "llama3.2"];
 
 export default function RagBestModelsDashboard() {
   const { data, loading, error, reload } = useEvaluationResults("rag_best_models");
@@ -34,6 +34,10 @@ export default function RagBestModelsDashboard() {
   const bestRouge = measured.reduce((best, row) => (Number(row.rougeL || 0) > Number(best?.rougeL || 0) ? row : best), null);
   const bestCitation = measured.reduce(
     (best, row) => (Number(row.citation_coverage || 0) > Number(best?.citation_coverage || 0) ? row : best),
+    null,
+  );
+  const bestBertScore = measured.reduce(
+    (best, row) => (Number(row.bertscore_f1 || 0) > Number(best?.bertscore_f1 || 0) ? row : best),
     null,
   );
   const fastest = measured.reduce(
@@ -60,6 +64,7 @@ export default function RagBestModelsDashboard() {
         <MetricCard label="Selected output" value={data?.selected_output_dir ? "available" : "missing"} detail={data?.selected_output_dir || "not available"} />
         <MetricCard label="Target providers found" value={`${targetCoverage.length}/${TARGET_PROVIDERS.length}`} detail={TARGET_PROVIDERS.map(providerLabel).join(", ")} />
         <MetricCard label="Best ROUGE-L" value={formatScore(bestRouge?.rougeL)} detail={bestRouge ? providerLabel(bestRouge.model_provider) : "not available"} />
+        <MetricCard label="Best BERTScore F1" value={formatScore(bestBertScore?.bertscore_f1)} detail={bestBertScore ? providerLabel(bestBertScore.model_provider) : "not available"} />
         <MetricCard label="Best citation coverage" value={formatScore(bestCitation?.citation_coverage)} detail={bestCitation ? providerLabel(bestCitation.model_provider) : "not available"} />
         <MetricCard label="Fastest provider" value={formatLatency(fastest?.average_latency_ms)} detail={fastest ? providerLabel(fastest.model_provider) : "not available"} />
       </div>
@@ -68,7 +73,7 @@ export default function RagBestModelsDashboard() {
         <div className="rag-best-flow">
           <FlowStep icon={DatabaseZap} title="Retrieve" detail="source note -> chunks -> MiniLM -> Qdrant" />
           <FlowStep icon={ShieldCheck} title="Ground" detail="balanced evidence + citation-first clinical facts" />
-          <FlowStep icon={BrainCircuit} title="Generate" detail="BART, Pegasus, Qwen, Llama, Gemini" />
+          <FlowStep icon={BrainCircuit} title="Generate" detail="Deterministic, BART, Pegasus, Qwen, Llama" />
           <FlowStep icon={Timer} title="Score" detail="ROUGE, citation quality, safety failures, latency" />
         </div>
       </Card>
