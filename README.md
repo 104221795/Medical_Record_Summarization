@@ -23,7 +23,7 @@ The system now supports:
 - Admin evaluation dashboards for benchmark results, provider readiness, jobs, human review, and failure analysis.
 - Dataset governance and diversity assets for proxy evaluation.
 - Redis/RQ background job mode for long-running model generation, plus local in-process mode for stable development.
-- BERTScore-ready evaluation configuration, ROUGE metrics, citation metrics, failure labels, and human review rubric exports.
+- Completed Flow 2.1 evaluation with ROUGE, BERTScore, citation metrics, clinical proxy metrics, failure labels, and human review rubric exports.
 
 ## Tech Stack
 
@@ -39,7 +39,7 @@ The system now supports:
 | Local LLMs | Ollama models: `qwen2.5:3b`, `llama3.2:3b` |
 | HF models | `facebook/bart-large-cnn`, `google/pegasus-pubmed`, optional Pegasus variants, `roberta-large` for BERTScore |
 | Cloud provider | Gemini 2.5 Flash Lite, optional and governed |
-| Evaluation | ROUGE, optional BERTScore, citation coverage, unsupported claim rate, failure analysis, latency, provider comparison |
+| Evaluation | ROUGE, BERTScore, citation coverage, unsupported claim rate, failure analysis, latency, provider comparison |
 | Local model cache | Hugging Face on `D:\hf_cache`, Ollama on `D:\ollama_models` |
 
 ## Architecture
@@ -91,7 +91,7 @@ flowchart LR
 | Flow 1 | Raw Summarization | Send normalized source note directly to summarizer for baseline comparison | Available for benchmark comparison |
 | Flow 1.5 | Clinical Context | Build structured context before summarization | Available for controlled comparison |
 | Flow 2 | RAG Grounded | Chunk, embed, retrieve evidence, summarize, validate citations | Main recommended doctor workflow direction |
-| Flow 2.1 | RAG Best Models | RAG with stronger providers such as Qwen2.5, Llama3.2, Gemini optional | Available for provider testing and admin evaluation |
+| Flow 2.1 | RAG Best Models | RAG comparison across deterministic, BART, Pegasus, Qwen2.5, and Llama3.2 | Completed on 50 records for all five providers; available in Admin Evaluation |
 
 Recommended current path for doctor-facing testing:
 
@@ -437,7 +437,7 @@ This reduces hallucination risk and makes evidence review easier for doctors.
 The evaluation system supports:
 
 - ROUGE-1, ROUGE-2, ROUGE-L.
-- Optional BERTScore.
+- BERTScore.
 - Citation coverage.
 - Unsupported claim rate.
 - Missing diagnosis rate.
@@ -458,12 +458,58 @@ Benchmark flows:
 - Flow 2 RAG Grounded.
 - Flow 2.1 RAG Best Models.
 
+### Latest Flow 2.1 Result
+
+The latest pre-diversity Flow 2.1 run evaluated 50 MultiClinSum proxy records
+with five providers. Every provider completed 50/50 records, for 250/250
+completed predictions and zero failed predictions.
+
+BERTScore was computed afterward from the saved prediction/reference pairs; the
+generation models were not rerun. The evaluator used `roberta-large` on CPU
+with batch size 2.
+
+| Provider | Completion | ROUGE-L | BERTScore P | BERTScore R | BERTScore F1 | Citation coverage | Faithfulness proxy | Critical omission | Latency p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Deterministic | 50/50 | `0.1737` | `0.7440` | `0.8546` | `0.7952` | `0.9147` | `0.9071` | `0.3688` | `0.00 ms` |
+| BART | 50/50 | `0.0757` | `0.8217` | `0.7815` | `0.8010` | `0.1307` | `0.7585` | `0.9583` | `59,018.25 ms` |
+| Pegasus CNN/DailyMail | 50/50 | `0.1495` | `0.8381` | `0.8091` | `0.8232` | `0.3800` | `0.7626` | `0.9236` | `50,691.55 ms` |
+| Qwen2.5 | 50/50 | `0.2122` | `0.8118` | `0.8690` | `0.8391` | `0.8884` | `0.8713` | `0.4460` | `46,864.95 ms` |
+| Llama3.2 | 50/50 | `0.1863` | `0.7796` | `0.8545` | `0.8149` | `0.8620` | `0.8413` | `0.5108` | `65,747.15 ms` |
+
+Qwen2.5 is the strongest generative PoC provider in this run by ROUGE-L,
+BERTScore F1, citation coverage, and faithfulness proxy. Deterministic remains
+the most reliable smoke/control provider. BART and Pegasus remain useful
+baselines, but their semantic similarity scores do not compensate for weak
+citation coverage and high omission proxies.
+
+This run disabled retrieval blocking only for benchmark completion. The
+separate gated run remains evidence that insufficient retrieval can block
+generation. The doctor-facing workflow retains its retrieval and clinical
+safety gates.
+
+Artifacts:
+
+```text
+D:\clin_summ_outputs\rag_best_models_benchmark_50_no_gate
+```
+
+Admin pages load this run through:
+
+```text
+D:\clin_summ_outputs\latest_rag_best_models.json
+```
+
+These are proxy evaluation results. They do not establish clinical safety,
+clinical effectiveness, or real-EHR performance. Generated summaries remain
+clinician-review-only drafts.
+
 Typical benchmark artifact locations:
 
 ```text
 D:\clin_summ_outputs\medium_benchmark
 D:\clin_summ_outputs\medium_benchmark_bart_pegasus
 D:\clin_summ_outputs\rag_grounded_benchmark
+D:\clin_summ_outputs\rag_best_models_benchmark_50_no_gate
 D:\clin_summ_outputs\rag_best_models_ollama_smoke
 D:\clin_summ_outputs\rag_best_models_ollama_50
 outputs\evaluation
@@ -566,6 +612,10 @@ Latest local verification:
 ```text
 Redis/RQ smoke: pass
 Background job regression: 6 passed
+Flow 2.1 benchmark: 5 providers x 50 records, 250/250 completed
+Flow 2.1 BERTScore: computed for all five providers
+Admin Flow 2.1 artifact selection: verified
+Targeted Admin/evaluation tests: 19 passed
 Frontend build: pass
 ```
 
