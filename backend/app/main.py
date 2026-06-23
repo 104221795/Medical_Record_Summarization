@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from .config import Settings, get_settings
 from .db.session import build_engine_from_settings, create_session_factory
+from .evaluation.artifact_paths import configured_evaluation_artifact_root
 from .routers.audit import router as audit_router
 from .routers.auth import router as auth_router
 from .routers.citations import router as citation_router
@@ -253,7 +254,7 @@ def _readiness_report(app: FastAPI) -> dict[str, Any]:
         "configuration": _configuration_check(settings),
     }
     critical_names = ["database", "configuration"]
-    if settings.redis_required or settings.deployment_mode == "railway":
+    if settings.redis_required or settings.deployment_mode in {"compose", "railway"}:
         critical_names.append("jobs")
     critical_failures = [
         name for name in critical_names if checks[name]["status"] == "fail"
@@ -312,16 +313,18 @@ def _vector_store_check(settings: Settings) -> dict[str, Any]:
 
 
 def _artifact_check(settings: Settings) -> dict[str, Any]:
-    root = settings.evaluation_artifact_root
-    if root is None:
-        return {
-            "status": "warning",
-            "message": "RAG_EVALUATION_ARTIFACT_ROOT is not configured; admin benchmark pages will show graceful empty states if artifacts are absent.",
-        }
+    root = configured_evaluation_artifact_root(settings.evaluation_artifact_root)
     return {
         "status": "pass" if root.exists() else "warning",
         "path": str(root),
-        "message": "Evaluation artifact root is readable." if root.exists() else "Evaluation artifact root does not exist yet.",
+        "message": (
+            "Evaluation artifact root is readable."
+            if root.exists()
+            else (
+                "Evaluation artifact root does not exist yet. Set "
+                "RAG_EVALUATION_ARTIFACT_ROOT or prepare artifacts/evaluation."
+            )
+        ),
     }
 
 
@@ -372,7 +375,7 @@ def _job_system_check(
         active_jobs = -1
     redis_reachable = bool(queue_status.get("redis_reachable"))
     worker_count = int(queue_status.get("worker_count") or 0)
-    required = settings.redis_required or settings.deployment_mode == "railway"
+    required = settings.redis_required or settings.deployment_mode in {"compose", "railway"}
     ready = (
         settings.background_jobs_enabled
         and settings.job_backend == "rq"

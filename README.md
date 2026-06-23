@@ -25,6 +25,19 @@ The system now supports:
 - Redis/RQ background job mode for long-running model generation, plus local in-process mode for stable development.
 - Completed Flow 2.1 evaluation with ROUGE, BERTScore, citation metrics, clinical proxy metrics, failure labels, and human review rubric exports.
 
+## Week 5 Focus
+
+Major feature scope is frozen for the final demonstration. P0-P2 implementation
+and automated analysis are complete. The remaining priority is:
+
+1. capture doctor/admin UI screenshots;
+2. record the end-to-end demo;
+3. collect real human-review scores using the blinded protocol;
+4. package approved evidence and verify reviewer access.
+
+Public cloud deployment is optional future work. It is not required for the
+current demo or delivery.
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -40,7 +53,7 @@ The system now supports:
 | HF models | `facebook/bart-large-cnn`, `google/pegasus-pubmed`, optional Pegasus variants, `roberta-large` for BERTScore |
 | Cloud provider | Gemini 2.5 Flash Lite, optional and governed |
 | Evaluation | ROUGE, BERTScore, citation coverage, unsupported claim rate, failure analysis, latency, provider comparison |
-| Local model cache | Hugging Face on `D:\hf_cache`, Ollama on `D:\ollama_models` |
+| Local model cache | Configurable through environment variables; `D:\hf_cache` and `D:\ollama_models` are optional Windows examples |
 
 ## Architecture
 
@@ -138,7 +151,7 @@ when using `LLM_GATEWAY_MODE=proxy`.
 Choose the dependency set for the work you intend to run:
 
 ```powershell
-# Railway-equivalent web/worker runtime; excludes local ML and benchmark stacks.
+# Lightweight Docker web/worker runtime; excludes local ML and benchmark stacks.
 python -m pip install -r requirements-runtime.txt
 
 # Full local research/development environment, including ML and tests.
@@ -146,8 +159,8 @@ python -m pip install -r requirements.txt
 ```
 
 The root `requirements.txt` composes `requirements-runtime.txt`,
-`requirements-ml.txt`, and `requirements-test.txt`. The Railway Docker image
-installs only `requirements-runtime.txt`, so it does not install Torch,
+`requirements-ml.txt`, and `requirements-test.txt`. The lightweight Docker
+image installs only `requirements-runtime.txt`, so it does not install Torch,
 Transformers, sentence-transformers, BERTScore, MLflow, or CUDA/NVIDIA wheels.
 
 ```powershell
@@ -251,7 +264,17 @@ The compose profile builds the React frontend, serves it through FastAPI, starts
 http://127.0.0.1:8080
 ```
 
-### 8. Railway Staging
+Docker Compose is the current verified staging and final-demo path. It
+bind-mounts the portable benchmark package from `artifacts/evaluation` into
+`/app/artifacts`.
+
+Use the executable checklist:
+
+```text
+docs/demo/LOCAL_DOCKER_COMPOSE_DEMO_CHECKLIST.md
+```
+
+### 8. Optional Future Railway Staging
 
 Railway uses `railway.json`, the root `Dockerfile`, and the Railway-provided `PORT`.
 The image uses the hashing retrieval path to keep the staging web/worker runtime
@@ -268,6 +291,9 @@ Railway provider strategy:
   external `OLLAMA_BASE_URL` is explicitly configured and readiness succeeds.
 - BART/Pegasus remain local/offline benchmark providers and are not installed in
   the Railway runtime image.
+
+This is retained as optional future architecture documentation. It is not a
+current Week 5 requirement.
 
 Detailed deployment guide:
 
@@ -294,6 +320,8 @@ TRANSFORMERS_CACHE=D:\hf_cache\hub
 RAG_EMBEDDING_PROVIDER=sentence_transformers
 RAG_SENTENCE_TRANSFORMERS_MODEL=sentence-transformers/all-MiniLM-L6-v2
 RAG_SENTENCE_TRANSFORMERS_LOCAL_FILES_ONLY=true
+
+RAG_EVALUATION_ARTIFACT_ROOT=artifacts/evaluation
 
 OLLAMA_MODELS=D:\ollama_models
 OLLAMA_API_BASE=http://127.0.0.1:11434
@@ -490,29 +518,54 @@ safety gates.
 Artifacts:
 
 ```text
-D:\clin_summ_outputs\rag_best_models_benchmark_50_no_gate
+artifacts/evaluation/rag_best_models_benchmark_50_no_gate
+artifacts/evaluation/rag_best_models_benchmark_50_gated
+artifacts/evaluation/week5_analysis
 ```
 
 Admin pages load this run through:
 
 ```text
-D:\clin_summ_outputs\latest_rag_best_models.json
+artifacts/evaluation/latest_rag_best_models.json
 ```
+
+Set `RAG_EVALUATION_ARTIFACT_ROOT` to use another location. Existing
+`D:\clin_summ_outputs` folders remain an optional backward-compatible discovery
+fallback, but they are no longer required on another machine.
 
 These are proxy evaluation results. They do not establish clinical safety,
 clinical effectiveness, or real-EHR performance. Generated summaries remain
 clinician-review-only drafts.
 
+### Week 5 P1/P2 Analysis
+
+The saved 50-record artifacts were analyzed without rerunning generation or
+retrieval models. The package adds:
+
+- balanced easy/medium/hard source strata (17/16/17 records);
+- provider-by-stratum metrics and failure taxonomy;
+- a focused study of the two section-aware retrieval-gate blocks;
+- exploratory ROUGE/BERTScore/grounding correlations;
+- historical Flow 1/1.5/2/2.1 comparison on common records;
+- post-hoc retrieval-threshold sensitivity;
+- a blinded 12-case human-review package with intentionally blank scores.
+
+Run or regenerate the analysis with:
+
+```powershell
+python -m scripts.analyze_week5_evaluation
+```
+
+The human-review package is ready, but real clinician/reviewer scoring remains
+pending. AI-generated scores must not be presented as human evaluation.
+
 Typical benchmark artifact locations:
 
 ```text
-D:\clin_summ_outputs\medium_benchmark
-D:\clin_summ_outputs\medium_benchmark_bart_pegasus
-D:\clin_summ_outputs\rag_grounded_benchmark
-D:\clin_summ_outputs\rag_best_models_benchmark_50_no_gate
-D:\clin_summ_outputs\rag_best_models_ollama_smoke
-D:\clin_summ_outputs\rag_best_models_ollama_50
-outputs\evaluation
+artifacts/evaluation/medium_benchmark
+artifacts/evaluation/medium_benchmark_bart_pegasus
+artifacts/evaluation/rag_grounded_benchmark
+artifacts/evaluation/rag_best_models_benchmark_50_no_gate
 ```
 
 Admin dashboards read available benchmark artifacts and show provider readiness,
@@ -556,6 +609,10 @@ Human evaluation supports:
 
 Human review data is intended to become a training signal for prompt tuning,
 retrieval tuning, reranking, and future safety evaluation.
+
+The Week 5 blinded protocol and score package are documented in
+`docs/evaluation/HUMAN_EVALUATION_PROTOCOL.md`. Scores remain blank until real
+reviewers complete the protocol.
 
 ## Background Jobs
 
@@ -607,16 +664,40 @@ Set-Location "D:\MyNewDesktop\clin-summ\frontend"
 npm run build
 ```
 
-Latest local verification:
+Recorded Week 4 delivery verification:
 
 ```text
-Redis/RQ smoke: pass
-Background job regression: 6 passed
+Full backend suite: 165 passed, 0 failed
+Deployment-focused suite: 19 passed
+Docker build: pass
+Docker Compose staging: pass
+/health: HTTP 200
+/ready: HTTP 200
+Runtime image: approximately 122 MB
+Runtime image excludes Torch, Transformers, sentence-transformers, BERTScore,
+datasets, evaluate, MLflow, CUDA, and NVIDIA packages
 Flow 2.1 benchmark: 5 providers x 50 records, 250/250 completed
 Flow 2.1 BERTScore: computed for all five providers
 Admin Flow 2.1 artifact selection: verified
-Targeted Admin/evaluation tests: 19 passed
 Frontend build: pass
+```
+
+These are recorded delivery results. New Week 5 commands and screenshots must
+be captured separately in `docs/demo/DEMO_EVIDENCE_PACKAGE.md`; do not silently
+replace historical evidence with an unrecorded rerun.
+
+Current Week 5 automated evidence captured on 2026-06-22:
+
+```text
+Full backend suite: 172 passed
+Lightweight backend verification: 37 passed
+Frontend production build: pass
+Docker build: pass
+Docker Compose app/database health: pass
+Redis/RQ worker readiness: pass
+/health: HTTP 200
+/ready: HTTP 200
+Portable Flow 2.1: 5 providers, 250 outputs, BERTScore 5/5
 ```
 
 ## Troubleshooting
@@ -735,17 +816,25 @@ The MVP now includes an explicit safety layer before any real EHR integration:
 
 Operational docs:
 
+- [Local Docker Compose demo checklist](docs/demo/LOCAL_DOCKER_COMPOSE_DEMO_CHECKLIST.md)
+- [Demo evidence package](docs/demo/DEMO_EVIDENCE_PACKAGE.md)
+- [Final demo and presentation runbook](docs/demo/FINAL_DEMO_AND_PRESENTATION_RUNBOOK.md)
+- [Week 5 repository audit](docs/demo/WEEK5_REPOSITORY_AUDIT.md)
+- [Week 5 final delivery report](docs/delivery%205/WEEK5_FINAL_DELIVERY.md)
+- [Human evaluation protocol](docs/evaluation/HUMAN_EVALUATION_PROTOCOL.md)
+- [Retrieval gate case study](docs/evaluation/RETRIEVAL_GATE_CASE_STUDY.md)
 - [Deployment readiness audit](docs/DEPLOYMENT_READINESS_AUDIT.md)
 - [QA checklist](docs/QA_CHECKLIST.md)
 - [Guardrails](docs/GUARDRAILS.md)
-- [Railway deployment](docs/DEPLOYMENT_RAILWAY.md)
+- [Optional future Railway deployment](docs/DEPLOYMENT_RAILWAY.md)
 - [Evaluation snapshot](docs/EVALUATION_SNAPSHOT.md)
 
-## Recommended Next Improvements
+## Recommended Week 5 Work
 
-1. Wire Redis/RQ into deployment with a persisted job table and production process manager.
-2. Continue improving retrieval quality with reranking, conflict evidence display, and medical NLI verification.
-3. Expand dataset diversity with MTS-Dialog, MEDIQA-Sum, synthetic EHR, and messy-format cases.
-4. Add stronger factuality metrics and medical NLI validation.
-5. Improve human review analytics and reviewer feedback loops.
-6. Add production monitoring for latency, error rates, queue depth, provider failure rates, and citation quality.
+1. Run one final dry-run using the presentation runbook.
+2. Capture the remaining doctor/admin UI screenshots.
+3. Record the end-to-end demo and verify reviewer access to the evidence package.
+4. Invite qualified reviewers to complete the blinded human-evaluation sheet.
+5. Avoid major new features before the final presentation.
+6. Treat public cloud deployment, additional datasets, reranking, medical NLI,
+   and production monitoring as optional future work.

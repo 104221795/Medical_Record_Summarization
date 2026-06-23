@@ -1,6 +1,8 @@
 # Evaluation Snapshot
 
-The deployment package should include a final proxy benchmark snapshot when local compute allows it. Do not run heavy benchmark jobs in CI or Railway deploy.
+The final local demo package should include the completed proxy benchmark
+snapshot. Do not run heavy benchmark jobs in CI, Docker image builds, or demo
+startup.
 
 ## Recommended Snapshot
 
@@ -8,6 +10,7 @@ The deployment package should include a final proxy benchmark snapshot when loca
 - Dataset: governed benchmark set or selected de-identified proxy subset
 - Limit: 50 records preferred, 20 records acceptable for time-limited demo
 - Providers:
+  - `deterministic`
   - `bart`
   - `pegasus`
   - `qwen2.5`
@@ -16,7 +19,11 @@ The deployment package should include a final proxy benchmark snapshot when loca
 
 ## Manual Command
 
-PowerShell example for a 20-record no-Gemini snapshot:
+New outputs default to the portable repository-relative
+`artifacts/evaluation` root. Override it with
+`RAG_EVALUATION_ARTIFACT_ROOT`.
+
+PowerShell example for an intentional 20-record no-Gemini run:
 
 ```powershell
 Set-Location "D:\MyNewDesktop\clin-summ"
@@ -29,15 +36,20 @@ $env:OLLAMA_API_BASE="http://127.0.0.1:11434"
 $env:LLM_GATEWAY_MODE="litellm"
 $env:RAG_EMBEDDING_PROVIDER="sentence_transformers"
 $env:RAG_SENTENCE_TRANSFORMERS_MODEL="sentence-transformers/all-MiniLM-L6-v2"
+$env:RAG_EVALUATION_ARTIFACT_ROOT="artifacts/evaluation"
 
 .\.venv\Scripts\python.exe -m scripts.run_rag_grounded_benchmark `
-  --input data/processed/governance/benchmark_set.jsonl `
+  --dataset data/processed/governance/benchmark_set.jsonl `
   --limit 20 `
-  --models bart,pegasus,qwen2.5,llama3.2 `
-  --output-dir D:\clin_summ_outputs\rag_best_models_deploy_snapshot_20
+  --models deterministic,bart,pegasus,qwen2.5,llama3.2 `
+  --output-dir artifacts/evaluation/rag_best_models_snapshot_20
 ```
 
 For 50 records, change `--limit 50`.
+
+Do not use this command during final-demo preparation when the completed
+50-record snapshot is already available. Copy and verify the approved snapshot
+instead.
 
 ## Expected Artifacts
 
@@ -57,4 +69,7 @@ Proxy evaluation only. These results do not demonstrate clinical safety, clinica
 
 ## Admin Dashboard
 
-Set `RAG_EVALUATION_ARTIFACT_ROOT` or use the local artifact folders expected by the evaluation service so Admin Evaluation can load the latest snapshot. Missing artifacts must show a graceful empty state.
+Set `RAG_EVALUATION_ARTIFACT_ROOT` or use the repository-relative
+`artifacts/evaluation` fallback so Admin Evaluation can load the latest
+snapshot. Existing `D:/clin_summ_outputs` folders remain optional legacy
+discovery only. Missing artifacts must show a graceful empty state.

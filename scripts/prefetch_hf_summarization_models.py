@@ -7,10 +7,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from backend.app.evaluation.artifact_paths import configured_evaluation_artifact_root
 from src.models.seq2seq import configure_hf_d_cache, generate_seq2seq_summary, load_seq2seq_model
 
 
-OUTPUT_DIR = Path("D:/clin_summ_outputs/model_prefetch")
+OUTPUT_DIR = configured_evaluation_artifact_root() / "model_prefetch"
 MODELS = [
     "facebook/bart-large-cnn",
     "google/pegasus-pubmed",

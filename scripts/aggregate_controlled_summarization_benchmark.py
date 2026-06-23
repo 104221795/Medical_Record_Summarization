@@ -9,10 +9,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from backend.app.evaluation.artifact_paths import configured_evaluation_artifact_root
 from evaluation.data_governance.layers import HONESTY_WARNING, configure_d_drive_environment
 
 
-ROOT = Path("D:/clin_summ_outputs/summarization_benchmark")
+ROOT = configured_evaluation_artifact_root() / "summarization_benchmark"
 STAGES = {
     "A": ROOT / "stages" / "stage_a_deterministic_limit3",
     "B": ROOT / "stages" / "stage_b_bart_limit3",

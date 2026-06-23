@@ -44,6 +44,7 @@ RUN groupadd --system app \
 
 COPY --chown=app:app alembic.ini ./
 COPY --chown=app:app backend ./backend
+COPY --chown=app:app data/demo ./data/demo
 COPY --chown=app:app src ./src
 COPY --chown=app:app prompts ./prompts
 COPY --chown=app:app scripts ./scripts

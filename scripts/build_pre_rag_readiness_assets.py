@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.app.evaluation.citation_grounding import analyze_prediction_row, write_grounding_outputs
+from backend.app.evaluation.artifact_paths import configured_evaluation_artifact_root
 from backend.app.evaluation.clinical_metrics import (
     PER_RECORD_CLINICAL_FIELDS,
     aggregate_clinical_metrics,
@@ -30,8 +31,10 @@ from backend.app.evaluation.semantic_metrics import compute_pairwise_metrics
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DATASET = Path("data/processed/governance/benchmark_set.jsonl")
-DEFAULT_BENCHMARK_OUTPUT = Path("D:/clin_summ_outputs/medium_benchmark_bart_pegasus")
-DEFAULT_OUTPUT = Path("D:/clin_summ_outputs/pre_rag_readiness")
+DEFAULT_BENCHMARK_OUTPUT = (
+    configured_evaluation_artifact_root() / "medium_benchmark_bart_pegasus"
+)
+DEFAULT_OUTPUT = configured_evaluation_artifact_root() / "pre_rag_readiness"
 PROXY_WARNING = (
     "Proxy evaluation only. These results do not demonstrate clinical safety, clinical effectiveness, "
     "or real-world healthcare performance. Real EHR evaluation requires credentialed datasets such as "

@@ -9,11 +9,12 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
+from backend.app.evaluation.artifact_paths import configured_evaluation_artifact_root
 from evaluation.data_governance.layers import HONESTY_WARNING
 from src.data.dataset_loader import load_jsonl_dataset
 
 
-OUTPUT_DIR = Path("D:/clin_summ_outputs/dataset_governance")
+OUTPUT_DIR = configured_evaluation_artifact_root() / "dataset_governance"
 PROCESSED_GOVERNANCE_DIR = Path("data/processed/governance")
 SUPPORTED_DATASETS = ("MultiClinSum", "MTS-Dialog", "MEDIQA-Sum", "Synthea", "SyntheticMass")
 REQUIRED_FIELDS = ("note_id", "source_note", "reference_summary", "dataset", "split")

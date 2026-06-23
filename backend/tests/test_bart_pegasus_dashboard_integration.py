@@ -8,6 +8,11 @@ from backend.app.persistence_schemas import SummaryGenerateRequest
 from backend.app.services import evaluation_service
 from backend.app.config import Settings
 from backend.app.dependencies import _validated_header_context
+from backend.app.evaluation.artifact_paths import (
+    DEFAULT_EVALUATION_ARTIFACT_ROOT,
+    benchmark_discovery_dirs,
+    configured_evaluation_artifact_root,
+)
 from backend.app.main import create_app
 from backend.app.routers.auth import _hash_password, _verify_password, logout
 from backend.app.persistence_schemas import AuthGoogleLoginRequest, AuthSignupRequest
@@ -102,7 +107,6 @@ def test_benchmark_csv_reader_parses_rows(tmp_path: Path) -> None:
 
 def test_latest_rag_best_models_pointer_selects_completed_flow_2_1_run(
     tmp_path: Path,
-    monkeypatch,
 ) -> None:
     output_dir = tmp_path / "rag_best_models_benchmark_50_no_gate"
     output_dir.mkdir()
@@ -124,11 +128,38 @@ def test_latest_rag_best_models_pointer_selects_completed_flow_2_1_run(
         json.dumps({"selected_output_dir": str(output_dir)}),
         encoding="utf-8",
     )
-    monkeypatch.setattr(evaluation_service, "RAG_BEST_MODELS_POINTER_PATH", pointer)
-
-    selected = evaluation_service._latest_rag_best_models_output_dir()
+    selected = evaluation_service._latest_rag_best_models_output_dir(tmp_path)
 
     assert selected == output_dir
+
+
+def test_relative_artifact_root_defaults_to_repository_location(monkeypatch) -> None:
+    monkeypatch.delenv("RAG_EVALUATION_ARTIFACT_ROOT", raising=False)
+    monkeypatch.delenv("EVALUATION_ARTIFACT_ROOT", raising=False)
+    monkeypatch.delenv("BENCHMARK_SNAPSHOT_DIR", raising=False)
+
+    assert configured_evaluation_artifact_root() == DEFAULT_EVALUATION_ARTIFACT_ROOT
+
+
+def test_configured_artifact_root_is_preferred_for_flow_2_1(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "rag_best_models_benchmark_50_no_gate"
+    output_dir.mkdir()
+    (output_dir / "model_comparison.csv").write_text(
+        "model_provider,status,record_count,completed_count,rougeL\n"
+        "qwen2.5,completed,50,50,0.2122\n",
+        encoding="utf-8",
+    )
+
+    candidates = benchmark_discovery_dirs(tmp_path)
+    selected, discovered = evaluation_service._select_benchmark_output_dir(
+        candidates,
+        "rag_best_models",
+    )
+
+    assert selected == output_dir
+    assert next(item for item in discovered if item["path"] == str(output_dir))["selected"] is True
 
 
 def test_benchmark_results_merge_pegasus_pubmed_prediction_rows(tmp_path: Path) -> None:

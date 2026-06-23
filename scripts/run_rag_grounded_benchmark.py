@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.app.config import Settings
+from backend.app.evaluation.artifact_paths import configured_evaluation_artifact_root
 from backend.app.evaluation.citation_grounding import analyze_prediction_row, split_claims, write_grounding_outputs
 from backend.app.evaluation.clinical_context_builder import (
     SECTION_PATTERNS,
@@ -44,7 +45,7 @@ PROXY_WARNING = (
     "MIMIC-IV-Note or MIMIC-IV-BHC under approved governance processes."
 )
 DEFAULT_DATASET = Path("data/processed/governance/benchmark_set.jsonl")
-DEFAULT_OUTPUT = Path("D:/clin_summ_outputs/rag_best_models_benchmark")
+DEFAULT_OUTPUT = configured_evaluation_artifact_root() / "rag_best_models_benchmark"
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 DEFAULT_MODELS = "deterministic,bart,pegasus,qwen2.5,llama3.2,gemini2.5_flash_lite"
 SECTION_CHUNK_QUOTAS = {
@@ -266,7 +267,7 @@ def main() -> None:
     write_json(output_dir / "artifact_manifest.json", artifact_manifest)
 
     if not args.skip_latest_pointer:
-        latest_pointer = Path("D:/clin_summ_outputs/latest_rag_best_models.json")
+        latest_pointer = configured_evaluation_artifact_root() / "latest_rag_best_models.json"
         try:
             write_json(latest_pointer, {"selected_output_dir": str(output_dir)})
         except Exception as exc:
@@ -1423,7 +1424,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--llm-gateway-local-num-ctx", type=int, default=int(os.environ.get("LLM_GATEWAY_LOCAL_NUM_CTX", "8192")))
     parser.add_argument("--terminal-smoke-report", action="store_true", help="Print source/evidence/facts/model outputs directly to the terminal.")
     parser.add_argument("--terminal-smoke-records", type=int, default=1, help="Number of records to print in the terminal smoke report.")
-    parser.add_argument("--skip-latest-pointer", action="store_true", help="Do not update D:/clin_summ_outputs/latest_rag_best_models.json for UI discovery.")
+    parser.add_argument(
+        "--skip-latest-pointer",
+        action="store_true",
+        help="Do not update latest_rag_best_models.json under the configured evaluation artifact root.",
+    )
     parser.add_argument("--disable-retrieval-gate", action="store_true", help="Force summarization even when retrieval quality gate says review retrieval first.")
     parser.add_argument(
         "--drop-unexpected-predictions",

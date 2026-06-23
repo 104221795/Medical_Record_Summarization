@@ -126,6 +126,22 @@ def test_railway_gemini_is_selectable_when_server_secret_is_configured() -> None
     assert gemini.deployment_role == "deployment_primary"
 
 
+def test_compose_mode_enforces_strict_rq_topology() -> None:
+    settings = Settings(
+        environment="staging",
+        deployment_mode="compose",
+        auth_secret_key=SecretStr("staging-test-secret-with-sufficient-entropy"),
+        cors_origins="http://127.0.0.1:8080,http://localhost:8080",
+        job_backend="rq",
+        redis_required=True,
+        embedding_provider="hashing",
+    )
+
+    assert settings.deployment_mode == "compose"
+    assert settings.job_backend == "rq"
+    assert settings.redis_required is True
+
+
 def test_staging_rejects_role_header_impersonation_and_admin_signup(tmp_path) -> None:
     settings = Settings(
         environment="staging",

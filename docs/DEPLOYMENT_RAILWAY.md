@@ -1,5 +1,9 @@
 # Railway Staging Deployment
 
+> Week 5 note: public cloud deployment is optional future work. The current
+> verified staging/demo path is local Docker Compose. Use
+> `docs/demo/LOCAL_DOCKER_COMPOSE_DEMO_CHECKLIST.md` for the final demo.
+
 Target:
 
 > Railway-ready staging deployment for a de-identified, clinician-review-only Medical Record Summarization PoC.

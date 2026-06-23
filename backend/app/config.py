@@ -28,7 +28,7 @@ class Settings(BaseSettings):
 
     app_name: str = "Medical Record Summarization RAG API"
     environment: Literal["development", "test", "staging", "production"] = "development"
-    deployment_mode: Literal["local", "railway"] = Field(
+    deployment_mode: Literal["local", "compose", "railway"] = Field(
         default="local",
         validation_alias=AliasChoices("RAG_DEPLOYMENT_MODE", "DEPLOYMENT_MODE"),
     )
@@ -232,10 +232,14 @@ class Settings(BaseSettings):
                 )
             if "*" in {origin.strip() for origin in self.cors_origins.split(",")}:
                 raise ValueError("Wildcard CORS is not allowed in staging/production.")
-        if self.deployment_mode == "railway" and self.job_backend != "rq":
-            raise ValueError("Railway deployment requires RAG_JOB_BACKEND=rq.")
-        if self.deployment_mode == "railway" and not self.redis_required:
-            raise ValueError("Railway deployment requires REDIS_REQUIRED=true.")
+        if self.deployment_mode in {"compose", "railway"} and self.job_backend != "rq":
+            raise ValueError(
+                f"{self.deployment_mode} deployment requires RAG_JOB_BACKEND=rq."
+            )
+        if self.deployment_mode in {"compose", "railway"} and not self.redis_required:
+            raise ValueError(
+                f"{self.deployment_mode} deployment requires REDIS_REQUIRED=true."
+            )
         if self.environment == "production" and self.embedding_provider == "hashing":
             raise ValueError(
                 "Hashing embeddings are development-only; configure "

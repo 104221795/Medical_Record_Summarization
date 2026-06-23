@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.app.config import Settings
+from backend.app.evaluation.artifact_paths import configured_evaluation_artifact_root
 from backend.app.evaluation.citation_grounding import analyze_prediction_row, write_grounding_outputs
 from backend.app.evaluation.clinical_context_builder import (
     SECTION_QUERIES,
@@ -41,7 +42,7 @@ PROXY_WARNING = (
     "MIMIC-IV-Note or MIMIC-IV-BHC under approved governance processes."
 )
 DEFAULT_DATASET = Path("data/processed/governance/benchmark_set.jsonl")
-DEFAULT_OUTPUT = Path("D:/clin_summ_outputs/clinical_context_benchmark")
+DEFAULT_OUTPUT = configured_evaluation_artifact_root() / "clinical_context_benchmark"
 
 
 def main() -> None:

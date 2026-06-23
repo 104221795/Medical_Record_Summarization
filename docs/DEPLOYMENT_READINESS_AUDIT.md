@@ -1,6 +1,8 @@
 # Deployment Readiness Audit
 
-Status: Railway staging preparation for a de-identified, clinician-review-only PoC.
+Status: local Docker Compose staging is the current verified path. Railway
+staging remains optional future work for a de-identified,
+clinician-review-only PoC.
 
 ## Repository Surface
 

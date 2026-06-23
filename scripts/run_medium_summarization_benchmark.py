@@ -24,6 +24,10 @@ from backend.app.evaluation.clinical_metrics import (
     empty_clinical_record_metrics,
     serialize_failure_categories,
 )
+from backend.app.evaluation.artifact_paths import (
+    LEGACY_EVALUATION_ARTIFACT_ROOT,
+    configured_evaluation_artifact_root,
+)
 from backend.app.evaluation.semantic_metrics import compute_pairwise_metrics
 from evaluation.data_governance.layers import HONESTY_WARNING, configure_d_drive_environment
 from src.data.dataset_loader import load_jsonl_dataset
@@ -31,11 +35,13 @@ from src.models import DeterministicSummarizer
 
 
 INPUT_PATH = Path("data/processed/governance/benchmark_set.jsonl")
-OUTPUT_DIR = Path("D:/clin_summ_outputs/medium_benchmark_bart_pegasus")
+OUTPUT_DIR = configured_evaluation_artifact_root() / "medium_benchmark_bart_pegasus"
 STAGE_DIR = OUTPUT_DIR / "stages"
 BART_MODEL = "facebook/bart-large-cnn"
 PEGASUS_MODEL = "google/pegasus-xsum"
-LEGACY_BART_PREDICTIONS = Path("D:/clin_summ_outputs/medium_benchmark/bart_predictions.jsonl")
+LEGACY_BART_PREDICTIONS = (
+    LEGACY_EVALUATION_ARTIFACT_ROOT / "medium_benchmark" / "bart_predictions.jsonl"
+)
 PEGASUS_PUBMED_MODEL = "google/pegasus-pubmed"
 PEGASUS_CNN_DAILYMAIL_MODEL = "google/pegasus-cnn_dailymail"
 PEGASUS_CANDIDATES = [

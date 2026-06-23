@@ -74,33 +74,16 @@ from ..evaluation.clinical_metrics import (
     compute_clinical_record_metrics,
     serialize_failure_categories,
 )
+from ..evaluation.artifact_paths import (
+    DEFAULT_EVALUATION_ARTIFACT_ROOT,
+    benchmark_discovery_dirs,
+    latest_rag_pointer_paths,
+)
 
 
 BENCHMARK_DATASET_PATH = ROOT_DIR / "data" / "processed" / "ehr_benchmark" / "test.jsonl"
 BENCHMARK_OUTPUT_PATH = ROOT_DIR / "results" / "ehr_benchmark" / "model_comparison.csv"
 BENCHMARK_RUNNER_PATH = ROOT_DIR / "scripts" / "run_baseline_summarization.py"
-MEDIUM_BENCHMARK_OUTPUT_DIR = Path("D:/clin_summ_outputs/medium_benchmark_bart_pegasus")
-SUMMARIZATION_ONLY_OUTPUT_DIR = Path("D:/clin_summ_outputs/summarization_only_benchmark")
-CLINICAL_CONTEXT_OUTPUT_DIR = Path("D:/clin_summ_outputs/clinical_context_benchmark")
-RAG_GROUNDED_OUTPUT_DIR = Path("D:/clin_summ_outputs/rag_grounded_benchmark")
-RAG_BEST_MODELS_OUTPUT_DIR = Path("D:/clin_summ_outputs/rag_best_models_benchmark")
-PREFERRED_RAG_BEST_MODELS_OUTPUT_DIR = Path("D:/clin_summ_outputs/rag_best_models_benchmark_no_gemini_ui")
-RAG_BEST_MODELS_POINTER_PATH = Path("D:/clin_summ_outputs/latest_rag_best_models.json")
-MEDIUM_BENCHMARK_COMPARISON_PATH = MEDIUM_BENCHMARK_OUTPUT_DIR / "model_comparison.csv"
-MEDIUM_BENCHMARK_REPORT_PATH = MEDIUM_BENCHMARK_OUTPUT_DIR / "EVALUATION_REPORT.md"
-MEDIUM_BENCHMARK_FAILURE_PATH = MEDIUM_BENCHMARK_OUTPUT_DIR / "failure_analysis.md"
-BENCHMARK_DISCOVERY_DIRS = [
-    Path("D:/clin_summ_outputs/rag_best_models_benchmark_no_gemini_ui"),
-    Path("D:/clin_summ_outputs/rag_best_models_benchmark"),
-    Path("D:/clin_summ_outputs/rag_best_models_ollama_50"),
-    Path("D:/clin_summ_outputs/rag_best_models_ollama_smoke"),
-    Path("D:/clin_summ_outputs/rag_grounded_benchmark"),
-    Path("D:/clin_summ_outputs/clinical_context_benchmark"),
-    Path("D:/clin_summ_outputs/summarization_only_benchmark"),
-    Path("D:/clin_summ_outputs/medium_benchmark"),
-    Path("D:/clin_summ_outputs/medium_benchmark_bart_pegasus"),
-    Path("D:/clin_summ_outputs/performance_benchmark"),
-]
 PREDICTION_FILES = {
     "deterministic": "deterministic_predictions.jsonl",
     "bart": "bart_predictions.jsonl",
@@ -425,9 +408,10 @@ class EvaluationService:
 
     def benchmark_results(self, benchmark_type: str | None = None) -> BenchmarkResultsResponse:
         # Prefer an explicit latest pointer for Flow 2.1 if present and valid.
-        selected_dir, discovered = _select_benchmark_output_dir(BENCHMARK_DISCOVERY_DIRS, benchmark_type)
+        candidate_dirs = benchmark_discovery_dirs(self.settings.evaluation_artifact_root)
+        selected_dir, discovered = _select_benchmark_output_dir(candidate_dirs, benchmark_type)
         if benchmark_type == "rag_best_models":
-            pointer_dir = _latest_rag_best_models_output_dir()
+            pointer_dir = _latest_rag_best_models_output_dir(self.settings.evaluation_artifact_root)
             if pointer_dir is not None:
                 selected_dir = pointer_dir
                 # Ensure discovery metadata reflects the same run used by the API.
@@ -538,8 +522,9 @@ class EvaluationService:
     ) -> BenchmarkFlowComparisonResponse:
         flow_dirs: dict[str, Path] = {}
         flow_metadata: list[dict[str, str | None]] = []
+        candidate_dirs = benchmark_discovery_dirs(self.settings.evaluation_artifact_root)
         for flow_key, title in FLOW_COMPARISON_LABELS.items():
-            selected_dir, _ = _select_benchmark_output_dir(BENCHMARK_DISCOVERY_DIRS, flow_key)
+            selected_dir, _ = _select_benchmark_output_dir(candidate_dirs, flow_key)
             flow_dirs[flow_key] = selected_dir
             flow_metadata.append(
                 {
@@ -768,8 +753,9 @@ class EvaluationService:
         ]
 
     def _rag_readiness_gate(self) -> dict[str, Any]:
-        selected_dir, _discovered = _select_benchmark_output_dir(BENCHMARK_DISCOVERY_DIRS, "rag_best_models")
-        pointer_dir = _latest_rag_best_models_output_dir()
+        candidate_dirs = benchmark_discovery_dirs(self.settings.evaluation_artifact_root)
+        selected_dir, _discovered = _select_benchmark_output_dir(candidate_dirs, "rag_best_models")
+        pointer_dir = _latest_rag_best_models_output_dir(self.settings.evaluation_artifact_root)
         if pointer_dir is not None:
             selected_dir = pointer_dir
         retrieval_path = selected_dir / "retrieval_metrics.csv"
@@ -1442,16 +1428,25 @@ def _read_model_comparison(path: Path) -> list[BenchmarkResultRow]:
         return [_benchmark_row(row) for row in reader]
 
 
-def _latest_rag_best_models_output_dir() -> Path | None:
-    if not RAG_BEST_MODELS_POINTER_PATH.exists():
-        return None
-    try:
-        payload = json.loads(RAG_BEST_MODELS_POINTER_PATH.read_text(encoding="utf-8-sig"))
-        selected = Path(str(payload.get("selected_output_dir") or ""))
-    except (OSError, ValueError, TypeError, json.JSONDecodeError):
-        return None
-    if selected.exists() and (selected / "model_comparison.csv").exists():
-        return selected
+def _latest_rag_best_models_output_dir(
+    artifact_root: str | Path | None = None,
+) -> Path | None:
+    for pointer_path in latest_rag_pointer_paths(artifact_root):
+        if not pointer_path.exists():
+            continue
+        try:
+            payload = json.loads(pointer_path.read_text(encoding="utf-8-sig"))
+            configured = Path(str(payload.get("selected_output_dir") or ""))
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            continue
+        candidates = [configured]
+        if not configured.is_absolute():
+            candidates.insert(0, pointer_path.parent / configured)
+        elif configured.name:
+            candidates.append(pointer_path.parent / configured.name)
+        for selected in candidates:
+            if selected.exists() and (selected / "model_comparison.csv").exists():
+                return selected
     return None
 
 
@@ -1459,20 +1454,7 @@ def _select_benchmark_output_dir(
     candidate_dirs: list[Path],
     benchmark_type: str | None = None,
 ) -> tuple[Path, list[dict[str, Any]]]:
-    # For rag_best_models, also scan the root output directory for any
-    # folders matching the `rag_best_models*` prefix so new runs are
-    # discovered automatically without manual copying.
-    candidate_paths: list[Path] = list(candidate_dirs)
-    if benchmark_type == "rag_best_models":
-        root_scan = Path("D:/clin_summ_outputs")
-        try:
-            for p in sorted(root_scan.glob("rag_best_models*")):
-                if p not in candidate_paths:
-                    candidate_paths.append(p)
-        except Exception:
-            # ignore scanning errors and fall back to provided candidates
-            pass
-    discovered = [_folder_info(path) for path in candidate_paths]
+    discovered = [_folder_info(path) for path in candidate_dirs]
     existing = [item for item in discovered if item["exists"]]
     if benchmark_type:
         existing = [item for item in existing if item["benchmark_type"] == benchmark_type]
@@ -1483,7 +1465,12 @@ def _select_benchmark_output_dir(
     if benchmark_type == "rag_best_models":
         # If the preferred folder exists and contains a comparison CSV, select it.
         preferred = next(
-            (item for item in existing if item["path"] == str(PREFERRED_RAG_BEST_MODELS_OUTPUT_DIR) and item.get("has_model_comparison")),
+            (
+                item
+                for item in existing
+                if Path(item["path"]).name == "rag_best_models_benchmark_no_gemini_ui"
+                and item.get("has_model_comparison")
+            ),
             None,
         )
         if preferred:
@@ -1501,13 +1488,17 @@ def _select_benchmark_output_dir(
                 item["selected"] = item["path"] == str(selected)
             return selected, discovered
     if not existing:
+        primary_root = candidate_dirs[0] if candidate_dirs else DEFAULT_EVALUATION_ARTIFACT_ROOT
         fallback_by_type = {
-            "rag_best_models": RAG_BEST_MODELS_OUTPUT_DIR,
-            "rag_grounded": RAG_GROUNDED_OUTPUT_DIR,
-            "clinical_context": CLINICAL_CONTEXT_OUTPUT_DIR,
-            "summarization_only": MEDIUM_BENCHMARK_OUTPUT_DIR,
+            "rag_best_models": primary_root / "rag_best_models_benchmark",
+            "rag_grounded": primary_root / "rag_grounded_benchmark",
+            "clinical_context": primary_root / "clinical_context_benchmark",
+            "summarization_only": primary_root / "medium_benchmark_bart_pegasus",
         }
-        selected = fallback_by_type.get(benchmark_type or "", MEDIUM_BENCHMARK_OUTPUT_DIR)
+        selected = fallback_by_type.get(
+            benchmark_type or "",
+            primary_root / "medium_benchmark_bart_pegasus",
+        )
         for item in discovered:
             item["selected"] = item["path"] == str(selected)
         return selected, discovered

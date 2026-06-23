@@ -28,7 +28,12 @@ dist
 build
 
 api
-data
+data/*
+!data/demo/
+data/demo/*
+!data/demo/README.md
+!data/demo/final_demo_cases.json
+!data/demo/seed_clinical_cases.json
 evaluation
 data/raw
 data/raw_*
@@ -47,6 +52,8 @@ output
 outputs
 results
 clin_summ_outputs
+artifacts/evaluation/*
+!artifacts/evaluation/README.md
 var
 backend/var
 

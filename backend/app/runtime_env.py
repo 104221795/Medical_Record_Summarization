@@ -37,7 +37,7 @@ def load_runtime_env(
 
 
 def _apply_cache_defaults(deployment_mode: str) -> None:
-    if deployment_mode == "railway":
+    if deployment_mode in {"compose", "railway"}:
         os.environ.setdefault("HF_HOME", "/tmp/hf_cache")
         os.environ.setdefault("HF_HUB_CACHE", "/tmp/hf_cache/hub")
         os.environ.setdefault("HF_DATASETS_CACHE", "/tmp/hf_cache/datasets")
@@ -59,7 +59,7 @@ def _apply_retrieval_defaults(deployment_mode: str) -> None:
     os.environ.setdefault("RAG_SENTENCE_TRANSFORMERS_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
     os.environ.setdefault(
         "RAG_SENTENCE_TRANSFORMERS_LOCAL_FILES_ONLY",
-        "false" if deployment_mode == "railway" else "true",
+        "false" if deployment_mode in {"compose", "railway"} else "true",
     )
 
 
@@ -68,7 +68,7 @@ def _apply_rq_defaults(deployment_mode: str) -> None:
     os.environ.setdefault("RAG_RQ_QUEUE_NAME", "clin_summ_jobs")
     os.environ.setdefault(
         "RAG_JOB_FALLBACK_TO_IN_PROCESS",
-        "false" if deployment_mode == "railway" else "true",
+        "false" if deployment_mode in {"compose", "railway"} else "true",
     )
     os.environ.setdefault("RAG_RQ_REQUIRE_LIVE_WORKER", "true")
     os.environ.setdefault("RAG_RQ_MAX_RETRIES", "2")

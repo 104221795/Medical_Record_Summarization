@@ -20,13 +20,13 @@ Dữ liệu lâm sàng đã khử định danh
 
 Quy trình này hiện được hỗ trợ bởi web service, worker, PostgreSQL và hàng đợi Redis có thể triển khai độc lập. Hệ thống chứng minh được toàn bộ vòng lặp kỹ thuật và sản phẩm, từ dữ liệu nguồn đến bước bác sĩ review có kiểm soát, đồng thời duy trì ranh giới rằng mọi output do AI tạo ra chỉ là bản nháp cho đến khi được người có thẩm quyền phê duyệt.
 
-Khối lượng bàn giao kể từ báo cáo Week 3 ban đầu là đáng kể: phần chênh lệch repository từ commit `32fa429` đến commit hiện tại `75c89fd` gồm 103 file thay đổi, 11.380 dòng thêm và 2.241 dòng xóa. Nhánh `main` hiện khớp với `origin/main`.
+Khối lượng bàn giao được ghi nhận tại checkpoint xác minh Week 4 là đáng kể: phần chênh lệch repository từ commit `32fa429` đến checkpoint `75c89fd` gồm 103 file thay đổi, 11.380 dòng thêm và 2.241 dòng xóa. Đây là bằng chứng lịch sử tại thời điểm xác minh Week 4, không phải tuyên bố về trạng thái Git hiện tại của Week 5; trạng thái hiện tại phải được ghi riêng trong evidence package.
 
 Quá trình xác minh kết thúc với 165 backend test pass và không có test fail, bộ test tập trung vào deployment có 19 test pass, Docker build thành công và môi trường Docker Compose staging cục bộ chạy thành công. Topology đã xác minh gồm FastAPI web, RQ worker, PostgreSQL và Redis. PostgreSQL ở trạng thái healthy, Redis đang chạy, web service healthy, worker đã đăng ký, `/health` trả HTTP 200 và `/ready` trả HTTP 200 cùng thông tin readiness có cấu trúc cho database, queue, worker và provider.
 
 Ranh giới dependency của runtime cũng đã được sửa. Deployment image chỉ cài `requirements-runtime.txt`; các package ML và benchmark nặng dành cho local nằm trong `requirements-ml.txt`. Image cuối có kích thước xấp xỉ 122 MB. Quá trình xác minh xác nhận Torch, Transformers, sentence-transformers, BERTScore, datasets, evaluate, MLflow, sentencepiece, CUDA và các package NVIDIA không có trong image.
 
-Việc triển khai Railway công khai chưa được thực hiện vì không có hosting credit. Đây là giới hạn vận hành về tài nguyên hosting, không phải blocker về kiến trúc hệ thống. Topology Railway-ready dự kiến đã được xác minh cục bộ thông qua Docker Compose staging. Báo cáo không đưa ra tuyên bố về mức độ sẵn sàng vận hành thực tế trong bệnh viện, độ an toàn lâm sàng hoặc hiệu quả lâm sàng.
+Việc triển khai public cloud không nằm trong phạm vi bắt buộc hiện tại. Week 5 chủ động giữ Docker Compose cục bộ làm staging/demo path đã được xác minh và tập trung vào khả năng lặp lại, evidence package, tài liệu và ghi hình demo. Kiến trúc Railway-ready vẫn được giữ như bằng chứng khả thi và hướng tùy chọn trong tương lai, không phải blocker hay điều kiện hoàn thành. Báo cáo không đưa ra tuyên bố về mức độ sẵn sàng vận hành thực tế trong bệnh viện, độ an toàn lâm sàng hoặc hiệu quả lâm sàng.
 
 ## 1.1 Tóm Tắt Dành Cho Reviewer
 
@@ -34,10 +34,10 @@ Việc triển khai Railway công khai chưa được thực hiện vì không c
 | --- | --- |
 | Trạng thái tổng thể | PoC staging cục bộ sẵn sàng trình diễn |
 | Xác minh | 165 backend test pass; bộ test tập trung vào deployment pass; Docker build pass; Docker Compose pass; `/health` và `/ready` trả HTTP 200 |
-| Triển khai | Kiến trúc Railway-ready đã được chuẩn bị; triển khai Railway công khai được hoãn do giới hạn hosting credit |
+| Triển khai | Docker Compose là staging/demo path hiện đã xác minh; public cloud chỉ là bước tùy chọn trong tương lai |
 | Ranh giới runtime | Staging image gọn nhẹ không chứa Torch, Transformers, sentence-transformers, BERTScore, datasets, evaluate, MLflow, CUDA và các package NVIDIA |
 | Ranh giới an toàn | Summary do AI tạo ra vẫn là bản nháp chỉ dành cho bác sĩ review; không có tuyên bố về độ an toàn hoặc hiệu quả lâm sàng |
-| Hành động tiếp theo | Ghi hình demo cục bộ, đóng gói bằng chứng và tùy chọn triển khai public cloud khi có đủ tài nguyên hosting |
+| Hành động tiếp theo | Ghi hình demo cục bộ, đóng gói bằng chứng, chuẩn hóa artifact portable và xác minh khả năng lặp lại |
 
 ## 2. Baseline Week 3
 
@@ -209,8 +209,10 @@ Qwen2.5 tiếp tục là generative provider mạnh nhất trong run no-gate the
 Artifact cuối được lưu tại:
 
 ```text
-D:\clin_summ_outputs\rag_best_models_benchmark_50_no_gate
+artifacts/evaluation/rag_best_models_benchmark_50_no_gate
 ```
+
+Thư mục `D:\clin_summ_outputs\rag_best_models_benchmark_50_no_gate` vẫn được hỗ trợ như vị trí legacy trên máy đã chạy benchmark. Admin dashboard hiện ưu tiên `RAG_EVALUATION_ARTIFACT_ROOT`, dùng `artifacts/evaluation` làm fallback tương đối theo repository và chỉ dùng đường dẫn D drive để tương thích ngược.
 
 ### 4.5 Human Evaluation Và Auditability
 
@@ -407,7 +409,7 @@ Mọi metric trong báo cáo được lấy trực tiếp từ artifact report, 
 
 | Hạng mục xác minh | Kết quả |
 | --- | --- |
-| Đồng bộ repository | `main` và `origin/main` cùng ở `75c89fdc596692b692fdaaf311efe40a06c96b30` |
+| Checkpoint repository Week 4 | Bằng chứng lịch sử được ghi tại `75c89fdc596692b692fdaaf311efe40a06c96b30`; trạng thái Week 5 được theo dõi riêng |
 | Toàn bộ backend suite | 165 pass, 0 fail |
 | Bộ test tập trung vào deployment | 19 pass |
 | Docker build | Pass |
@@ -425,7 +427,7 @@ Mọi metric trong báo cáo được lấy trực tiếp từ artifact report, 
 
 Lần chạy Compose ban đầu fail do stale Docker network/container state ở phía host. Compose cleanup đã xử lý vấn đề; không cần thay đổi kiến trúc ứng dụng.
 
-## 7. Trạng Thái Deployment
+## 7. Trạng Thái Staging Và Deployment Tùy Chọn
 
 Repository hiện có kiến trúc Railway-ready cho PoC staging chỉ dùng dữ liệu đã khử định danh và bắt buộc clinician review. Topology Railway dự kiến:
 
@@ -436,13 +438,13 @@ Web service
   + Redis
 ```
 
-Việc triển khai Railway công khai được hoãn vì không có hosting credit. Cùng topology và giả định runtime đã được xác minh cục bộ thông qua Docker Compose staging, gồm database migration, web health, kết nối Redis/RQ, worker registration và provider readiness.
+Public cloud không phải mục tiêu bắt buộc ở thời điểm hiện tại. Cùng topology và giả định runtime đã được xác minh cục bộ thông qua Docker Compose staging, gồm database migration, web health, kết nối Redis/RQ, worker registration và provider readiness. Week 5 giữ môi trường này làm đường dẫn staging/demo chính để tránh mở rộng phạm vi trước buổi trình diễn cuối.
 
-Đây là giới hạn vận hành về hosting, không phải blocker kiến trúc. Mô tả chính xác về trạng thái bàn giao là:
+Mô tả chính xác về trạng thái bàn giao là:
 
 > Kiến trúc Railway-ready và đã được xác minh cục bộ thông qua Docker Compose staging.
 
-Hệ thống chưa được đưa lên Railway công khai.
+Hệ thống chưa được đưa lên Railway hoặc Render công khai và không cần public deployment để hoàn tất demo hiện tại.
 
 ## 8. Ranh Giới Diễn Giải
 
@@ -452,7 +454,7 @@ Các ranh giới cần giữ để diễn giải kết quả chính xác:
 
 - kết quả là proxy evaluation trên dữ liệu open/de-identified, không phải thẩm định trên EHR bệnh viện;
 - summary do AI tạo ra vẫn là bản nháp bắt buộc clinician review;
-- public Railway deployment là bước tùy chọn khi có hosting credit, vì Docker Compose staging cục bộ đã được xác minh;
+- public cloud deployment là bước tùy chọn trong tương lai, vì Docker Compose staging cục bộ là đường dẫn hiện đã được xác minh;
 - báo cáo không đưa ra tuyên bố về độ an toàn, hiệu quả lâm sàng, quyết định lâm sàng tự động hoặc writeback vào EMR thực.
 
 ## 9. Đề Xuất Bước Tiếp Theo Cho Week 5
@@ -464,12 +466,12 @@ Week 5 nên ưu tiên chất lượng trình diễn, đóng gói bằng chứng 
 3. Ghi hình demo end-to-end trên môi trường Docker Compose staging cục bộ.
 4. Chạy lại deterministic smoke theo checklist trước khi ghi hình để xác nhận tính lặp lại của demo.
 5. Đóng gói kết quả benchmark đã hoàn tất, giữ tách biệt historical optimized baseline, Week 3 provider-selection run, stricter gated run và run 50/50 có BERTScore.
-6. Tùy chọn triển khai Railway hoặc Render công khai khi có hosting credit/tài nguyên; đây không phải điều kiện bắt buộc để hoàn tất demo hiện tại.
-7. Nếu có public staging, chạy deterministic smoke trước; chỉ chạy Gemini smoke khi có key, external use đã được phê duyệt và dữ liệu demo đã khử định danh.
+6. Ghi nhận Railway hoặc Render là hướng tùy chọn trong tương lai; không triển khai trước demo cuối nếu không có nhu cầu review rõ ràng.
+7. Nếu một giai đoạn sau có public staging, chạy deterministic smoke trước; chỉ chạy Gemini smoke khi có key, external use đã được phê duyệt và dữ liệu demo đã khử định danh.
 8. Không bổ sung feature lớn trước buổi trình diễn cuối; tập trung vào repeatability, trình bày bằng chứng, disclosure rủi ro và operational cleanup.
 
 ## 10. Kết Luận
 
 So với Week 3, Week 4 đã chuyển định hướng RAG, evidence gate, human review, background job và deployment readiness thành một bề mặt staging tích hợp và đã được xác minh. Thành quả quan trọng nhất không phải là một metric cao hơn hoặc một model mới, mà là sự kết hợp giữa scoped retrieval, evidence-gated generation, clinician review, hành động có thể audit, persisted job, dependency deployment gọn nhẹ và structured readiness.
 
-Hệ thống hiện là một PoC staging chỉ dùng dữ liệu đã khử định danh, bắt buộc clinician review và sẵn sàng cho demo cục bộ; việc triển khai public cloud được hoãn vì lý do tài nguyên hosting. Kiến trúc đã Railway-ready và được xác minh cục bộ thông qua Docker Compose staging. Báo cáo không đưa ra tuyên bố về độ an toàn hoặc hiệu quả lâm sàng.
+Hệ thống hiện là một PoC staging chỉ dùng dữ liệu đã khử định danh, bắt buộc clinician review và sẵn sàng cho demo cục bộ. Docker Compose là đường dẫn staging/demo chính đã được xác minh; public cloud chỉ là hướng tùy chọn trong tương lai. Báo cáo không đưa ra tuyên bố về độ an toàn hoặc hiệu quả lâm sàng.

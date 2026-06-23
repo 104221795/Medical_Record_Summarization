@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     environment:
       RAG_ENVIRONMENT: staging
-      DEPLOYMENT_MODE: railway
+      DEPLOYMENT_MODE: compose
       PRIMARY_PROVIDER: deterministic
       RAG_DATABASE_URL: postgresql+psycopg://clin_summ:clin_summ_dev@db:5432/clin_summ
       RAG_AUTH_SECRET_KEY: local-compose-change-me
@@ -38,7 +38,7 @@ services:
       redis:
         condition: service_started
     volumes:
-      - app_artifacts:/app/artifacts
+      - ./artifacts/evaluation:/app/artifacts:ro
 
   worker:
     build:
@@ -48,7 +48,7 @@ services:
       disable: true
     environment:
       RAG_ENVIRONMENT: staging
-      DEPLOYMENT_MODE: railway
+      DEPLOYMENT_MODE: compose
       PRIMARY_PROVIDER: deterministic
       RAG_DATABASE_URL: postgresql+psycopg://clin_summ:clin_summ_dev@db:5432/clin_summ
       RAG_AUTH_SECRET_KEY: local-compose-change-me
@@ -98,4 +98,3 @@ services:
 
 volumes:
   postgres_data:
-  app_artifacts:

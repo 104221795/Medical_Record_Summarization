@@ -16,6 +16,7 @@ from backend.app.evaluation.clinical_metrics import (
     empty_clinical_record_metrics,
     serialize_failure_categories,
 )
+from backend.app.evaluation.artifact_paths import configured_evaluation_artifact_root
 from backend.app.evaluation.semantic_metrics import compute_pairwise_metrics
 from evaluation.data_governance.layers import (
     HONESTY_WARNING,
@@ -29,7 +30,9 @@ from src.data.dataset_loader import load_jsonl_dataset
 from src.models import BartSummarizer, BaseSummarizer, DeterministicSummarizer, PegasusSummarizer
 
 
-DEFAULT_OUTPUT_DIR = Path(os.environ.get("CLIN_SUMM_OUTPUT_DIR", "D:/clin_summ_outputs"))
+DEFAULT_OUTPUT_DIR = configured_evaluation_artifact_root(
+    os.environ.get("CLIN_SUMM_OUTPUT_DIR") or None
+)
 PROXY_WARNING = "Proxy evaluation only. Do not claim real EHR benchmark or clinical performance from these outputs."
 LEGACY_PROXY_WARNING = (
     "Proxy evaluation only: use de-identified/demo/open benchmark data. "
