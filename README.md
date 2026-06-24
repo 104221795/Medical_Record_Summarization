@@ -823,6 +823,9 @@ Operational docs:
 - [Week 5 final delivery report](docs/delivery%205/WEEK5_FINAL_DELIVERY.md)
 - [Human evaluation protocol](docs/evaluation/HUMAN_EVALUATION_PROTOCOL.md)
 - [Retrieval gate case study](docs/evaluation/RETRIEVAL_GATE_CASE_STUDY.md)
+- [Vinmec medical record summarization research roadmap](docs/research/VINMEC_MEDICAL_RECORD_SUMMARIZATION_RESEARCH_ROADMAP.md)
+- [Vinmec pilot proposal](docs/research/VINMEC_PILOT_PROPOSAL.md)
+- [Final research conclusion](docs/research/FINAL_RESEARCH_CONCLUSION.md)
 - [Deployment readiness audit](docs/DEPLOYMENT_READINESS_AUDIT.md)
 - [QA checklist](docs/QA_CHECKLIST.md)
 - [Guardrails](docs/GUARDRAILS.md)
@@ -836,5 +839,6 @@ Operational docs:
 3. Record the end-to-end demo and verify reviewer access to the evidence package.
 4. Invite qualified reviewers to complete the blinded human-evaluation sheet.
 5. Avoid major new features before the final presentation.
-6. Treat public cloud deployment, additional datasets, reranking, medical NLI,
-   and production monitoring as optional future work.
+6. Use the Vinmec pilot proposal as the research-first next step; treat public
+   cloud deployment, additional datasets, reranking, medical NLI, and production
+   monitoring as optional future work.

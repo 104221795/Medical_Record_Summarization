@@ -235,7 +235,56 @@ từ 48 xuống 38 records. Bảng này không chạy lại retrieval/generation
 sampling. Nó không phải clinician edit distance, không phải edit time và không
 được dùng làm bằng chứng workflow efficiency cho đến khi có reviewer thật.
 
-## 6. Artifact và reproducibility
+## 6. Evidence-first interpretation: vì sao giữ RAG khi Raw có ROUGE cao hơn?
+
+Benchmark lịch sử cho thấy Raw có ROUGE-L cao hơn Flow 2/2.1 ở deterministic,
+BART và Pegasus. Đây là kết quả hợp lý vì source hiện tại chỉ khoảng 500–600
+tokens: model Raw có thể nhìn gần như toàn bộ note, trong khi RAG tạo thêm các
+điểm có thể mất thông tin như section detection, chunking, embedding, query,
+top-k và retrieval gate.
+
+RAG trong dự án không được tối ưu với lời hứa “luôn tăng ROUGE”. Nó được tối ưu
+cho evidence-first doctor workflow:
+
+- claim truy ngược được về đúng source chunk;
+- retrieval giới hạn theo tenant, patient và encounter;
+- unsupported/conflicting evidence vẫn hiện cho bác sĩ;
+- missing evidence được coi là unknown, không phải absent;
+- hệ thống có thể từ chối generation nếu thiếu evidence bắt buộc;
+- review và approval có thể audit.
+
+Deterministic minh họa trade-off này rõ nhất: từ Raw đến Flow 2.1, ROUGE-L giảm
+`0.2407 → 0.1737`, nhưng citation coverage tăng `0.0133 → 0.9147`, factuality
+proxy tăng `0.8059 → 0.9071`, timeline completeness tăng `0.3064 → 0.6667` và
+critical-omission proxy giảm `0.7701 → 0.3688`.
+
+Vì vậy kết luận đúng là:
+
+> Raw phù hợp cho một note ngắn và lexical summarization. RAG phù hợp hơn khi
+> mục tiêu là evidence traceability, nhiều tài liệu, patient isolation,
+> citation review và safe refusal. Nghiên cứu tiếp theo nên kiểm tra adaptive
+> routing thay vì bắt mọi case dùng cùng một flow.
+
+Qdrant không thực hiện chunking. Chunking xảy ra trước và tạo các đơn vị bằng
+chứng có section/source span; embedding biểu diễn ngữ nghĩa của từng chunk;
+Qdrant lưu và truy hồi các chunk theo similarity cùng patient/encounter filter.
+Embedding và Qdrant không thể cứu một chunk bị cắt sai hoặc phân loại sai
+section, nên retrieval improvement phải bắt đầu từ normalization/chunking.
+
+Gói nghiên cứu Vinmec được tách riêng để không trộn lẫn PoC benchmark với giả
+định triển khai bệnh viện:
+
+- `docs/research/VINMEC_MEDICAL_RECORD_SUMMARIZATION_RESEARCH_ROADMAP.md`:
+  phân tích hiện trạng công khai, điều kiện mở rộng, governance và lộ trình
+  nghiên cứu.
+- `docs/research/VINMEC_PILOT_PROPOSAL.md`: proposal pilot theo P0/P1/P2,
+  risk register, human-evaluation design, go/no-go criteria và architecture
+  research-only.
+- `docs/research/FINAL_RESEARCH_CONCLUSION.md`: kết luận nghiên cứu cuối cùng,
+  nhấn mạnh PoC evidence-first, ranh giới proxy evaluation và hướng research
+  pilot thay vì production deployment.
+
+## 7. Artifact và reproducibility
 
 ```text
 scripts/analyze_week5_evaluation.py
@@ -272,7 +321,7 @@ Analyzer ưu tiên ba historical-flow CSV repository-relative ở trên; legacy
 D-drive chỉ còn là fallback. Vì vậy controlled comparison có thể được tái tạo
 trên máy demo khác khi portable artifacts được chuyển cùng gói.
 
-## 7. Acceptance matrix
+## 8. Acceptance matrix
 
 | Điều kiện | Trạng thái | Bằng chứng |
 | --- | --- | --- |
@@ -287,7 +336,7 @@ trên máy demo khác khi portable artifacts được chuyển cùng gói.
 | Human/clinician scoring | Chờ reviewer thật | Không được tự động hoặc giả lập |
 | UI screenshots/video/SharePoint | Chờ operator | Runbook và checklist đã sẵn sàng |
 
-## 8. Kết luận và quyết định đề xuất
+## 9. Kết luận và quyết định đề xuất
 
 P0, P1 và P2 đã hoàn tất ở mức implementation, automated analysis và delivery
 documentation. Dự án hiện có câu chuyện end-to-end đủ mạnh cho final demo:
@@ -301,9 +350,15 @@ Quyết định tốt nhất lúc này là:
 2. chạy dry-run demo theo runbook;
 3. ghi hình và hoàn thiện evidence thủ công;
 4. mời reviewer thật chấm blinded package;
-5. chỉ cân nhắc public cloud deployment khi có credit/tài nguyên và khi nó phục
+5. dùng Vinmec pilot proposal như hướng phát triển nghiên cứu tiếp theo;
+6. chỉ cân nhắc public cloud deployment khi có credit/tài nguyên và khi nó phục
    vụ mục tiêu demo cụ thể.
 
 Không nên mô tả dự án là hệ thống vận hành chính thức, đã được xác nhận an
 toàn/hiệu quả lâm sàng, đã kiểm chứng trên EHR thực hoặc có quyền tự ra quyết
 định lâm sàng.
+
+Kết luận cuối cùng: giá trị của dự án không chỉ là benchmark provider. Giá trị
+chính là một workflow clinical NLP có kỷ luật: AI tạo draft, claim có evidence,
+retrieval có gate, bác sĩ duyệt cuối cùng, metric proxy được tách khỏi human
+validation và hướng mở rộng được đặt trong pilot nghiên cứu có governance.
