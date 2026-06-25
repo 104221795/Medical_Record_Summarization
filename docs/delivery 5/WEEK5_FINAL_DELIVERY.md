@@ -271,18 +271,15 @@ Qdrant lưu và truy hồi các chunk theo similarity cùng patient/encounter fi
 Embedding và Qdrant không thể cứu một chunk bị cắt sai hoặc phân loại sai
 section, nên retrieval improvement phải bắt đầu từ normalization/chunking.
 
-Gói nghiên cứu Vinmec được tách riêng để không trộn lẫn PoC benchmark với giả
-định triển khai bệnh viện:
+Proposal được tách thành **một file nộp riêng** theo style enterprise solution
+proposal để không trộn lẫn PoC benchmark với giả định triển khai bệnh viện:
 
-- `docs/research/VINMEC_MEDICAL_RECORD_SUMMARIZATION_RESEARCH_ROADMAP.md`:
-  phân tích hiện trạng công khai, điều kiện mở rộng, governance và lộ trình
-  nghiên cứu.
-- `docs/research/VINMEC_PILOT_PROPOSAL.md`: proposal pilot theo P0/P1/P2,
-  risk register, human-evaluation design, go/no-go criteria và architecture
-  research-only.
-- `docs/research/FINAL_RESEARCH_CONCLUSION.md`: kết luận nghiên cứu cuối cùng,
-  nhấn mạnh PoC evidence-first, ranh giới proxy evaluation và hướng research
-  pilot thay vì production deployment.
+- `docs/proposal/MEDICAL_RECORD_SUMMARIZATION_PROPOSAL.md`: bản proposal chính
+  để nộp/chuyển slide, gồm executive summary, agenda, solution introduction,
+  problem assessment, why this solution, user/role/function mapping, business
+  workflow Mermaid diagram, technical component map, RAG/citation pipeline,
+  evaluation framework, benchmark summary, delivery schedule, handover,
+  limitations, roadmap và slide-ready outline.
 
 ## 7. Artifact và reproducibility
 
@@ -350,7 +347,8 @@ Quyết định tốt nhất lúc này là:
 2. chạy dry-run demo theo runbook;
 3. ghi hình và hoàn thiện evidence thủ công;
 4. mời reviewer thật chấm blinded package;
-5. dùng Vinmec pilot proposal như hướng phát triển nghiên cứu tiếp theo;
+5. dùng medical record summarization solution proposal như hướng phát triển
+   nghiên cứu tiếp theo;
 6. chỉ cân nhắc public cloud deployment khi có credit/tài nguyên và khi nó phục
    vụ mục tiêu demo cụ thể.
 

@@ -1,0 +1,190 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Medical Record Summarization Enterprise Proposal</title>
+<style>
+@page { size: 16in 9in; margin: 0; }
+body { margin:0; background:#eef6f8; font-family: Arial, sans-serif; color:#132235; }
+.slide { width: 16in; height: 9in; box-sizing:border-box; padding:0.7in; page-break-after:always; background:#fff; position:relative; overflow:hidden; }
+.slide.dark { background:#073B4C; color:white; }
+.kicker { color:#0E8796; font-weight:800; letter-spacing:.08em; font-size:14px; }
+.dark .kicker { color:#FFF5D6; }
+h1 { font-size:42px; margin:.18in 0 .12in; line-height:1.05; }
+p { font-size:20px; max-width:10in; color:#60758A; }
+.dark p { color:#d8eef0; }
+.media { display:flex; gap:.18in; align-items:center; margin-top:.35in; }
+.media img { max-width:4.8in; max-height:4.2in; border:1px solid #d8e8ea; border-radius:12px; object-fit:contain; background:white; }
+.foot { position:absolute; bottom:.28in; left:.7in; right:.7in; text-align:center; font-size:12px; color:#60758A; }
+.dark .foot { color:#d8eef0; }
+</style></head><body><section class="slide dark">
+<div class="kicker">00</div>
+<h1>Cover</h1>
+
+<div class="media"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">01 PROPOSAL STRUCTURE</div>
+<h1>Agenda</h1>
+<p>Cấu trúc theo style enterprise proposal: vấn đề trước, giải pháp sau, rồi kỹ thuật và lộ trình.</p>
+<div class="media"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">01 SOLUTION INTRODUCTION</div>
+<h1>Executive Summary</h1>
+<p>Một PoC có định hướng enterprise: evidence-first, review-first, audit-first.</p>
+<div class="media"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">02 PROBLEM ASSESSMENT</div>
+<h1>Why This Matters</h1>
+<p>Medical summarization không chỉ là rút gọn văn bản; đó là bài toán bằng chứng và trách nhiệm review.</p>
+<div class="media"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">02 PROBLEM ASSESSMENT</div>
+<h1>Current Challenge Assessment</h1>
+<p>Bảng vấn đề chuyển thành năng lực cần có trong một PoC enterprise-grade.</p>
+<div class="media"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">03 BUSINESS PROPOSAL</div>
+<h1>Proposed Solution Overview</h1>
+<p>Một luồng nghiệp vụ ngắn: từ scope bệnh nhân đến draft có citation và audit.</p>
+<div class="media"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">03 BUSINESS PROPOSAL</div>
+<h1>Product Entry — Role-based Workspace</h1>
+<p>Entry point cho doctor/admin demo với role-based navigation.</p>
+<div class="media"><img src="assets/figures/Figure_01.png" alt="Figure 1"><img src="assets/figures/Figure_02.png" alt="Figure 2"><img src="assets/figures/Figure_04.png" alt="Figure 4"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">03 BUSINESS PROPOSAL</div>
+<h1>Doctor Workflow — Patient Selection</h1>
+<p>Bác sĩ bắt đầu từ danh sách bệnh nhân de-identified và chọn đúng patient/encounter scope.</p>
+<div class="media"><img src="assets/figures/Figure_05.png" alt="Figure 5"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">03 BUSINESS PROPOSAL</div>
+<h1>Doctor Workflow — Clinical Context</h1>
+<p>Patient context gom profile, timeline, source documents và previous summaries.</p>
+<div class="media"><img src="assets/figures/Figure_06.png" alt="Figure 6"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">03 BUSINESS PROPOSAL</div>
+<h1>Doctor Workflow — Generate AI Draft</h1>
+<p>RAG evidence-first: retrieve trước, generate sau, draft luôn cần review.</p>
+<div class="media"><img src="assets/figures/Figure_07.png" alt="Figure 7"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">04 TECHNICAL PROPOSAL</div>
+<h1>Evidence Quality Gate</h1>
+<p>Gate làm rủi ro hiển thị trước khi bác sĩ quyết định.</p>
+<div class="media"><img src="assets/figures/Figure_08.png" alt="Figure 8"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">04 TECHNICAL PROPOSAL</div>
+<h1>Citation-first Review</h1>
+<p>Mỗi claim quan trọng cần trace được về evidence source.</p>
+<div class="media"><img src="assets/figures/Figure_09.png" alt="Figure 9"><img src="assets/figures/Figure_10.png" alt="Figure 10"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">04 TECHNICAL PROPOSAL</div>
+<h1>Human-in-the-loop Decision</h1>
+<p>Bác sĩ là người quyết định cuối; AI chỉ tạo draft có thể sửa hoặc từ chối.</p>
+<div class="media"><img src="assets/figures/Figure_11.png" alt="Figure 11"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">04 TECHNICAL PROPOSAL</div>
+<h1>Summary Lifecycle and Audit</h1>
+<p>Lifecycle + audit trail giúp reviewer thấy ai làm gì, khi nào, trên summary nào.</p>
+<div class="media"><img src="assets/figures/Figure_12.png" alt="Figure 12"><img src="assets/figures/Figure_13.png" alt="Figure 13"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">03 BUSINESS PROPOSAL</div>
+<h1>User / Role / Function Mapping</h1>
+<p>Map nhu cầu người dùng sang feature và giá trị đề xuất.</p>
+<div class="media"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">04 TECHNICAL PROPOSAL</div>
+<h1>Technical Architecture</h1>
+<p>Kiến trúc staging demo: frontend, FastAPI, services, storage/artifacts và worker.</p>
+<div class="media"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">04 TECHNICAL PROPOSAL</div>
+<h1>RAG and Citation Pipeline</h1>
+<p>RAG trong bài toán này là hạ tầng bằng chứng, không chỉ là cách gọi LLM.</p>
+<div class="media"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">04 TECHNICAL PROPOSAL</div>
+<h1>Evaluation Framework</h1>
+<p>Proxy evaluation phải đo cả chất lượng summary lẫn evidence grounding.</p>
+<div class="media"><img src="assets/figures/Figure_14.png" alt="Figure 14"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">04 TECHNICAL PROPOSAL</div>
+<h1>Benchmark Result Summary</h1>
+<p>Flow 2.1 no-gate: 50 records × 5 providers = 250/250 predictions.</p>
+<div class="media"><img src="assets/figures/Figure_16.png" alt="Figure 16"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">05 DELIVERY &amp; DEMO READINESS</div>
+<h1>Admin Evaluation Dashboard</h1>
+<p>Admin nhìn được Flow 2.1 benchmark visibility và provider completion.</p>
+<div class="media"><img src="assets/figures/Figure_15.png" alt="Figure 15"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">05 DELIVERY &amp; DEMO READINESS</div>
+<h1>Grounding Metrics and Error Analysis</h1>
+<p>Không chỉ biết model nào thắng; reviewer thấy vì sao model fail.</p>
+<div class="media"><img src="assets/figures/Figure_17.png" alt="Figure 17"><img src="assets/figures/Figure_19.png" alt="Figure 19"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">05 DELIVERY &amp; DEMO READINESS</div>
+<h1>RAG vs Raw Context Comparison</h1>
+<p>Raw có thể tốt với note ngắn; RAG hữu ích hơn khi cần evidence-first, multi-document và citation review.</p>
+<div class="media"><img src="assets/figures/Figure_18.png" alt="Figure 18"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">05 DELIVERY &amp; DEMO READINESS</div>
+<h1>Reproducibility and Artifacts</h1>
+<p>Benchmark không chỉ là screenshot; artifacts giúp reviewer kiểm tra lại.</p>
+<div class="media"><img src="assets/figures/Figure_20.png" alt="Figure 20"><img src="assets/figures/Figure_22.png" alt="Figure 22"><img src="assets/figures/Figure_23.png" alt="Figure 23"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">05 DELIVERY &amp; DEMO READINESS</div>
+<h1>Demo Staging Architecture</h1>
+<p>Docker Compose local staging path validates app, worker, PostgreSQL, Redis, /health và /ready.</p>
+<div class="media"><img src="assets/figures/Figure_21.png" alt="Figure 21"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">05 DELIVERY &amp; DEMO READINESS</div>
+<h1>Delivery Schedule</h1>
+<p>Timeline Week 1–Week 6 theo artifact/delivery hiện tại.</p>
+<div class="media"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">06 RESEARCH PILOT ROADMAP &amp; GOVERNANCE</div>
+<h1>Vinmec Research Pilot Appendix</h1>
+<p>Bước hợp lý là research-first pilot, không phải rollout hospital workflow.</p>
+<div class="media"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">06 RESEARCH PILOT ROADMAP &amp; GOVERNANCE</div>
+<h1>Limitations and Risk Controls</h1>
+<p>Risk table cho proposal enterprise: mitigation rõ, limitation còn lại rõ.</p>
+<div class="media"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide ">
+<div class="kicker">06 RESEARCH PILOT ROADMAP &amp; GOVERNANCE</div>
+<h1>Roadmap and Conclusion</h1>
+<p>Kết luận bảo thủ: tăng evidence, human review và governance trước khi mở rộng.</p>
+<div class="media"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section><section class="slide dark">
+<div class="kicker">END</div>
+<h1>Q&amp;A</h1>
+
+<div class="media"></div>
+<div class="foot">Clinician-review-only PoC • proxy/de-identified data • not clinical deployment</div>
+</section></body></html>

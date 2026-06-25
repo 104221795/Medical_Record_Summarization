@@ -1,8 +1,12 @@
 # Final Research Conclusion — Citation-grounded Medical Record Summarization
 
 > **Scope:** kết luận nghiên cứu cho PoC hiện tại và hướng mở rộng pilot. Đây
-> không phải bằng chứng clinical safety/effectiveness, không phải xác nhận triển
+> không phải bằng chứng an toàn/hiệu quả lâm sàng, không phải xác nhận triển
 > khai tại bệnh viện thật và không phải tài liệu phê duyệt HIS/EMR integration.
+
+> **Ghi chú nộp bài:** kết luận này đã được tích hợp vào
+> [VINMEC_MEDICAL_RECORD_SUMMARIZATION_PROPOSAL.md](VINMEC_MEDICAL_RECORD_SUMMARIZATION_PROPOSAL.md).
+> Nếu chỉ nộp một proposal Vinmec, hãy nộp file proposal tổng hợp đó.
 
 ## 1. Luận điểm cuối cùng
 
@@ -45,8 +49,8 @@ PoC đã chứng minh ở mức local staging/research prototype rằng:
 
 Các ranh giới này phải được giữ rõ:
 
-- chưa chứng minh clinical safety;
-- chưa chứng minh clinical effectiveness;
+- chưa chứng minh an toàn lâm sàng;
+- chưa chứng minh hiệu quả lâm sàng;
 - chưa chứng minh giảm thời gian bác sĩ trong workflow thật;
 - chưa chứng minh trên real EHR/Vinmec data;
 - chưa chứng minh hệ thống phù hợp mọi khoa hoặc mọi site;
@@ -128,10 +132,10 @@ pilot nghiên cứu, dự án có cơ hội trở thành một case study có ch
 The cleanest final presentation message is:
 
 > We built a demo-ready local staging PoC for citation-grounded medical record
-> summarization. The PoC does not claim clinical safety or real-EHR validation.
+> summarization. The PoC does not claim hospital-grade validation or live EHR use.
 > Its contribution is an evidence-first workflow: AI drafts, citation support,
 > retrieval gate, doctor review, auditability and disciplined evaluation. The
-> right next step is a governed research pilot, not production deployment.
+> right next step is a governed research pilot, not an official live rollout.
 
 Vietnamese version:
 

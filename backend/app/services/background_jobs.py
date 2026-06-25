@@ -15,6 +15,7 @@ from urllib import request as urlrequest
 
 from sqlalchemy import select
 
+from ..ollama_utils import configured_ollama_base_url, ollama_model_name
 from ..persistence_schemas import ModelJobCreateRequest, ModelJobListResponse, ModelJobResponse, ModelReadinessResponse
 
 
@@ -808,7 +809,7 @@ class ModelJobService:
 
     def _warm_ollama(self, job_id: str, item: ModelCatalogItem, started: float) -> dict[str, Any]:
         self._check_cancel_or_timeout(job_id, started)
-        base_url = os.environ.get("OLLAMA_API_BASE", "http://127.0.0.1:11434").rstrip("/")
+        base_url = configured_ollama_base_url()
         model_name = _ollama_model_name(item.model_name)
         health = _ollama_model_health(model_name, include_smoke=False)
         if not health.get("ollama_running"):
@@ -1252,15 +1253,11 @@ def _hf_model_cache_dir(model_name: str, cache_root: str | None) -> Path:
 
 
 def _ollama_model_name(model_name: str) -> str:
-    clean = model_name.strip()
-    for prefix in ("ollama_chat/", "ollama/"):
-        if clean.startswith(prefix):
-            return clean[len(prefix) :]
-    return clean
+    return ollama_model_name(model_name)
 
 
 def _ollama_model_health(model_name: str, *, include_smoke: bool) -> dict[str, Any]:
-    base_url = os.environ.get("OLLAMA_API_BASE", "http://127.0.0.1:11434").rstrip("/")
+    base_url = configured_ollama_base_url()
     result: dict[str, Any] = {
         "ollama_running": False,
         "model_present": False,

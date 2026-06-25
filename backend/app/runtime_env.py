@@ -5,6 +5,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from .ollama_utils import configured_ollama_base_url
+
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -42,16 +44,15 @@ def _apply_cache_defaults(deployment_mode: str) -> None:
         os.environ.setdefault("HF_HUB_CACHE", "/tmp/hf_cache/hub")
         os.environ.setdefault("HF_DATASETS_CACHE", "/tmp/hf_cache/datasets")
         os.environ.setdefault("TRANSFORMERS_CACHE", "/tmp/hf_cache/hub")
-        configured_ollama = os.environ.get("OLLAMA_BASE_URL")
-        if configured_ollama:
-            os.environ.setdefault("OLLAMA_API_BASE", configured_ollama)
+        configured_ollama = configured_ollama_base_url()
+        os.environ.setdefault("OLLAMA_API_BASE", configured_ollama)
         return
     os.environ.setdefault("HF_HOME", "D:\\hf_cache")
     os.environ.setdefault("HF_HUB_CACHE", "D:\\hf_cache\\hub")
     os.environ.setdefault("HF_DATASETS_CACHE", "D:\\hf_cache\\datasets")
     os.environ.setdefault("TRANSFORMERS_CACHE", "D:\\hf_cache\\hub")
     os.environ.setdefault("OLLAMA_MODELS", "D:\\ollama_models")
-    os.environ.setdefault("OLLAMA_API_BASE", "http://127.0.0.1:11434")
+    os.environ.setdefault("OLLAMA_API_BASE", configured_ollama_base_url())
 
 
 def _apply_retrieval_defaults(deployment_mode: str) -> None:

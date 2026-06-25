@@ -8,9 +8,9 @@ This project is a local/development MVP. It is not a production HIS/EMR
 integration. Use mock or de-identified data for local development, demos, and
 tests.
 
-Proxy evaluation only. These results do not demonstrate clinical safety,
-clinical effectiveness, or real-world healthcare performance. Real EHR
-evaluation requires credentialed datasets such as MIMIC-IV-Note or
+Proxy evaluation only. These results do not demonstrate hospital-grade
+validation, live-care performance, or real-world healthcare outcomes. Real EHR
+evaluation would require credentialed datasets such as MIMIC-IV-Note or
 MIMIC-IV-BHC under approved governance processes.
 
 ## Project Status
@@ -533,9 +533,9 @@ Set `RAG_EVALUATION_ARTIFACT_ROOT` to use another location. Existing
 `D:\clin_summ_outputs` folders remain an optional backward-compatible discovery
 fallback, but they are no longer required on another machine.
 
-These are proxy evaluation results. They do not establish clinical safety,
-clinical effectiveness, or real-EHR performance. Generated summaries remain
-clinician-review-only drafts.
+These are proxy evaluation results. They do not establish hospital-grade
+validation, live-care performance, or real EHR performance. Generated summaries
+remain clinician-review-only drafts.
 
 ### Week 5 P1/P2 Analysis
 
@@ -702,7 +702,7 @@ Portable Flow 2.1: 5 providers, 250 outputs, BERTScore 5/5
 
 ## Troubleshooting
 
-### Backend starts, but Qwen/Llama fail with WinError 10061
+### Backend starts, but Qwen/Llama readiness fails with URL error or WinError 10061
 
 This usually means the provider is trying to call a local gateway or Ollama
 endpoint that is not running.
@@ -710,14 +710,16 @@ endpoint that is not running.
 For local Ollama direct mode:
 
 ```env
+LOCAL_OLLAMA_ENABLED=true
 LLM_GATEWAY_MODE=litellm
 OLLAMA_MODELS=D:\ollama_models
-OLLAMA_API_BASE=http://127.0.0.1:11434
+OLLAMA_BASE_URL=http://127.0.0.1:11434
 ```
 
 Check Ollama:
 
 ```powershell
+ollama serve
 ollama list
 ```
 
@@ -727,6 +729,23 @@ Expected models:
 qwen2.5:3b
 llama3.2:3b
 ```
+
+If Qwen is missing:
+
+```powershell
+ollama pull qwen2.5:3b
+```
+
+If you use a different local Qwen tag, keep the provider name as `qwen2.5` but
+override the actual Ollama model:
+
+```env
+LLM_GATEWAY_QWEN2_5_MODEL=ollama/qwen2.5:7b
+```
+
+The app accepts `OLLAMA_BASE_URL`, `OLLAMA_API_BASE`, or `OLLAMA_HOST`; values
+like `localhost:11434` and `http://127.0.0.1:11434/api` are normalized for
+readiness checks.
 
 ### Redis/RQ job stays at queued_rq
 
@@ -816,13 +835,20 @@ The MVP now includes an explicit safety layer before any real EHR integration:
 
 Operational docs:
 
+Primary submission package:
+
+- [Week 5 final delivery report](docs/delivery%205/WEEK5_FINAL_DELIVERY.md)
+- [Medical record summarization solution proposal](docs/proposal/MEDICAL_RECORD_SUMMARIZATION_PROPOSAL.md)
+
+Supporting/reference documents:
+
 - [Local Docker Compose demo checklist](docs/demo/LOCAL_DOCKER_COMPOSE_DEMO_CHECKLIST.md)
 - [Demo evidence package](docs/demo/DEMO_EVIDENCE_PACKAGE.md)
 - [Final demo and presentation runbook](docs/demo/FINAL_DEMO_AND_PRESENTATION_RUNBOOK.md)
 - [Week 5 repository audit](docs/demo/WEEK5_REPOSITORY_AUDIT.md)
-- [Week 5 final delivery report](docs/delivery%205/WEEK5_FINAL_DELIVERY.md)
 - [Human evaluation protocol](docs/evaluation/HUMAN_EVALUATION_PROTOCOL.md)
 - [Retrieval gate case study](docs/evaluation/RETRIEVAL_GATE_CASE_STUDY.md)
+- [Vinmec medical record summarization research proposal](docs/research/VINMEC_MEDICAL_RECORD_SUMMARIZATION_PROPOSAL.md)
 - [Vinmec medical record summarization research roadmap](docs/research/VINMEC_MEDICAL_RECORD_SUMMARIZATION_RESEARCH_ROADMAP.md)
 - [Vinmec pilot proposal](docs/research/VINMEC_PILOT_PROPOSAL.md)
 - [Final research conclusion](docs/research/FINAL_RESEARCH_CONCLUSION.md)
@@ -839,6 +865,7 @@ Operational docs:
 3. Record the end-to-end demo and verify reviewer access to the evidence package.
 4. Invite qualified reviewers to complete the blinded human-evaluation sheet.
 5. Avoid major new features before the final presentation.
-6. Use the Vinmec pilot proposal as the research-first next step; treat public
-   cloud deployment, additional datasets, reranking, medical NLI, and production
-   monitoring as optional future work.
+6. Submit the Week 5 delivery report together with the professional solution
+   proposal in `docs/proposal`; treat public cloud deployment,
+   additional datasets, reranking, medical NLI, and long-term monitoring as
+   optional future work.

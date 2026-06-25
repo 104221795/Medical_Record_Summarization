@@ -6,6 +6,12 @@ from urllib import request as urlrequest
 from dataclasses import dataclass
 
 from ..config import Settings
+from ..evaluation.llmgateway import gateway_model_name
+from ..ollama_utils import (
+    configured_ollama_base_url,
+    ollama_exception_message,
+    ollama_model_name,
+)
 from ..persistence_schemas import ProviderInfo, ProviderListResponse
 
 
@@ -128,6 +134,7 @@ class SummaryProviderGateway:
         disabled_reason: str | None = None
         deployment_role = self._deployment_role(metadata.provider_name)
         readiness_source = "local"
+        model_name = self._effective_model_name(metadata)
 
         if metadata.provider_name == "deterministic":
             status = "ready"
@@ -145,7 +152,7 @@ class SummaryProviderGateway:
             readiness_source = (
                 "railway" if self.settings.deployment_mode == "railway" else "local"
             )
-            status, disabled_reason = self._ollama_status(metadata)
+            status, disabled_reason = self._ollama_status(metadata, model_name)
             selectable = status == "ready"
         elif metadata.provider_type == "local_huggingface_seq2seq":
             readiness_source = "cache"
@@ -165,7 +172,7 @@ class SummaryProviderGateway:
         return ProviderInfo(
             provider_name=metadata.provider_name,
             display_name=metadata.display_name,
-            model_name=metadata.model_name,
+            model_name=model_name,
             provider_type=metadata.provider_type,
             status=status,
             requires_api_key=metadata.requires_api_key,
@@ -194,37 +201,53 @@ class SummaryProviderGateway:
             return "local_benchmark_only"
         return "optional"
 
+    def _effective_model_name(self, metadata: ProviderMetadata) -> str:
+        if metadata.provider_name in {"qwen2.5", "llama3.2", "gemini2.5_flash_lite"}:
+            return gateway_model_name(metadata.provider_name)
+        return metadata.model_name
+
     def _ollama_status(
         self,
         metadata: ProviderMetadata,
+        model_name: str,
     ) -> tuple[str, str | None]:
         if not self.settings.local_ollama_enabled:
             return (
                 "local_only",
                 "Ollama providers are disabled. Set LOCAL_OLLAMA_ENABLED=true to enable them.",
             )
-        base_url = (self.settings.ollama_base_url or "").rstrip("/")
-        if not base_url:
-            return (
-                "configuration_required",
-                "Configure OLLAMA_BASE_URL for the Ollama service.",
-            )
+        base_url = configured_ollama_base_url(self.settings.ollama_base_url)
+        tags_url = f"{base_url}/api/tags"
+        native_model_name = ollama_model_name(model_name)
         try:
-            with urlrequest.urlopen(f"{base_url}/api/tags", timeout=2.0) as response:
+            with urlrequest.urlopen(tags_url, timeout=2.0) as response:
                 payload = json.loads(response.read().decode("utf-8"))
         except Exception as exc:
             return (
                 "unavailable",
-                f"Ollama readiness check failed: {type(exc).__name__}.",
+                (
+                    f"Ollama readiness check failed at {tags_url}: "
+                    f"{ollama_exception_message(exc)}. "
+                    "Start Ollama locally or set OLLAMA_BASE_URL/OLLAMA_API_BASE/OLLAMA_HOST "
+                    f"to a reachable service, then run `ollama pull {native_model_name}` "
+                    "if the model is missing."
+                ),
             )
-        model_name = metadata.model_name.removeprefix("ollama/")
         available = {
             str(item.get("name") or "")
             for item in payload.get("models", [])
             if isinstance(item, dict)
         }
-        if model_name not in available:
-            return ("unavailable", f"Ollama model '{model_name}' is not installed.")
+        if native_model_name not in available:
+            sample = ", ".join(sorted(available)[:5]) or "none"
+            return (
+                "unavailable",
+                (
+                    f"Ollama model '{native_model_name}' is not installed. "
+                    f"Available models: {sample}. Run `ollama pull {native_model_name}` "
+                    f"or override the provider model with {_gateway_model_env_key(metadata.provider_name)}."
+                ),
+            )
         return ("ready", None)
 
 
@@ -238,3 +261,7 @@ def _cache_status_error() -> str | None:
         if value and value.lower().startswith("c:"):
             return f"cache_misconfigured_{name}_points_to_c_drive"
     return None
+
+
+def _gateway_model_env_key(provider_name: str) -> str:
+    return "LLM_GATEWAY_" + provider_name.upper().replace(".", "_") + "_MODEL"

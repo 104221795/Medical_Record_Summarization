@@ -7,6 +7,8 @@ from typing import Any, Literal
 
 import httpx
 
+from ..ollama_utils import configured_ollama_base_url, ollama_model_name
+
 
 DEFAULT_GATEWAY_BASE_URL = "http://localhost:4000"
 DEFAULT_TEMPERATURE = 0.1
@@ -211,9 +213,9 @@ def _generate_via_ollama_native(
 
     if provider not in LOCAL_GATEWAY_PROVIDERS:
         raise LLMGatewayError(f"Native Ollama fallback is not supported for {provider}.")
-    base_url = os.environ.get("OLLAMA_API_BASE", "http://127.0.0.1:11434").rstrip("/")
+    base_url = configured_ollama_base_url()
     payload = {
-        "model": _ollama_model_name(model_name),
+        "model": ollama_model_name(model_name),
         "messages": messages,
         "stream": False,
         "keep_alive": os.environ.get("OLLAMA_KEEP_ALIVE", "10m"),
@@ -276,14 +278,6 @@ def _extract_chat_completion_text(response: dict[str, Any]) -> str:
     if isinstance(message, dict):
         return str(message.get("content") or "")
     return str(first.get("text") or "")
-
-
-def _ollama_model_name(model_name: str) -> str:
-    clean = model_name.strip()
-    for prefix in ("ollama_chat/", "ollama/"):
-        if clean.startswith(prefix):
-            return clean[len(prefix) :]
-    return clean
 
 
 def _summary_messages(prompt: str) -> list[dict[str, str]]:

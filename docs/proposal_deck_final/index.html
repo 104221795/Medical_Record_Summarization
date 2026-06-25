@@ -1,0 +1,878 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vinmec × VinSmartFuture — Medical Record Summarization PoC</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="deck">
+    
+    <section class="slide cover dark" id="slide-01">
+      <div class="network-pattern"></div>
+      <div class="cover-grid">
+        <div>
+          <div class="cover-kicker">enterprise-grade proposal deck</div>
+          <h1>Vinmec × VinSmartFuture</h1>
+          <h2>Citation-grounded Medical Record Summarization PoC</h2>
+          <p>Evidence-first AI draft workflow with clinician review, citation validation, auditability and proxy evaluation.</p>
+          <div class="cover-pills">
+            <span class="pill gold">local staging demo-ready PoC</span>
+            <span class="pill cyan">research-first pilot foundation</span>
+            <span class="pill ghost">production-readiness roadmap</span>
+          </div>
+        </div>
+        <div class="cover-panel">
+          <div class="panel-title">Clinical boundary</div>
+          <div class="boundary-line">Clinician-review-only AI draft</div>
+          <div class="boundary-line">De-identified / mock / proxy data</div>
+          <div class="boundary-line">Not a clinical deployment</div>
+          <div class="boundary-line">No autonomous diagnosis, treatment recommendation or prescribing</div>
+        </div>
+      </div>
+      <div class="gold-line"></div>
+      <div class="cover-footer">Clinician-review-only PoC | De-identified/proxy data | Not a clinical deployment</div>
+      <aside class="speaker-note">Open with the positioning: this is a premium enterprise proposal for a controlled evidence-first PoC, not a hospital deployment claim. Emphasize clinician review and proxy evaluation immediately.</aside>
+    </section>
+    
+    <section class="slide" id="slide-02">
+      <div class="slide-bg-lines"></div>
+      <header class="slide-header">
+        <div class="eyebrow">01 Context &amp; Problem</div>
+        <h1>Executive Narrative</h1>
+        <p class="subtitle">Medical summarization needs evidence traceability and clinician control, not only fluent AI-generated text.</p>
+      </header>
+      
+      <div class="four-cards">
+        
+    <div class="card ">
+      <div class="card-kicker">Problem</div>
+      <p>Medical records are fragmented across encounters, notes, medications, timelines and prior summaries.</p>
+    </div>
+    
+        
+    <div class="card ">
+      <div class="card-kicker">Solution</div>
+      <p>A citation-grounded RAG workflow creates clinician-review-only AI drafts from scoped evidence.</p>
+    </div>
+    
+        
+    <div class="card ">
+      <div class="card-kicker">Proof</div>
+      <p>The local staging demo-ready PoC includes doctor/admin UI, benchmark visibility, test/build evidence and artifacts.</p>
+    </div>
+    
+        
+    <div class="card gold">
+      <div class="card-kicker">Boundary</div>
+      <p>The deck uses proxy evaluation only; it does not claim clinical safety, effectiveness, real EHR validation or hospital deployment.</p>
+    </div>
+    
+      </div>
+      <div class="message-band">One message: the project is designed to make evidence and uncertainty visible before a clinician decides.</div>
+      <aside class="speaker-note">Walk through the four-card story. The important contrast is not AI versus doctors; it is fluent ungrounded text versus evidence-first drafts under clinician control.</aside>
+    
+      
+      <div class="slide-footer">
+        <span>01 Context &amp; Problem</span>
+        <span>02 / 24</span>
+      </div>
+    
+    </section>
+    
+    <section class="slide dark divider" id="slide-03">
+      <div class="slide-bg-lines"></div>
+      <header class="slide-header">
+        <div class="eyebrow">Proposal Agenda</div>
+        <h1>Premium Enterprise Proposal Structure</h1>
+        <p class="subtitle">Problem assessment before solution, business proposal before technical proposal, then delivery and pilot governance.</p>
+      </header>
+      
+      <div class="agenda-grid">
+        <div class="agenda-item"><span>01</span><strong>Context &amp; Problem</strong></div><div class="agenda-item"><span>02</span><strong>Proposed Solution</strong></div><div class="agenda-item"><span>03</span><strong>Doctor Workflow</strong></div><div class="agenda-item"><span>04</span><strong>Evaluation &amp; Evidence</strong></div><div class="agenda-item"><span>05</span><strong>Technical Readiness</strong></div><div class="agenda-item"><span>06</span><strong>Research Pilot Roadmap</strong></div>
+      </div>
+      <aside class="speaker-note">Set expectations for an enterprise proposal deck. The structure mirrors a consulting-style solution proposal: context, solution, workflow, evidence, readiness, and roadmap.</aside>
+    
+      
+      <div class="slide-footer">
+        <span>Proposal Agenda</span>
+        <span>03 / 24</span>
+      </div>
+    
+    </section>
+    
+    <section class="slide" id="slide-04">
+      <div class="slide-bg-lines"></div>
+      <header class="slide-header">
+        <div class="eyebrow">01 Context &amp; Problem</div>
+        <h1>Why the Problem Matters</h1>
+        <p class="subtitle">Clinical summarization is risky when the system cannot show what evidence was used.</p>
+      </header>
+      
+      <div class="three-pain-cards">
+        <div class="pain-card"><div class="icon-line"></div><h3>Fragmented medical records</h3><p>Key facts may sit across multiple notes, encounters and documents.</p></div>
+        <div class="pain-card"><div class="icon-line"></div><h3>Hallucination / omission risk</h3><p>Generic LLM summaries can sound fluent while missing or adding critical facts.</p></div>
+        <div class="pain-card"><div class="icon-line"></div><h3>Lack of source traceability</h3><p>Without citations, reviewers cannot quickly verify the draft against evidence.</p></div>
+      </div>
+      <aside class="speaker-note">Explain why the problem is not just text summarization. In medical records, omitted or unsupported information can affect trust, so the workflow must surface evidence.</aside>
+    
+      
+      <div class="slide-footer">
+        <span>01 Context &amp; Problem</span>
+        <span>04 / 24</span>
+      </div>
+    
+    </section>
+    
+    <section class="slide" id="slide-05">
+      <div class="slide-bg-lines"></div>
+      <header class="slide-header">
+        <div class="eyebrow">02 Proposed Solution</div>
+        <h1>Why Citation-grounded RAG</h1>
+        <p class="subtitle">RAG is positioned as evidence infrastructure, not a guarantee of clinical correctness.</p>
+      </header>
+      
+      <div class="pillar-grid">
+        <div class="pillar"><span>01</span><h3>Evidence Retrieval</h3><p>Retrieve patient/encounter-scoped chunks before generation.</p></div>
+        <div class="pillar"><span>02</span><h3>Citation Validation</h3><p>Link important generated claims back to source evidence.</p></div>
+        <div class="pillar"><span>03</span><h3>Clinician Final Control</h3><p>Drafts remain editable, rejectable and review-only.</p></div>
+      </div>
+      <div class="message-band dark-text">RAG helps organize evidence. It does not replace clinical judgment or validate clinical correctness by itself.</div>
+      <aside class="speaker-note">Keep the RAG explanation precise. RAG is valuable because it provides a structured evidence pathway and review surface, not because it magically makes outputs clinically safe.</aside>
+    
+      
+      <div class="slide-footer">
+        <span>02 Proposed Solution</span>
+        <span>05 / 24</span>
+      </div>
+    
+    </section>
+    
+    <section class="slide" id="slide-06">
+      <div class="slide-bg-lines"></div>
+      <header class="slide-header">
+        <div class="eyebrow">02 Proposed Solution</div>
+        <h1>Solution at a Glance</h1>
+        <p class="subtitle">A clean evidence-first workflow from patient scope to audit trail.</p>
+      </header>
+      
+      
+    <div class="workflow">
+      <div class="flow-step"><span>01</span><strong>Patient / Encounter Scope</strong></div><div class="flow-step"><span>02</span><strong>Evidence Retrieval</strong></div><div class="flow-step"><span>03</span><strong>AI Draft</strong></div><div class="flow-step"><span>04</span><strong>Citation Validation</strong></div><div class="flow-step"><span>05</span><strong>Clinician Review</strong></div><div class="flow-step"><span>06</span><strong>Final Summary</strong></div><div class="flow-step"><span>07</span><strong>Audit Trail</strong></div>
+    </div>
+    
+      <div class="glance-note">The workflow is deliberately gated: source evidence is retrieved and validated before the clinician accepts any final summary.</div>
+      <aside class="speaker-note">This is the cleanest process slide. Explain each step in one sentence and stress that the AI output is a draft, not a final clinical decision.</aside>
+    
+      
+      <div class="slide-footer">
+        <span>02 Proposed Solution</span>
+        <span>06 / 24</span>
+      </div>
+    
+    </section>
+    
+    <section class="slide" id="slide-07">
+      <div class="slide-bg-lines"></div>
+      <header class="slide-header">
+        <div class="eyebrow">03 Doctor Workflow</div>
+        <h1>Product Entry: Role-based Workspace</h1>
+        <p class="subtitle">Doctor and admin workspaces support an evidence-first summarization flow inside a local staging demo-ready PoC.</p>
+      </header>
+      
+      <div class="split screenshot-right">
+        <div class="stack-with-mini">
+          <div class="callout-stack">
+            <div class="callout"><span>01</span><strong>Doctor and admin workspaces</strong><p>Role-specific navigation for clinical review and evaluation workflows.</p></div>
+            <div class="callout"><span>02</span><strong>Evidence-first summarization flow</strong><p>The product entry frames summarization around reviewable evidence.</p></div>
+            <div class="callout"><span>03</span><strong>Local staging boundary</strong><p>Demo-ready locally; no hospital deployment claim.</p></div>
+          </div>
+          <div class="mini-shot-row">
+            
+      <figure class="figure-frame cover">
+        <div class="figure-badge">Entry</div>
+        <img src="assets/figures/figure_01.png" alt="Figure 1: Product Landing Page" />
+        <figcaption>Figure 1 — Product Landing Page</figcaption>
+      </figure>
+    
+            
+      <figure class="figure-frame cover">
+        <div class="figure-badge">Access</div>
+        <img src="assets/figures/figure_02.png" alt="Figure 2: Role-Based Login Page" />
+        <figcaption>Figure 2 — Role-Based Login Page</figcaption>
+      </figure>
+    
+          </div>
+        </div>
+        
+      <figure class="figure-frame cover">
+        <div class="figure-badge">Product entry</div>
+        <img src="assets/figures/figure_04.png" alt="Figure 4: Doctor Workspace Overview" />
+        <figcaption>Figure 4 — Doctor Workspace Overview</figcaption>
+      </figure>
+    
+      </div>
+      <aside class="speaker-note">Use this slide to orient reviewers. The screenshot demonstrates product coherence and role-based entry, while the callouts keep the message business-oriented.</aside>
+    
+      
+      <div class="slide-footer">
+        <span>03 Doctor Workflow</span>
+        <span>07 / 24</span>
+      </div>
+    
+    </section>
+    
+    <section class="slide" id="slide-08">
+      <div class="slide-bg-lines"></div>
+      <header class="slide-header">
+        <div class="eyebrow">03 Doctor Workflow</div>
+        <h1>Patient and Encounter Scope</h1>
+        <p class="subtitle">The workflow starts from de-identified patient and encounter context.</p>
+      </header>
+      
+      <div class="two-shot">
+        
+      <figure class="figure-frame contain">
+        <div class="figure-badge">Patient scope</div>
+        <img src="assets/figures/figure_05.png" alt="Figure 5: De-identified Patient List" />
+        <figcaption>Figure 5 — De-identified Patient List</figcaption>
+      </figure>
+    
+        
+      <figure class="figure-frame contain">
+        <div class="figure-badge">Encounter context</div>
+        <img src="assets/figures/figure_06.png" alt="Figure 6: Patient Context and Timeline" />
+        <figcaption>Figure 6 — Patient Context and Timeline</figcaption>
+      </figure>
+    
+      </div>
+      <div class="message-band">Patient/encounter scope is the first safety guardrail against wrong-patient evidence and context mixing.</div>
+      <aside class="speaker-note">Describe the left-to-right clinical flow: choose a de-identified patient, inspect encounter context, then generate or review. Avoid claiming real EHR integration.</aside>
+    
+      
+      <div class="slide-footer">
+        <span>03 Doctor Workflow</span>
+        <span>08 / 24</span>
+      </div>
+    
+    </section>
+    
+    <section class="slide" id="slide-09">
+      <div class="slide-bg-lines"></div>
+      <header class="slide-header">
+        <div class="eyebrow">03 Doctor Workflow</div>
+        <h1>Evidence-first Draft Generation</h1>
+        <p class="subtitle">The draft is generated after patient-scoped retrieval and provider selection.</p>
+      </header>
+      
+      <div class="split screenshot-left">
+        
+      <figure class="figure-frame cover">
+        <div class="figure-badge">Draft generation</div>
+        <img src="assets/figures/figure_07.png" alt="Figure 7: RAG Evidence-First Generate Summary" />
+        <figcaption>Figure 7 — RAG Evidence-First Generate Summary</figcaption>
+      </figure>
+    
+        <div class="callout-stack compact">
+          <div class="callout"><span>A</span><strong>Patient-scoped retrieval</strong><p>Evidence is retrieved before provider inference.</p></div>
+          <div class="callout"><span>B</span><strong>Provider selection</strong><p>Providers can be compared for proxy evaluation and demo flow.</p></div>
+          <div class="callout"><span>C</span><strong>Draft-only generation</strong><p>The generated summary requires clinician review before use.</p></div>
+        </div>
+      </div>
+      <aside class="speaker-note">Position generation as a controlled workflow step. The slide should not sound like autonomous clinical summarization; keep saying draft-only.</aside>
+    
+      
+      <div class="slide-footer">
+        <span>03 Doctor Workflow</span>
+        <span>09 / 24</span>
+      </div>
+    
+    </section>
+    
+    <section class="slide quality-slide" id="slide-10">
+      <div class="slide-bg-lines"></div>
+      <header class="slide-header">
+        <div class="eyebrow">03 Doctor Workflow</div>
+        <h1>Evidence Quality Gate</h1>
+        <p class="subtitle">Citation coverage, unsupported claims, conflicts and retrieval warnings are made visible before decision.</p>
+      </header>
+      
+      <div class="hero-shot">
+        
+      <figure class="figure-frame cover">
+        <div class="figure-badge">Key differentiator</div>
+        <img src="assets/figures/figure_08.png" alt="Figure 8: Review and Evidence Quality Gate" />
+        <figcaption>Figure 8 — Review and Evidence Quality Gate</figcaption>
+      </figure>
+    
+      </div>
+      <div class="floating-label label-a">Citation coverage</div>
+      <div class="floating-label label-b">Unsupported claims</div>
+      <div class="floating-label label-c">Conflicts & retrieval warnings</div>
+      <aside class="speaker-note">This is a core differentiator. Explain that the quality gate is designed to surface uncertainty rather than hide it behind a polished summary.</aside>
+    
+      
+      <div class="slide-footer">
+        <span>03 Doctor Workflow</span>
+        <span>10 / 24</span>
+      </div>
+    
+    </section>
+    
+    <section class="slide" id="slide-11">
+      <div class="slide-bg-lines"></div>
+      <header class="slide-header">
+        <div class="eyebrow">03 Doctor Workflow</div>
+        <h1>Citation-first Review</h1>
+        <p class="subtitle">Important generated claims are linked to source evidence for clinician verification.</p>
+      </header>
+      
+      <div class="two-shot emphasis">
+        
+      <figure class="figure-frame cover">
+        <div class="figure-badge">Claim review</div>
+        <img src="assets/figures/figure_09.png" alt="Figure 9: Citation and Claim Review" />
+        <figcaption>Figure 9 — Citation and Claim Review</figcaption>
+      </figure>
+    
+        
+      <figure class="figure-frame contain">
+        <div class="figure-badge">Evidence trace</div>
+        <img src="assets/figures/figure_10.png" alt="Figure 10: Citation Tracking Detail" />
+        <figcaption>Figure 10 — Citation Tracking Detail</figcaption>
+      </figure>
+    
+      </div>
+      <div class="caption-band">Citation is not decoration; it is the review mechanism that lets a clinician inspect the source behind a generated claim.</div>
+      <aside class="speaker-note">Explain how the review workspace connects claims, citations and source excerpts. Keep the language conservative: the clinician verifies; the system assists.</aside>
+    
+      
+      <div class="slide-footer">
+        <span>03 Doctor Workflow</span>
+        <span>11 / 24</span>
+      </div>
+    
+    </section>
+    
+    <section class="slide" id="slide-12">
+      <div class="slide-bg-lines"></div>
+      <header class="slide-header">
+        <div class="eyebrow">03 Doctor Workflow</div>
+        <h1>Human-in-the-loop Decision</h1>
+        <p class="subtitle">The clinician can edit, approve, request revision, or reject. The AI output remains a draft.</p>
+      </header>
+      
+      <div class="split screenshot-left">
+        
+      <figure class="figure-frame cover">
+        <div class="figure-badge">HITL decision</div>
+        <img src="assets/figures/figure_11.png" alt="Figure 11: Editable Draft and Reject Decision" />
+        <figcaption>Figure 11 — Editable Draft and Reject Decision</figcaption>
+      </figure>
+    
+        <div class="authority-panel">
+          <h3>Clinician remains final authority.</h3>
+          <ul><li>Edit the draft</li><li>Approve only after review</li><li>Request revision</li><li>Reject unsupported draft</li><li>Decision is recorded</li></ul>
+        </div>
+      </div>
+      <aside class="speaker-note">Use this slide to make the safety boundary concrete. The UI supports clinician decisions; it does not automate diagnosis, treatment, prescribing or discharge approval.</aside>
+    
+      
+      <div class="slide-footer">
+        <span>03 Doctor Workflow</span>
+        <span>12 / 24</span>
+      </div>
+    
+    </section>
+    
+    <section class="slide" id="slide-13">
+      <div class="slide-bg-lines"></div>
+      <header class="slide-header">
+        <div class="eyebrow">03 Doctor Workflow</div>
+        <h1>Lifecycle and Auditability</h1>
+        <p class="subtitle">The system preserves review status, reviewer action, generated time and audit events.</p>
+      </header>
+      
+      <div class="two-shot">
+        
+      <figure class="figure-frame cover">
+        <div class="figure-badge">Lifecycle</div>
+        <img src="assets/figures/figure_12.png" alt="Figure 12: Patient Summary History Status" />
+        <figcaption>Figure 12 — Patient Summary History Status</figcaption>
+      </figure>
+    
+        
+      <figure class="figure-frame cover">
+        <div class="figure-badge">Audit trail</div>
+        <img src="assets/figures/figure_13.png" alt="Figure 13: Audit History Trace" />
+        <figcaption>Figure 13 — Audit History Trace</figcaption>
+      </figure>
+    
+      </div>
+      <div class="message-band">Auditability turns the PoC from a simple demo into a reviewable enterprise workflow foundation.</div>
+      <aside class="speaker-note">Point out summary lifecycle and audit trails. This is valuable for governance and research review even before any real clinical deployment is considered.</aside>
+    
+      
+      <div class="slide-footer">
+        <span>03 Doctor Workflow</span>
+        <span>13 / 24</span>
+      </div>
+    
+    </section>
+    
+    <section class="slide" id="slide-14">
+      <div class="slide-bg-lines"></div>
+      <header class="slide-header">
+        <div class="eyebrow">03 Business Proposal</div>
+        <h1>Role / Value Mapping</h1>
+        <p class="subtitle">Each stakeholder gets a distinct workflow value, without turning the slide into a giant table.</p>
+      </header>
+      
+      <div class="role-grid">
+        
+    <div class="card ">
+      <div class="card-kicker">Doctor</div>
+      <p>Pain: long records → Feature: cited draft review → Value: faster evidence inspection.</p>
+    </div>
+    
+    <div class="card ">
+      <div class="card-kicker">Admin / Evaluator</div>
+      <p>Pain: hidden benchmark state → Feature: dashboards → Value: visible readiness and artifacts.</p>
+    </div>
+    
+    <div class="card ">
+      <div class="card-kicker">Technical Reviewer</div>
+      <p>Pain: unverifiable runtime → Feature: Docker/test/build evidence → Value: repeatable demo proof.</p>
+    </div>
+    
+    <div class="card ">
+      <div class="card-kicker">Research Evaluator</div>
+      <p>Pain: shallow metrics → Feature: grounding and safety proxy → Value: better study design.</p>
+    </div>
+    
+    <div class="card gold">
+      <div class="card-kicker">Mentor / Reviewer</div>
+      <p>Pain: fragmented delivery story → Feature: enterprise deck + evidence package → Value: fast high-level review.</p>
+    </div>
+    
+      </div>
+      <aside class="speaker-note">Summarize the business value for each stakeholder. This slide replaces a dense requirements table with a boardroom-readable value map.</aside>
+    
+      
+      <div class="slide-footer">
+        <span>03 Business Proposal</span>
+        <span>14 / 24</span>
+      </div>
+    
+    </section>
+    
+    <section class="slide" id="slide-15">
+      <div class="slide-bg-lines"></div>
+      <header class="slide-header">
+        <div class="eyebrow">04 Technical Readiness</div>
+        <h1>Technical Architecture</h1>
+        <p class="subtitle">A readable layered architecture for a local staging demo-ready PoC.</p>
+      </header>
+      
+      <div class="architecture">
+        <div class="arch-layer"><span>User Layer</span><strong>Doctor UI / Admin UI</strong></div>
+        <div class="arch-layer"><span>Application Layer</span><strong>React Frontend / FastAPI Backend</strong></div>
+        <div class="arch-layer"><span>AI/RAG Layer</span><strong>Chunking / Retrieval / Context Builder / Provider Gateway</strong></div>
+        <div class="arch-layer"><span>Safety Layer</span><strong>Citation Service / Safety Service / Review Service</strong></div>
+        <div class="arch-layer"><span>Data & Runtime Layer</span><strong>PostgreSQL / Redis-RQ / Artifacts / Docker Compose</strong></div>
+      </div>
+      <aside class="speaker-note">Explain the architecture in layers. Avoid implementation rabbit holes; focus on the enterprise separation between UI, API, AI/RAG, safety and runtime.</aside>
+    
+      
+      <div class="slide-footer">
+        <span>04 Technical Readiness</span>
+        <span>15 / 24</span>
+      </div>
+    
+    </section>
+    
+    <section class="slide" id="slide-16">
+      <div class="slide-bg-lines"></div>
+      <header class="slide-header">
+        <div class="eyebrow">04 Technical Readiness</div>
+        <h1>RAG and Citation Pipeline</h1>
+        <p class="subtitle">Chunking happens before vector retrieval; retrieved evidence is reviewed before final use.</p>
+      </header>
+      
+      
+    <div class="workflow compact">
+      <div class="flow-step"><span>01</span><strong>Clinical note</strong></div><div class="flow-step"><span>02</span><strong>Patient / encounter scope</strong></div><div class="flow-step"><span>03</span><strong>Chunking</strong></div><div class="flow-step"><span>04</span><strong>Retrieval</strong></div><div class="flow-step"><span>05</span><strong>Context builder</strong></div><div class="flow-step"><span>06</span><strong>Generation</strong></div><div class="flow-step"><span>07</span><strong>Citation matching</strong></div><div class="flow-step"><span>08</span><strong>Safety metrics</strong></div><div class="flow-step"><span>09</span><strong>Clinician review</strong></div>
+    </div>
+    
+      <div class="pipeline-note">
+        <strong>Design intent:</strong> citation-grounded RAG structures evidence for review. It is not a clinical correctness guarantee.
+      </div>
+      <aside class="speaker-note">Walk through the pipeline: notes are scoped, chunked, retrieved, assembled, generated, matched to citations, scored by safety proxy and reviewed by clinicians.</aside>
+    
+      
+      <div class="slide-footer">
+        <span>04 Technical Readiness</span>
+        <span>16 / 24</span>
+      </div>
+    
+    </section>
+    
+    <section class="slide" id="slide-17">
+      <div class="slide-bg-lines"></div>
+      <header class="slide-header">
+        <div class="eyebrow">04 Evaluation &amp; Evidence</div>
+        <h1>Evaluation Framework</h1>
+        <p class="subtitle">Proxy evaluation is layered: text similarity at the bottom, grounding and safety in the middle, human review as the future top layer.</p>
+      </header>
+      
+      <div class="metric-pyramid">
+        <div class="pyramid-row top">Human validation future</div>
+        <div class="pyramid-row mid">Grounding and safety proxy: citation coverage, unsupported claims, factuality proxy, omission proxy</div>
+        <div class="pyramid-row base">Text similarity: ROUGE-L and BERTScore</div>
+      </div>
+      <div class="metric-groups">
+        <span class="pill ">Text similarity</span>
+        <span class="pill ">Evidence grounding</span>
+        <span class="pill ">Safety proxy</span>
+        <span class="pill ">Workflow review</span>
+        <span class="pill gold">Human validation future</span>
+      </div>
+      <aside class="speaker-note">Explain that ROUGE and BERTScore are useful but insufficient. The project adds grounding and safety proxy metrics, with human evaluation as the next research layer.</aside>
+    
+      
+      <div class="slide-footer">
+        <span>04 Evaluation &amp; Evidence</span>
+        <span>17 / 24</span>
+      </div>
+    
+    </section>
+    
+    <section class="slide" id="slide-18">
+      <div class="slide-bg-lines"></div>
+      <header class="slide-header">
+        <div class="eyebrow">04 Evaluation &amp; Evidence</div>
+        <h1>Benchmark Result Summary</h1>
+        <p class="subtitle">Completed proxy benchmark visibility for the no-gate Flow 2.1 run.</p>
+      </header>
+      
+      <div class="summary-with-shot">
+        <div class="metric-grid six compact">
+          
+    <div class="metric ">
+      <div class="metric-value">50</div>
+      <div class="metric-label">Records</div>
+      
+    </div>
+    
+          
+    <div class="metric ">
+      <div class="metric-value">5</div>
+      <div class="metric-label">Providers</div>
+      
+    </div>
+    
+          
+    <div class="metric ">
+      <div class="metric-value">250/250</div>
+      <div class="metric-label">Predictions</div>
+      
+    </div>
+    
+          
+    <div class="metric ">
+      <div class="metric-value">BERTScore</div>
+      <div class="metric-label">Semantic metric</div>
+      <div class="metric-caption">computed</div>
+    </div>
+    
+          
+    <div class="metric ">
+      <div class="metric-value">Qwen2.5</div>
+      <div class="metric-label">Strongest generative provider</div>
+      <div class="metric-caption">proxy run</div>
+    </div>
+    
+          
+    <div class="metric ">
+      <div class="metric-value">Deterministic</div>
+      <div class="metric-label">Smoke/control provider</div>
+      <div class="metric-caption">most reliable</div>
+    </div>
+    
+        </div>
+        
+      <figure class="figure-frame contain">
+        <div class="figure-badge">Provider ranking</div>
+        <img src="assets/figures/figure_16.png" alt="Figure 16: Provider ROUGE Leaderboard" />
+        <figcaption>Figure 16 — Provider ROUGE Leaderboard</figcaption>
+      </figure>
+    
+      </div>
+      <div class="disclaimer-tile">Proxy evaluation only — not clinical validation, not real EHR validation, and not a clinical safety/effectiveness claim.</div>
+      <aside class="speaker-note">Present the headline benchmark facts only. State clearly that this is a proxy evaluation on completed artifacts and does not validate clinical performance.</aside>
+    
+      
+      <div class="slide-footer">
+        <span>04 Evaluation &amp; Evidence</span>
+        <span>18 / 24</span>
+      </div>
+    
+    </section>
+    
+    <section class="slide" id="slide-19">
+      <div class="slide-bg-lines"></div>
+      <header class="slide-header">
+        <div class="eyebrow">04 Evaluation &amp; Evidence</div>
+        <h1>Qwen2.5 Snapshot</h1>
+        <p class="subtitle">Best balanced generative provider in the completed no-gate proxy run; not clinical validation.</p>
+      </header>
+      
+      <div class="metric-grid five">
+        
+    <div class="metric ">
+      <div class="metric-value">0.2122</div>
+      <div class="metric-label">ROUGE-L</div>
+      
+    </div>
+    
+        
+    <div class="metric ">
+      <div class="metric-value">0.8391</div>
+      <div class="metric-label">BERTScore F1</div>
+      
+    </div>
+    
+        
+    <div class="metric ">
+      <div class="metric-value">0.8884</div>
+      <div class="metric-label">Citation coverage</div>
+      
+    </div>
+    
+        
+    <div class="metric ">
+      <div class="metric-value">0.8713</div>
+      <div class="metric-label">Factuality proxy</div>
+      
+    </div>
+    
+        
+    <div class="metric gold">
+      <div class="metric-value">0.4460</div>
+      <div class="metric-label">Critical omission</div>
+      
+    </div>
+    
+      </div>
+      <div class="bar-card">
+        <div><span style="width: 72%"></span><label>ROUGE-L 0.2122</label></div>
+        <div><span style="width: 84%"></span><label>BERTScore F1 0.8391</label></div>
+        <div><span style="width: 89%"></span><label>Citation coverage 0.8884</label></div>
+      </div>
+      <div class="disclaimer-tile compact">Interpretation is limited to proxy evaluation artifacts. It does not establish clinical safety or effectiveness.</div>
+      <aside class="speaker-note">Use exact metrics only. Emphasize the interpretation: Qwen2.5 looks strongest among generative PoC providers, but this remains proxy evidence.</aside>
+    
+      
+      <div class="slide-footer">
+        <span>04 Evaluation &amp; Evidence</span>
+        <span>19 / 24</span>
+      </div>
+    
+    </section>
+    
+    <section class="slide" id="slide-20">
+      <div class="slide-bg-lines"></div>
+      <header class="slide-header">
+        <div class="eyebrow">04 Evaluation &amp; Evidence</div>
+        <h1>Admin Evaluation Visibility</h1>
+        <p class="subtitle">Evaluation is inspectable through the Admin dashboard, not hidden inside scripts.</p>
+      </header>
+      
+      <div class="three-shot evidence">
+        
+      <figure class="figure-frame cover">
+        <div class="figure-badge">Readiness</div>
+        <img src="assets/figures/figure_14.png" alt="Figure 14: Admin Evaluation Readiness" />
+        <figcaption>Figure 14 — Admin Evaluation Readiness</figcaption>
+      </figure>
+    
+        
+      <figure class="figure-frame cover">
+        <div class="figure-badge">Flow 2.1 visibility</div>
+        <img src="assets/figures/figure_15.png" alt="Figure 15: RAG Best Models Admin Overview" />
+        <figcaption>Figure 15 — RAG Best Models Admin Overview</figcaption>
+      </figure>
+    
+        
+      <figure class="figure-frame contain">
+        <div class="figure-badge">Grounding metrics</div>
+        <img src="assets/figures/figure_17.png" alt="Figure 17: Evidence Grounding Metrics" />
+        <figcaption>Figure 17 — Evidence Grounding Metrics</figcaption>
+      </figure>
+    
+      </div>
+      <div class="caption-band">Admin users can inspect provider completion, ranking signals and evidence-grounding metrics from the product surface.</div>
+      <aside class="speaker-note">Show that benchmark evidence is operationalized into admin visibility. This helps reviewers see the evaluation discipline as part of the system, not a side script.</aside>
+    
+      
+      <div class="slide-footer">
+        <span>04 Evaluation &amp; Evidence</span>
+        <span>20 / 24</span>
+      </div>
+    
+    </section>
+    
+    <section class="slide" id="slide-21">
+      <div class="slide-bg-lines"></div>
+      <header class="slide-header">
+        <div class="eyebrow">04 Evaluation &amp; Evidence</div>
+        <h1>Error Analysis and Reproducibility</h1>
+        <p class="subtitle">Per-record failure analysis and artifact files support transparent review.</p>
+      </header>
+      
+      <div class="three-shot evidence">
+        
+      <figure class="figure-frame contain">
+        <div class="figure-badge">RAG vs raw</div>
+        <img src="assets/figures/figure_18.png" alt="Figure 18: RAG vs Raw Context Comparison" />
+        <figcaption>Figure 18 — RAG vs Raw Context Comparison</figcaption>
+      </figure>
+    
+        
+      <figure class="figure-frame cover">
+        <div class="figure-badge">Failure diagnosis</div>
+        <img src="assets/figures/figure_19.png" alt="Figure 19: Per-Record Failure Analysis" />
+        <figcaption>Figure 19 — Per-Record Failure Analysis</figcaption>
+      </figure>
+    
+        
+      <figure class="figure-frame cover">
+        <div class="figure-badge">Reproducibility</div>
+        <img src="assets/figures/figure_20.png" alt="Figure 20: RAG Benchmark Artifacts and Run Files" />
+        <figcaption>Figure 20 — RAG Benchmark Artifacts and Run Files</figcaption>
+      </figure>
+    
+      </div>
+      <div class="artifact-list">
+        <span class="pill ">predictions</span>
+        <span class="pill ">metrics</span>
+        <span class="pill ">manifests</span>
+        <span class="pill ">reports</span>
+        <span class="pill gold">failure analysis</span>
+      </div>
+      <aside class="speaker-note">Explain why reproducibility matters: artifacts make the benchmark inspectable and failure analysis makes model limitations visible at record level.</aside>
+    
+      
+      <div class="slide-footer">
+        <span>04 Evaluation &amp; Evidence</span>
+        <span>21 / 24</span>
+      </div>
+    
+    </section>
+    
+    <section class="slide" id="slide-22">
+      <div class="slide-bg-lines"></div>
+      <header class="slide-header">
+        <div class="eyebrow">05 Technical Readiness</div>
+        <h1>Technical Readiness Evidence</h1>
+        <p class="subtitle">Docker Compose local staging and evidence package support repeatable demo.</p>
+      </header>
+      
+      <div class="three-shot technical">
+        
+      <figure class="figure-frame contain">
+        <div class="figure-badge">Runtime checklist</div>
+        <img src="assets/figures/figure_21.png" alt="Figure 21: Technical System Running Checklist" />
+        <figcaption>Figure 21 — Technical System Running Checklist</figcaption>
+      </figure>
+    
+        
+      <figure class="figure-frame contain">
+        <div class="figure-badge">Evidence folder</div>
+        <img src="assets/figures/figure_22.png" alt="Figure 22: Evidence Package Folder Structure" />
+        <figcaption>Figure 22 — Evidence Package Folder Structure</figcaption>
+      </figure>
+    
+        
+      <figure class="figure-frame contain">
+        <div class="figure-badge">Evidence package</div>
+        <img src="assets/figures/figure_23.png" alt="Figure 23: Latest Running Test Evidence" />
+        <figcaption>Figure 23 — Latest Running Test Evidence</figcaption>
+      </figure>
+    
+      </div>
+      <div class="metric-strip">
+        <span class="pill ">/health</span>
+        <span class="pill ">/ready</span>
+        <span class="pill ">tests</span>
+        <span class="pill ">frontend build</span>
+        <span class="pill ">Docker build</span>
+        <span class="pill gold">logs / artifacts</span>
+      </div>
+      <aside class="speaker-note">This slide is demo readiness evidence, not production deployment. State that the local staging path has logs and build/test proof for repeatable review.</aside>
+    
+      
+      <div class="slide-footer">
+        <span>05 Technical Readiness</span>
+        <span>22 / 24</span>
+      </div>
+    
+    </section>
+    
+    <section class="slide dark roadmap-slide" id="slide-23">
+      <div class="slide-bg-lines"></div>
+      <header class="slide-header">
+        <div class="eyebrow">06 Research Pilot Roadmap</div>
+        <h1>Vinmec Research Pilot Roadmap</h1>
+        <p class="subtitle">A research-first pilot foundation before any controlled clinical workflow study.</p>
+      </header>
+      
+      
+    <div class="roadmap">
+      <div class="roadmap-step"><span>01</span><strong>PoC local staging</strong></div><div class="roadmap-step"><span>02</span><strong>Governance / workflow discovery</strong></div><div class="roadmap-step"><span>03</span><strong>Retrospective de-identified study</strong></div><div class="roadmap-step"><span>04</span><strong>Raw vs Structured vs RAG vs Adaptive comparison</strong></div><div class="roadmap-step"><span>05</span><strong>Clinician human evaluation</strong></div><div class="roadmap-step"><span>06</span><strong>Silent / shadow mode</strong></div><div class="roadmap-step"><span>07</span><strong>Clinician-visible usability pilot</strong></div>
+    </div>
+    
+      <div class="disclaimer-tile">Governance first: no real EHR evaluation, writeback or clinical workflow use without approved data access, review protocol and audit controls.</div>
+      <aside class="speaker-note">Frame the Vinmec roadmap carefully. The proposed next step is controlled research design, not uncontrolled rollout. Mention governance, workflow discovery and clinician human evaluation.</aside>
+    
+      
+      <div class="slide-footer">
+        <span>06 Research Pilot Roadmap</span>
+        <span>23 / 24</span>
+      </div>
+    
+    </section>
+    
+    <section class="slide dark closing-slide" id="slide-24">
+      <div class="slide-bg-lines"></div>
+      <header class="slide-header">
+        <div class="eyebrow">06 Research Pilot Roadmap</div>
+        <h1>Risk Controls and Closing</h1>
+        <p class="subtitle">A research-first foundation for evidence-grounded clinical summarization — ready for controlled pilot design, not uncontrolled hospital rollout.</p>
+      </header>
+      
+      <div class="risk-grid">
+        <div class="risk-panel">
+          <h3>Key risks</h3>
+          <ul><li>Wrong-patient evidence</li><li>Unsupported diagnosis</li><li>Medication / allergy error</li><li>PHI leakage</li><li>Over-trust</li></ul>
+        </div>
+        <div class="risk-panel control">
+          <h3>Controls</h3>
+          <ul><li>Patient / encounter filters</li><li>Citation validation</li><li>Unsupported-claim visibility</li><li>Clinician review</li><li>Audit trail and governance gates</li></ul>
+        </div>
+      </div>
+      <div class="closing-line">Final position: a research-first pilot foundation and production-readiness roadmap — not a production clinical system.</div>
+      <aside class="speaker-note">Close by being ambitious but conservative. The project is credible because it controls risk and proposes a disciplined pilot path rather than overclaiming deployment readiness.</aside>
+    
+      
+      <div class="slide-footer">
+        <span>06 Research Pilot Roadmap</span>
+        <span>24 / 24</span>
+      </div>
+    
+    </section>
+    
+  </main>
+</body>
+</html>

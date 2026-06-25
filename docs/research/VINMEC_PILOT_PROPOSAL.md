@@ -7,6 +7,10 @@
 > kiểm tra. Không chẩn đoán, không khuyến nghị điều trị, không tự ký hồ sơ,
 > không ghi ngược vào HIS/EMR và không thay thế quyết định lâm sàng.
 
+> **Ghi chú nộp bài:** bản proposal tổng hợp nên nộp là
+> [VINMEC_MEDICAL_RECORD_SUMMARIZATION_PROPOSAL.md](VINMEC_MEDICAL_RECORD_SUMMARIZATION_PROPOSAL.md).
+> File này được giữ như tài liệu tham chiếu chi tiết về pilot.
+
 ## 1. One-page proposal
 
 ### Vấn đề
@@ -139,7 +143,7 @@ P2 nên tách hai bước:
 | Audit đầy đủ | Tái tạo được output khi có incident |
 | Incident response đã diễn tập | Biết pause/revoke/escalate khi có lỗi |
 
-P2 không phải production rollout. P2 là nghiên cứu usability và safety under
+P2 không phải triển khai vận hành chính thức. P2 là nghiên cứu usability và safety under
 workflow constraints.
 
 ## 4. Vinmec Applicability Matrix
@@ -297,7 +301,7 @@ The strength is that it is deliberately narrow, measurable and safe:
 ## 11. Final pilot conclusion
 
 The best next step for Vinmec is a **research-first pilot**, not a public-cloud
-deployment and not a production rollout. The PoC should be positioned as a
+deployment and not an official live rollout. The PoC should be positioned as a
 locally validated, citation-grounded prototype that is ready to support a
 controlled study.
 

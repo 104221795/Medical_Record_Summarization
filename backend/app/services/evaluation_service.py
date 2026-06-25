@@ -28,6 +28,7 @@ from ..models import (
     SummaryReview,
     SummaryStatus,
 )
+from ..ollama_utils import configured_ollama_base_url, ollama_model_name
 from ..persistence_schemas import (
     BenchmarkFlowComparisonRecord,
     BenchmarkFlowComparisonResponse,
@@ -657,8 +658,10 @@ class EvaluationService:
         deterministic = latest.get("local") or latest.get("deterministic")
         bart_enabled = _real_baselines_enabled()
         pegasus_enabled = _real_baselines_enabled()
-        qwen_health = _ollama_model_health("qwen2.5:3b")
-        llama_health = _ollama_model_health("llama3.2:3b")
+        qwen_model = os.environ.get("LLM_GATEWAY_QWEN2_5_MODEL") or "ollama/qwen2.5:3b"
+        llama_model = os.environ.get("LLM_GATEWAY_LLAMA3_2_MODEL") or "ollama/llama3.2:3b"
+        qwen_health = _ollama_model_health(ollama_model_name(qwen_model))
+        llama_health = _ollama_model_health(ollama_model_name(llama_model))
         qwen_enabled = bool(qwen_health.get("model_present")) or latest.get("qwen2.5") is not None
         llama_enabled = bool(llama_health.get("model_present")) or latest.get("llama3.2") is not None
         gemini_flash_health = _gemini_key_health(os.environ.get("GEMINI_API_KEY") or self.settings.gemini_api_key)
@@ -714,7 +717,7 @@ class EvaluationService:
                 "qwen2.5",
                 configured=qwen_enabled,
                 enabled=qwen_enabled and bool(qwen_health.get("ollama_running")),
-                model_name=os.environ.get("LLM_GATEWAY_QWEN2_5_MODEL") or "ollama/qwen2.5:3b",
+                model_name=qwen_model,
                 latest=latest.get("qwen2.5"),
                 message=_ollama_health_message("qwen2.5", qwen_health),
                 health_checks=qwen_health,
@@ -724,7 +727,7 @@ class EvaluationService:
                 "llama3.2",
                 configured=llama_enabled,
                 enabled=llama_enabled and bool(llama_health.get("ollama_running")),
-                model_name=os.environ.get("LLM_GATEWAY_LLAMA3_2_MODEL") or "ollama/llama3.2:3b",
+                model_name=llama_model,
                 latest=latest.get("llama3.2"),
                 message=_ollama_health_message("llama3.2", llama_health),
                 health_checks=llama_health,
@@ -1030,7 +1033,7 @@ def _provider_status(
 
 
 def _ollama_model_health(model_name: str) -> dict[str, Any]:
-    base_url = os.environ.get("OLLAMA_API_BASE", "http://127.0.0.1:11434").rstrip("/")
+    base_url = configured_ollama_base_url()
     result: dict[str, Any] = {
         "ollama_running": False,
         "model_present": False,

@@ -164,6 +164,7 @@ class Settings(BaseSettings):
             "RAG_OLLAMA_BASE_URL",
             "OLLAMA_BASE_URL",
             "OLLAMA_API_BASE",
+            "OLLAMA_HOST",
         ),
     )
     background_jobs_enabled: bool = Field(
